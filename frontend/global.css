@@ -1,0 +1,39 @@
+@import 'tailwindcss';
+@import 'uniwind';
+@import 'heroui-native/styles';
+
+@theme {
+  --font-sans: 'PlusJakartaSans_400Regular';
+  --field-radius: 12px;
+}
+
+@layer theme {
+  :root {
+    @variant light {
+      --background: #FFF8E7;
+      --foreground: #12284B;
+      --surface: #FFFFFF;
+      --surface-foreground: #12284B;
+      --surface-secondary: #FFF8E7;
+      --overlay: #FFFFFF;
+      --overlay-foreground: #12284B;
+      --muted: #526175;
+      --accent: #0055A0;
+      --accent-foreground: #FFFFFF;
+      --default: #FFF8E7;
+      --default-foreground: #12284B;
+      --border: #DCE4EC;
+      --separator: #DCE4EC;
+      --focus: #0055A0;
+      --link: #0055A0;
+      --danger: #B42318;
+      --danger-foreground: #FFFFFF;
+      --warning: #8A4B08;
+      --warning-foreground: #FFFFFF;
+      --field-background: #FFFFFF;
+      --field-foreground: #12284B;
+      --field-placeholder: #526175;
+      --field-border: #DCE4EC;
+    }
+  }
+}
