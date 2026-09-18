@@ -1,5 +1,5 @@
 export type Language = 'id' | 'en';
-export const LANGUAGE_KEY = 'sigapp.language';
+export const LANGUAGE_KEY = 'evacuaid.language';
 export function isLanguage(value: unknown): value is Language { return value === 'id' || value === 'en'; }
 export function resolveLanguage(saved: unknown, deviceLanguages: (string | null)[]): Language {
   if (isLanguage(saved)) return saved;

@@ -18,7 +18,7 @@ function Navigation() {
   const { t } = useTranslation();
   const titleStyle = useTypography('button');
   return <Stack screenOptions={{ headerStyle: { backgroundColor: colors.canvas }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitleStyle: titleStyle, contentStyle: { backgroundColor: colors.canvas }, headerBackTitle: t('back') }}>
-    <Stack.Screen name="index" options={{ title: 'SIGApp' }} />
+    <Stack.Screen name="index" options={{ title: 'EvacuAid' }} />
     <Stack.Screen name="components" options={{ title: t('components') }} />
     <Stack.Screen name="buddy-map" options={{ title: t('map') }} />
   </Stack>;
