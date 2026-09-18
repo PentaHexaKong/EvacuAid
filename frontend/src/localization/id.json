@@ -89,5 +89,9 @@
   "savePreferences": "Simpan preferensi",
   "supportSettings": "Preferensi dukungan",
   "setupSaveError": "Preferensi belum tersimpan. Silakan coba lagi.",
-  "localPreferences": "Disimpan di perangkat ini. Ubah kapan saja melalui Beranda → Preferensi dukungan."
+  "localPreferences": "Disimpan di perangkat ini. Ubah kapan saja melalui Beranda → Preferensi dukungan.",
+  "settings": "Pengaturan",
+  "logout": "Keluar",
+  "logoutErrorTitle": "Belum dapat keluar",
+  "logoutErrorBody": "Perubahan belum tersimpan. Silakan coba lagi."
 }

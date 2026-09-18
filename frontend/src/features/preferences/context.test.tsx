@@ -36,3 +36,14 @@ test('read failure still finishes hydration', async () => {
   await waitFor(() => expect(result.current.ready).toBe(true));
   expect(result.current.preferences).toEqual(defaults);
 });
+test('logging out restores setup on the next launch without clearing support preferences', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify({ completed: true, largerText: true, strongerContrast: true }));
+  const first = renderHook(usePreferences, { wrapper: PreferencesProvider });
+  await waitFor(() => expect(first.result.current.ready).toBe(true));
+  await act(async () => first.result.current.save({ ...first.result.current.preferences, completed: false }));
+  expect(first.result.current.preferences.completed).toBe(false);
+  first.unmount();
+  const next = renderHook(usePreferences, { wrapper: PreferencesProvider });
+  await waitFor(() => expect(next.result.current.ready).toBe(true));
+  expect(next.result.current.preferences).toEqual({ completed: false, largerText: true, strongerContrast: true });
+});

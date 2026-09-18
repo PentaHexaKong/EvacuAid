@@ -1,3 +1,4 @@
+import { SettingsMenu } from '@/components/settings-menu';
 import { useState } from 'react';
 import { ActionSheetIOS, Modal, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +23,7 @@ export function OverviewScreen() {
     setSaving(true); setLanguageError(false);
     try { await selectLanguage(language); } catch { setLanguageError(true); } finally { setSaving(false); }
   };
-  return <Page>
+  return <><Page>
     <Modal visible={settingsOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSettingsOpen(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>{settingsOpen && <SetupScreen editing onDone={() => setSettingsOpen(false)} />}</SafeAreaView>
     </Modal>
@@ -39,5 +40,5 @@ export function OverviewScreen() {
       {Platform.OS === 'ios' ? <ActionButton variant="secondary" disabled={saving} loading={saving} label={`${t('language')}: ${i18n.language === 'id' ? 'Bahasa Indonesia' : 'English'}`} onPress={() => ActionSheetIOS.showActionSheetWithOptions({ title: t('language'), options: ['Bahasa Indonesia', 'English', t('cancel')], cancelButtonIndex: 2, tintColor: colors.primary }, (index) => { if (index === 0 || index === 1) void changeLanguage(index === 0 ? 'id' : 'en'); })} /> : <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>{(['id', 'en'] as const).map((language) => <Pressable key={language} disabled={saving} accessibilityRole="button" accessibilityState={{ selected: i18n.language === language, disabled: saving }} onPress={() => void changeLanguage(language)} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999, borderWidth: 1, borderColor: i18n.language === language ? colors.primary : colors.border, backgroundColor: pressed ? colors.sky : i18n.language === language ? colors.sky : colors.surface })}><AppText variant="button">{language === 'id' ? 'Bahasa Indonesia' : 'English'}</AppText></Pressable>)}</View>}
       {languageError && <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('languageError')}</AppText>}
     </View><ActionButton variant="secondary" label={t('supportSettings')} onPress={() => setSettingsOpen(true)} /><AppText variant="small" style={{ color: colors.muted }}>{t('demoOnly')}</AppText>
-  </Page>;
+  </Page><SettingsMenu /></>;
 }

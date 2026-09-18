@@ -89,5 +89,9 @@
   "savePreferences": "Save preferences",
   "supportSettings": "Support preferences",
   "setupSaveError": "Could not save your preferences. Please try again.",
-  "localPreferences": "Saved on this device. Change these anytime from Home → Support preferences."
+  "localPreferences": "Saved on this device. Change these anytime from Home → Support preferences.",
+  "settings": "Settings",
+  "logout": "Log out",
+  "logoutErrorTitle": "Could not log out",
+  "logoutErrorBody": "Your changes could not be saved. Please try again."
 }
