@@ -1,5 +1,5 @@
 {
-  "overview": "Ringkasan",
+  "overview": "Beranda",
   "components": "Komponen",
   "map": "Peta buddy",
   "preview": "PRATINJAU FONDASI",
@@ -69,5 +69,25 @@
   "noParticipants": "Tidak ada posisi yang tersedia.",
   "mapPaused": "Kembali ke layar ini untuk memulai simulasi baru.",
   "mapFooter": "Posisi lama bukan berarti seseorang masih di sana. Pratinjau ini menunjukkan kesegaran data, bukan layanan berbagi lokasi langsung.",
-  "back": "Kembali"
+  "cancel": "Batal",
+  "back": "Kembali",
+  "welcomeTitle": "Langkah berikutnya lebih jelas.",
+  "welcomeBody": "Informasi dan dukungan sesuai kebutuhanmu. Tanpa akun.",
+  "welcomePreviewTitle": "Jelajahi EvacuAid",
+  "welcomePreviewBody": "Coba simulasi peta buddy dan sesuaikan tampilan informasi. Peringatan langsung, berbagi lokasi nyata, dan rute evakuasi belum tersedia.",
+  "supportTitle": "Bagaimana EvacuAid dapat mendukungmu?",
+  "supportBody": "Pilih yang membantu. Kamu bisa memilih lebih dari satu atau melanjutkan tanpa perubahan.",
+  "largerText": "Teks lebih besar",
+  "largerTextDescription": "Perbesar teks konten selain pengaturan ukuran teks iPhone.",
+  "strongerContrast": "Kontras teks lebih kuat",
+  "strongerContrastDescription": "Buat informasi pendukung lebih gelap dan mudah dibedakan.",
+  "futureSupport": "Panduan suara, isyarat getar, dan rute tanpa tangga direncanakan, tetapi belum tersedia di pratinjau ini. Pengaturan aksesibilitas sistem tetap dapat digunakan tanpa penyiapan.",
+  "getStarted": "Mulai",
+  "skipSetup": "Lewati penyiapan",
+  "setUpLater": "Atur nanti",
+  "continueHome": "Lanjut ke beranda",
+  "savePreferences": "Simpan preferensi",
+  "supportSettings": "Preferensi dukungan",
+  "setupSaveError": "Preferensi belum tersimpan. Silakan coba lagi.",
+  "localPreferences": "Disimpan di perangkat ini. Ubah kapan saja melalui Beranda → Preferensi dukungan."
 }

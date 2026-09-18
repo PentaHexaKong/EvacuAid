@@ -1,5 +1,5 @@
 {
-  "overview": "Overview",
+  "overview": "Home",
   "components": "Components",
   "map": "Buddy map",
   "preview": "FOUNDATION PREVIEW",
@@ -69,5 +69,25 @@
   "noParticipants": "No positions are available.",
   "mapPaused": "Return to this screen to start a fresh simulation.",
   "mapFooter": "An old position does not mean someone is still there. This preview demonstrates freshness, not a live sharing service.",
-  "back": "Back"
+  "cancel": "Cancel",
+  "back": "Back",
+  "welcomeTitle": "A clearer next step.",
+  "welcomeBody": "Information and support, shaped around you. No account needed.",
+  "welcomePreviewTitle": "Explore EvacuAid",
+  "welcomePreviewBody": "Try a simulated buddy map and adjust how information is displayed. Live alerts, real sharing, and evacuation routing are not available yet.",
+  "supportTitle": "How can EvacuAid support you?",
+  "supportBody": "Choose what helps. Select more than one, or continue without changes.",
+  "largerText": "Larger text",
+  "largerTextDescription": "Enlarge app content in addition to your iPhone text settings.",
+  "strongerContrast": "Stronger text contrast",
+  "strongerContrastDescription": "Make secondary information darker and easier to distinguish.",
+  "futureSupport": "Spoken guidance, vibration cues, and step-free routing are planned, but are not available in this preview. Your system accessibility settings already work without setup.",
+  "getStarted": "Get started",
+  "skipSetup": "Skip setup",
+  "setUpLater": "Set up later",
+  "continueHome": "Continue to home",
+  "savePreferences": "Save preferences",
+  "supportSettings": "Support preferences",
+  "setupSaveError": "Could not save your preferences. Please try again.",
+  "localPreferences": "Saved on this device. Change these anytime from Home → Support preferences."
 }

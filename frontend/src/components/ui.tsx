@@ -1,3 +1,4 @@
+import { usePreferences } from '@/features/preferences/context';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, type TextProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,7 +7,10 @@ import { Card } from 'heroui-native/card';
 import { colors, radius, useTypography, type TextVariant } from '@/theme';
 
 export function AppText({ variant = 'body', style, ...props }: TextProps & { variant?: TextVariant }) {
-  return <Text allowFontScaling {...props} style={[useTypography(variant), style]} />;
+  const { preferences } = usePreferences();
+  const typography = useTypography(variant);
+  const resolved = StyleSheet.flatten([typography, style]);
+  return <Text allowFontScaling {...props} style={[typography, style, preferences.largerText && { fontSize: (resolved.fontSize ?? 16) * 1.2, lineHeight: (resolved.lineHeight ?? 24) * 1.2 }, preferences.strongerContrast && resolved.color === colors.muted && { color: colors.ink }]} />;
 }
 export function Page({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();

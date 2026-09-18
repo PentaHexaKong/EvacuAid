@@ -2,18 +2,28 @@ import '../../global.css';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, View } from 'react-native';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import * as SplashScreen from 'expo-splash-screen';
+import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
+import { SetupScreen } from '@/screens/setup';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
 import { colors, FontReadyContext } from '@/theme';
 
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 Uniwind.setTheme('light');
 
+function FirstRunGate() {
+  const { ready, preferences } = usePreferences();
+  useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
+  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
+  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen /></SafeAreaView>;
+}
 function Navigation() {
   const { t } = useTranslation();
   return <NativeTabs tintColor={colors.primary} disableTransparentOnScrollEdge minimizeBehavior="never">
@@ -44,6 +54,6 @@ export default function RootLayout() {
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
     {(!ready || (!fontsLoaded && !fontError)) ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><Navigation /></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider>}
+    <FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><PreferencesProvider><FirstRunGate /></PreferencesProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }
