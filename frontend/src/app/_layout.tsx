@@ -1,7 +1,7 @@
 import '../../global.css';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,18 +10,26 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
-import { colors, FontReadyContext, useTypography } from '@/theme';
+import { colors, FontReadyContext } from '@/theme';
 
 Uniwind.setTheme('light');
 
 function Navigation() {
   const { t } = useTranslation();
-  const titleStyle = useTypography('button');
-  return <Stack screenOptions={{ headerStyle: { backgroundColor: colors.canvas }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitleStyle: titleStyle, contentStyle: { backgroundColor: colors.canvas }, headerBackTitle: t('back') }}>
-    <Stack.Screen name="index" options={{ title: 'EvacuAid' }} />
-    <Stack.Screen name="components" options={{ title: t('components') }} />
-    <Stack.Screen name="buddy-map" options={{ title: t('map') }} />
-  </Stack>;
+  return <NativeTabs tintColor={colors.primary} disableTransparentOnScrollEdge minimizeBehavior="never">
+    <NativeTabs.Trigger name="(overview)">
+      <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+      <NativeTabs.Trigger.Label>{t('overview')}</NativeTabs.Trigger.Label>
+    </NativeTabs.Trigger>
+    <NativeTabs.Trigger name="(map)">
+      <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
+      <NativeTabs.Trigger.Label>{t('map')}</NativeTabs.Trigger.Label>
+    </NativeTabs.Trigger>
+    <NativeTabs.Trigger name="(components)">
+      <NativeTabs.Trigger.Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} md="dashboard" />
+      <NativeTabs.Trigger.Label>{t('components')}</NativeTabs.Trigger.Label>
+    </NativeTabs.Trigger>
+  </NativeTabs>;
 }
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
