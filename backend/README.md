@@ -1,6 +1,6 @@
-# SigApp Backend MVP
+# EvacuAid Backend MVP
 
-Small FastAPI backend for EvacuAid/SigApp. It fetches contextual BMKG weather and current PetaBencana community reports, normalizes them, compares reports to an optional user location, and returns a transparent response for the frontend.
+Small FastAPI backend for EvacuAid. It fetches contextual BMKG weather and current PetaBencana community reports, normalizes them, compares reports to an optional user location, and returns a transparent response for the frontend.
 
 It is **not** a hazard-prediction system and does not create official warnings. `official_status` stays `null` because this MVP does not integrate an authoritative warning/instruction feed. BMKG forecasts are contextual weather data; PetaBencana `/reports` data is community reporting. A nearby report can result in `ELEVATED` and `PREPARE`, never `EVACUATE`.
 
