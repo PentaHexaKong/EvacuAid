@@ -30,7 +30,7 @@ HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "10"))
 # freshness guard, not a short-lived event-alert expiry.
 MAX_DATA_AGE_MINUTES = float(os.getenv("MAX_DATA_AGE_MINUTES", "1440"))
 USER_AGENT = os.getenv(
-    "USER_AGENT", "EvacuAid-SigApp-MVP/0.1 (hackathon prototype)"
+    "USER_AGENT", "EvacuAid-MVP/0.1 (hackathon prototype)"
 )
 
 

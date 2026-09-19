@@ -1,1 +1,1 @@
-"""SigApp backend application package."""
+"""EvacuAid backend application package."""

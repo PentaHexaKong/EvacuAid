@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the SigApp hackathon backend MVP."""
+"""FastAPI entrypoint for the EvacuAid hackathon backend MVP."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ from app.services.petabencana_service import fetch_reports
 from app.services.risk_service import aggregate_risk, reports_with_distances
 
 
-app = FastAPI(title="SigApp Backend", version="0.1.0")
+app = FastAPI(title="EvacuAid Backend", version="0.1.0")
 
 
 @app.get("/")
 async def root() -> dict[str, str]:
-    return {"service": "SigApp Backend", "status": "running"}
+    return {"service": "EvacuAid Backend", "status": "running"}
 
 
 @app.get("/health")
 async def health() -> dict[str, object]:
     bmkg, reports = await asyncio.gather(fetch_weather(DEFAULT_ADM4), fetch_reports())
     return {
-        "service": "SigApp Backend",
+        "service": "EvacuAid Backend",
         "status": "running",
         "sources": {
             "BMKG": {"status": "available" if bmkg.available else "unavailable", "error": bmkg.error},

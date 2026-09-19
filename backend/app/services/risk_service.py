@@ -1,4 +1,4 @@
-"""Transparent, conservative aggregation logic for SigApp's MVP risk response."""
+"""Transparent, conservative aggregation logic for EvacuAid's MVP risk response."""
 
 from __future__ import annotations
 
