@@ -1,15 +1,12 @@
 # EvacuAid Backend
 
-EvacuAid is a Docker-first FastAPI backend for personalized disaster context. PostgreSQL with PostGIS is the canonical profile store. Redis is a best-effort cache for BMKG and PetaBencana source responses.
+EvacuAid is a Docker-first FastAPI backend for personalized disaster context. It combines contextual BMKG weather, PetaBencana community reports, a user's saved location, accessibility needs, and delivery preferences into transparent guidance for the frontend.
 
-<<<<<<< Updated upstream
-## Architecture
-=======
-It is **not** a hazard-prediction system and does not create official warnings. `official_status` stays `null` because this MVP does not integrate an authoritative warning/instruction feed. BMKG forecasts are contextual weather data; PetaBencana `/reports` data is community reporting. A nearby report can result in `ELEVATED` and `PREPARE`, never `EVACUATE`.
+It is **not** a hazard-prediction system and does not generate official warnings. Community reports can produce `WATCH`, `ELEVATED`, or `PREPARE`; they never independently produce `EVACUATE`. `official_status` remains `null` until a verified authoritative warning source is integrated.
 
 ## Architecture and current stage
 
-The diagram shows the intended EvacuAid flow. Green nodes are implemented for this MVP, amber nodes are partially implemented, and grey nodes are future work. The official-source branch is deliberately separate from contextual data: it must not be represented as live until a verified authoritative API is integrated.
+Green nodes are implemented, amber nodes are partial, and grey nodes are future work. The official-source branch is deliberately separate from contextual data and must not be presented as live until its API is verified and integrated.
 
 ```mermaid
 flowchart TB
@@ -21,93 +18,93 @@ flowchart TB
 
     weather["BMKG Weather Forecast — contextual"]
     reports["PetaBencana — community reports"]
-    backend["EvacuAid Backend"]
-    personalization["Personalization — profile and assistance rule"]
+    profile["PostgreSQL profile — location, accessibility, preferences"]
+    backend["EvacuAid risk and context services"]
+    personalization["Personalized presentation requirements"]
     action["User action — decision output only"]
 
     seismic --> backend
     volcano --> backend
     weather --> backend
     reports --> backend
+    profile --> backend
     backend --> personalization --> action
 
     classDef implemented fill:#dcfce7,stroke:#15803d,color:#14532d;
     classDef partial fill:#fef3c7,stroke:#d97706,color:#78350f;
     classDef future fill:#f3f4f6,stroke:#6b7280,color:#374151;
 
-    class weather,reports,backend implemented;
+    class weather,reports,profile,backend implemented;
     class personalization,action partial;
     class seismic,volcano future;
 ```
 
 | Diagram stage | Status sekarang | Letak file / bukti implementasi |
 | --- | --- | --- |
-| Official source: BMKG / InaTEWS (tsunami / earthquake) | Belum diintegrasikan. | Belum ada service; `official_status` sengaja selalu `null` di `app/services/risk_service.py`. |
-| Official source: PVMBG / MAGMA (volcano) | Belum diintegrasikan. | Belum ada service atau endpoint. |
-| Contextual source: BMKG Weather Forecast | Selesai untuk MVP: fetch, normalize, raw/processed JSON, fallback error. | `app/services/bmkg_service.py`, `app/config.py`, `data/raw/bmkg_raw.json`, `data/processed/bmkg_normalized.json` |
-| Contextual source: PetaBencana reports | Selesai untuk MVP: fetch GeoJSON, normalize, distance filtering, fallback error. Ini adalah community reports, bukan official warning. | `app/services/petabencana_service.py`, `app/services/risk_service.py`, `data/raw/petabencana_raw.json`, `data/processed/petabencana_normalized.json` |
-| EvacuAid Backend aggregation | Selesai untuk MVP: gabungkan source + user coordinates, hitung exposure, signal, action, confidence, lalu simpan output. | `app/services/risk_service.py`, `app/utils/geo.py`, `app/main.py`, `data/final_output.json` |
-| Personalization | Parsial: menerima `user_profile` dan `needs_assistance`; hanya `MOBILITY_LIMITATION` atau explicit request yang mengaktifkan physical-assistance flag. | `app/models/risk.py`, `app/services/risk_service.py` |
-| User action | Parsial: mengembalikan `MONITOR` atau `PREPARE`; belum mengirim push alert, meminta buddy, atau mengarahkan rute. | `app/models/risk.py`, `app/services/risk_service.py` |
-| Live frontend integration | Belum: frontend masih memakai simulated location/buddy source dan belum memanggil `/api/risk`. | `../frontend/src/features/buddy-map/location-source.ts`, future client for `POST /api/risk` |
+| Official sources: BMKG / InaTEWS and PVMBG / MAGMA | Belum diintegrasikan. `official_status` tidak dibuat dari forecast atau citizen report. | `app/services/risk_service.py`, `app/models/risk.py` |
+| Contextual source: BMKG Weather Forecast | Selesai: fetch, normalize, raw/processed JSON, fallback error. | `app/services/bmkg_service.py`, `app/config.py` |
+| Contextual source: PetaBencana reports | Selesai: fetch GeoJSON, normalize, distance filtering, fallback error. | `app/services/petabencana_service.py`, `app/services/risk_service.py` |
+| User profile store | Selesai: persisted user, location, multi-value accessibility, and delivery preferences. | `app/db/models/`, `app/repositories/users.py`, `app/routers/users.py`, `alembic/versions/20260920_01_profile_foundation.py` |
+| EvacuAid risk and context services | Selesai: aggregate source + saved user context, calculate exposure/signal/action/confidence, and return explainable requirements. | `app/services/risk_service.py`, `app/routers/context.py`, `app/models/context.py` |
+| Personalization | Parsial but usable: voice, vibration, text, accessible-route, and assistance requirements are returned. They do not change hazard severity. | `app/models/risk.py`, `app/services/risk_service.py` |
+| User action | Decision output only: `MONITOR`, `PREPARE`, or a future official instruction. No push notification, buddy request, rescue dispatch, or route guidance yet. | `app/models/risk.py`, `app/services/risk_service.py` |
+| Live frontend integration | Belum termasuk Compose stack; frontend must call the API and render the response. | `../frontend/`, `POST /api/risk`, `GET /v1/context` |
 
-**MVP boundary:** the adopted scope is flood-first. Do not add the tsunami/earthquake or volcano branch merely because it appears in the future architecture diagram; first decide to expand scope and verify the relevant official APIs.
+**MVP boundary:** EvacuAid remains flood-first. Do not add tsunami/earthquake or volcano features only because they appear in the future architecture branch.
 
-## Folder structure
->>>>>>> Stashed changes
+## Runtime architecture
 
 ```text
-Frontend -> FastAPI -> PostgreSQL + PostGIS
-                    -> Redis cache
-                    -> BMKG and PetaBencana
+Frontend
+  ├─ POST /api/risk               stateless contextual assessment
+  └─ GET /v1/context?user_id=...  persisted-user contextual assessment
+                 │
+                 ▼
+            FastAPI backend
+              ├─ PostgreSQL 16 + PostGIS 3.4: user profile data
+              ├─ Redis 7: best-effort source-response cache for /v1/context
+              ├─ BMKG weather forecast
+              └─ PetaBencana community reports
 ```
 
-Community reports are supporting evidence only: without an authoritative warning, they can produce `WATCH`, `ELEVATED`, or `PREPARE`, never `EVACUATE`.
+PostgreSQL is the canonical profile store. The migration enables PostGIS for future spatial work, but the current user model stores decimal latitude/longitude and uses Haversine distance in the application; no PostGIS geometry query is implemented yet.
 
-## Start
+Redis is non-authoritative. It caches BMKG weather for 5 minutes and PetaBencana reports for 60 seconds only when `/v1/context` is called. If Redis fails, the request fetches usable live data instead. The legacy `/api/weather`, `/api/reports`, and `/api/risk` endpoints do not use Redis.
 
-From `backend`:
+## Start with Docker
 
-```powershell
-Copy-Item .env.example .env
-```
+Prerequisite: Docker Desktop with Docker Compose enabled. Stop a local Uvicorn server first if it already uses port `8000`.
 
 From the repository root:
 
 ```powershell
+Copy-Item backend\.env.example backend\.env
 docker compose up --build
 ```
 
-The API is available at `http://127.0.0.1:8000`; Swagger is at `/docs`.
+The backend applies Alembic migrations before starting Uvicorn. The API is available at <http://127.0.0.1:8000>; Swagger is at <http://127.0.0.1:8000/docs>.
 
-## Docker services
+Compose services:
 
-- `backend`: FastAPI, migrations applied before Uvicorn starts
-- `postgres`: PostgreSQL 16 with PostGIS 3.4
-- `redis`: transient cache only
+- `backend`: FastAPI application and Alembic migration runner.
+- `postgres`: PostgreSQL 16 with PostGIS 3.4; persisted in the `postgres_data` Docker volume.
+- `redis`: transient cache; persisted in the `redis_data` Docker volume.
 
-Compose defaults are development-only. Configure `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in the root environment or Compose invocation; configure `DATABASE_URL` and `REDIS_URL` in `backend/.env` for non-Compose deployment.
-
-## Migrations and tests
-
-```powershell
-docker compose exec backend alembic upgrade head
-docker compose exec backend pytest
-```
-
-The test suite covers profile persistence, coordinate validation, multiple accessibility attributes, preferences, context orchestration, Redis fallback, explainable decision reasons, and the invariant that citizen reports cannot independently trigger evacuation.
+The Compose defaults (`evacuaid` / `change-me`) are development-only. Set `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` through the root environment or Compose invocation for another environment. `backend/.env` contains application defaults for standalone backend execution.
 
 ## API
 
-Existing MVP endpoints remain available:
+### Stateless MVP endpoints
 
 - `GET /`
 - `GET /health`
-- `GET /api/weather`
-- `GET /api/reports`
+- `GET /api/weather?adm4=31.71.03.1001`
+- `GET /api/reports?latitude=...&longitude=...&radius_m=...`
 - `POST /api/risk`
 
-Profile endpoints:
+`POST /api/risk` accepts coordinates plus optional accessibility/delivery flags and writes its latest complete response to `data/final_output.json`.
+
+### Persisted user and context endpoints
 
 - `POST /v1/users`
 - `GET /v1/users/{userId}`
@@ -117,18 +114,31 @@ Profile endpoints:
 - `GET|PUT /v1/users/{userId}/preferences`
 - `GET /v1/context?user_id={uuid}`
 
-`/v1/context` loads the persisted user, location, accessibility, and preferences, then delegates exposure and recommendation generation to the risk service. Its action includes stable `reason_codes` and presentation requirements. Accessibility changes delivery requirements, not hazard severity.
+`GET /v1/context` requires a saved user location. It loads the profile, accessibility values, and delivery preferences, uses cached source responses when available, then returns risk context with stable `reason_codes` and presentation requirements.
 
-## Schema and current scope
+## Data and migrations
 
-The initial Alembic revision creates:
+`alembic/versions/20260920_01_profile_foundation.py` creates:
 
-- `users`: UUID profile, optional coordinates, assistance flag, timestamps
-- `user_accessibility`: normalized multi-value attributes with one type per user
-- `user_preferences`: one-to-one voice, vibration, text, and language preferences
+- `users`: UUID profile, optional coordinates, assistance flag, timestamps.
+- `user_accessibility`: normalized multi-value accessibility attributes per user.
+- `user_preferences`: voice, vibration, text, and language preferences.
 
-Implemented: profile persistence, profile APIs, v2 explainable risk fields, source caching with graceful Redis failure, and unified context.
+Runtime source snapshots are created under `data/raw/` and `data/processed/`; the latest stateless risk response is `data/final_output.json`. Docker mounts `backend/data` so these outputs survive container replacement.
 
-Partial: authoritative warning ingestion is future-ready only; no official source is fabricated.
+## Tests
 
-Future: buddy relationships, assistance workflow, shelter routing, and notification delivery. Context truthfully returns `NOT_REQUESTED` assistance and `NOT_REQUIRED` navigation until those systems exist.
+With the stack running:
+
+```powershell
+docker compose exec backend pytest -q
+docker compose exec backend alembic current
+```
+
+The suite covers profile persistence, accessibility and preference updates, context orchestration, Redis fallback, coordinate validation, explainable reason codes, and the invariant that citizen reports cannot independently trigger evacuation.
+
+## Safety and future work
+
+- Do not infer `SIAGA`, `AWAS`, or evacuation from weather values, report distance, or citizen reports.
+- Do not claim current reports mean there is no disaster outside the query result.
+- Future work: verified official-warning ingestion, buddy relationships, assistance workflow, shelter/route data, and notification delivery.
