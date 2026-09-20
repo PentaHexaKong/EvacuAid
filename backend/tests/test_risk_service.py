@@ -7,6 +7,7 @@ from app.models.risk import (
     ConfidenceLevel,
     ExposureStatus,
     RecommendedAction,
+    OfficialWarningContext,
     RiskRequest,
     RiskResponse,
 )
@@ -113,6 +114,7 @@ def test_nearby_report_is_elevated_and_prepare(tmp_path, monkeypatch):
     assert response.exposure.status == ExposureStatus.NEARBY
     assert response.event.signal_level.value == "ELEVATED"
     assert response.action.recommended_action == RecommendedAction.PREPARE
+    assert "NEARBY_CITIZEN_REPORTS" in [code.value for code in response.action.reason_codes]
 
 
 def test_citizen_report_does_not_trigger_evacuation(tmp_path, monkeypatch):
@@ -125,6 +127,27 @@ def test_citizen_report_does_not_trigger_evacuation(tmp_path, monkeypatch):
     )
     assert response.event.official_status is None
     assert response.action.recommended_action != RecommendedAction.EVACUATE
+
+
+def test_visual_and_mobility_requirements_do_not_change_hazard_level(tmp_path, monkeypatch):
+    response = aggregate(
+        tmp_path,
+        request(accessibility=["VISUAL_IMPAIRMENT", "MOBILITY_LIMITATION"]),
+        BmkgFetchResult(WEATHER),
+        PetaBencanaFetchResult([NEARBY_FLOOD]),
+        monkeypatch,
+    )
+    assert response.event.signal_level.value == "ELEVATED"
+    assert response.action.requirements.voice_guidance_required is True
+    assert response.action.requirements.accessible_route_required is True
+    assert response.action.requirements.assistance_required is True
+
+
+def test_evacuation_requires_authoritative_awas(tmp_path, monkeypatch):
+    weather_fetcher, reports_fetcher = fetchers(BmkgFetchResult(WEATHER), PetaBencanaFetchResult([NEARBY_FLOOD]))
+    monkeypatch.setattr(risk_service, "FINAL_OUTPUT_PATH", tmp_path / "final_output.json")
+    response = run(risk_service.aggregate_risk(request(), weather_fetcher, reports_fetcher, OfficialWarningContext(status="AWAS")))
+    assert response.action.recommended_action == RecommendedAction.EVACUATE
 
 
 def test_external_api_failure_falls_back_without_crashing(tmp_path, monkeypatch):

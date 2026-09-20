@@ -38,6 +38,24 @@ class RecommendedAction(str, Enum):
     EVACUATE = "EVACUATE"
 
 
+class ReasonCode(str, Enum):
+    HEAVY_RAIN_FORECAST = "HEAVY_RAIN_FORECAST"
+    NEARBY_CITIZEN_REPORTS = "NEARBY_CITIZEN_REPORTS"
+    NEAREST_REPORT_WITHIN_1KM = "NEAREST_REPORT_WITHIN_1KM"
+    OFFICIAL_SIAGA = "OFFICIAL_SIAGA"
+    OFFICIAL_AWAS = "OFFICIAL_AWAS"
+    SOURCE_STALE = "SOURCE_STALE"
+
+
+class OfficialWarningStatus(str, Enum):
+    SIAGA = "SIAGA"
+    AWAS = "AWAS"
+
+
+class OfficialWarningContext(BaseModel):
+    status: OfficialWarningStatus
+
+
 class ConfidenceLevel(str, Enum):
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
@@ -50,6 +68,10 @@ class RiskRequest(BaseModel):
     longitude: float | None = Field(default=None, ge=-180, le=180)
     user_profile: UserProfile = UserProfile.NORMAL
     needs_assistance: bool = False
+    accessibility: list[str] = Field(default_factory=list, max_length=20)
+    voice_enabled: bool = True
+    vibration_enabled: bool = True
+    text_enabled: bool = True
 
     @model_validator(mode="after")
     def coordinates_are_a_pair(self) -> "RiskRequest":
@@ -81,6 +103,16 @@ class WeatherData(BaseModel):
 class ActionData(BaseModel):
     recommended_action: RecommendedAction
     assistance_required: bool
+    reason_codes: list[ReasonCode] = Field(default_factory=list)
+    requirements: "RequirementsData"
+
+
+class RequirementsData(BaseModel):
+    assistance_required: bool
+    accessible_route_required: bool
+    voice_guidance_required: bool
+    vibration_guidance_required: bool
+    text_guidance_required: bool
 
 
 class AssistanceData(BaseModel):

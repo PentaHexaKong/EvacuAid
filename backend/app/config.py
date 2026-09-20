@@ -32,6 +32,11 @@ MAX_DATA_AGE_MINUTES = float(os.getenv("MAX_DATA_AGE_MINUTES", "1440"))
 USER_AGENT = os.getenv(
     "USER_AGENT", "EvacuAid-MVP/0.1 (hackathon prototype)"
 )
+DATABASE_URL = os.getenv(
+    'DATABASE_URL', 'postgresql+asyncpg://evacuaid:change-me@postgres:5432/evacuaid'
+)
+REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+CONTEXT_CACHE_TTL_SECONDS = int(os.getenv('CONTEXT_CACHE_TTL_SECONDS', '60'))
 
 
 def ensure_data_directories() -> None:
