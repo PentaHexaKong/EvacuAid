@@ -1,7 +1,9 @@
 import '../../global.css';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, View } from 'react-native';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { AccessibilityInfo, ActivityIndicator, Platform, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { ProfileProvider } from '@/features/profile/context';
+import { RequestDraftProvider } from '@/features/requests/draft';
 import * as SplashScreen from 'expo-splash-screen';
 import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
 import { SetupScreen } from '@/screens/setup';
@@ -13,33 +15,40 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
-import { colors, FontReadyContext } from '@/theme';
+import { colors, FontReadyContext, SystemReduceMotionContext } from '@/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 Uniwind.setTheme('light');
 
+export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' };
+
 function FirstRunGate() {
   const { ready, preferences } = usePreferences();
+  const router = useRouter();
+  const [returnHome, setReturnHome] = useState(false);
+  useEffect(() => {
+    if (preferences.completed && returnHome) router.replace('/');
+  }, [preferences.completed, returnHome, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
-  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen /></SafeAreaView>;
+  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={() => setReturnHome(true)} /></SafeAreaView>;
 }
 function Navigation() {
   const { t } = useTranslation();
-  return <NativeTabs tintColor={colors.primary} disableTransparentOnScrollEdge minimizeBehavior="never">
-    <NativeTabs.Trigger name="(overview)">
-      <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
-      <NativeTabs.Trigger.Label>{t('overview')}</NativeTabs.Trigger.Label>
-    </NativeTabs.Trigger>
-    <NativeTabs.Trigger name="(map)">
-      <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
-      <NativeTabs.Trigger.Label>{t('map')}</NativeTabs.Trigger.Label>
-    </NativeTabs.Trigger>
-    <NativeTabs.Trigger name="(components)">
-      <NativeTabs.Trigger.Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} md="dashboard" />
-      <NativeTabs.Trigger.Label>{t('components')}</NativeTabs.Trigger.Label>
-    </NativeTabs.Trigger>
-  </NativeTabs>;
+  return <RequestDraftProvider><Stack screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
+    <Stack.Screen name="contact/[id]" options={{ title: t('contactTitle') }} />
+    <Stack.Screen name="destinations/index" options={{ title: t('destinationsTitle') }} />
+    <Stack.Screen name="destinations/[id]" options={{ title: t('destinationTitle') }} />
+    <Stack.Screen name="request/index" options={{ title: t('requestHelp') }} />
+    <Stack.Screen name="request/review" options={{ title: t('reviewRequest') }} />
+    {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
+    <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
+    <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
+    <Stack.Screen name="(map)" options={{ headerShown: false }} />
+    <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
+  </Stack></RequestDraftProvider>;
 }
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
@@ -54,6 +63,6 @@ export default function RootLayout() {
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
     {(!ready || (!fontsLoaded && !fontError)) ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><PreferencesProvider><FirstRunGate /></PreferencesProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider>}
+    <SystemReduceMotionContext.Provider value={reduceMotion}><FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

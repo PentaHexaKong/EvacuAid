@@ -52,3 +52,23 @@ declare module '@tabler/icons-react-native/IconWifiOff' {
   const Icon: typeof import('@tabler/icons-react-native').IconWifiOff;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconSearch' {
+  const Icon: typeof import('@tabler/icons-react-native').IconSearch;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconBell' {
+  const Icon: typeof import('@tabler/icons-react-native').IconBell;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconSettings' {
+  const Icon: typeof import('@tabler/icons-react-native').IconSettings;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconHeart' {
+  const Icon: typeof import('@tabler/icons-react-native').IconHeart;
+  export default Icon;
+}

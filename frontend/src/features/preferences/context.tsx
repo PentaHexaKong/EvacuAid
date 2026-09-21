@@ -18,3 +18,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   };
   return <Context.Provider value={{ preferences, ready, save }}>{children}</Context.Provider>;
 }
+
+export function PreferencesPreview({ preferences, children }: { preferences: Preferences; children: ReactNode }) {
+  const context = useContext(Context);
+  return <Context.Provider value={{ ...context, preferences }}>{children}</Context.Provider>;
+}
