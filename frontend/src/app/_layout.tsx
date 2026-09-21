@@ -7,6 +7,7 @@ import { RequestDraftProvider } from '@/features/requests/draft';
 import * as SplashScreen from 'expo-splash-screen';
 import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
 import { SetupScreen } from '@/screens/setup';
+import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -35,7 +36,7 @@ function FirstRunGate() {
 }
 function Navigation() {
   const { t } = useTranslation();
-  return <RequestDraftProvider><Stack screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
+  return <RequestDraftProvider><Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
     <Stack.Screen name="contact/[id]" options={{ title: t('contactTitle') }} />
@@ -46,6 +47,7 @@ function Navigation() {
     {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
     <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
+    <Stack.Screen name="route-simulation" options={{ title: t('routeSimulation') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />
     <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
   </Stack></RequestDraftProvider>;

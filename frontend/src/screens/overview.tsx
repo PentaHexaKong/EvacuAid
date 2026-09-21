@@ -68,6 +68,7 @@ export function OverviewScreen() {
             <Button isIconOnly variant="outline" accessibilityLabel={t(label)} onPress={() => href ? router.navigate(href) : Alert.alert(t('homeReport'), t('homeReportUnavailable'))} style={styles.quickButton}><Icon size={26} strokeWidth={1.7} color={colors.primary} /></Button>
             <AppText variant="button" accessible={false} style={{ textAlign: 'center', fontSize: 14, lineHeight: 20 }}>{t(label)}</AppText>
           </View>)}</View>
+          {__DEV__ && <Button variant="secondary" onPress={() => router.push('/route-simulation')} style={{ minHeight: 48, height: 'auto', paddingVertical: 12 }}><AppText variant="button" style={{ color: colors.primary }}>{t('routeSimulation')}</AppText></Button>}
         </View>
         <View style={{ gap: 12 }}>
           <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t('homeRecentAlert')}</AppText><Button variant="ghost" size="sm" onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Button></View>

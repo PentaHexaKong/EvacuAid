@@ -1,20 +1,24 @@
 import { SheetHeaderContext, SheetScrollView } from './sheet-scroll-view';
+import { PageHeaderContext, PageScrollView, PageTitleContext } from './page-scroll-view';
 import { usePreferences } from '@/features/preferences/context';
-import { useContext, useEffect, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, useAnimatedValue, type TextProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from 'heroui-native/card';
 import { colors, radius, SystemReduceMotionContext, useTypography, type TextVariant } from '@/theme';
 
 export function AppText({ variant = 'body', style, ...props }: TextProps & { variant?: TextVariant }) {
+  const measureTitle = useContext(PageTitleContext);
+  const text = useRef<Text>(null);
   const { preferences } = usePreferences();
   const typography = useTypography(variant);
   const resolved = StyleSheet.flatten([typography, style]);
-  return <Text allowFontScaling {...props} style={[typography, style, preferences.largerText && { fontSize: (resolved.fontSize ?? 16) * 1.2, lineHeight: (resolved.lineHeight ?? 24) * 1.2 }, preferences.strongerContrast && resolved.color === colors.muted && { color: colors.ink }]} />;
+  return <Text ref={text} allowFontScaling {...props} onLayout={event => { if (props.accessibilityRole === 'header') measureTitle?.(text.current); props.onLayout?.(event); }} style={[typography, style, preferences.largerText && { fontSize: (resolved.fontSize ?? 16) * 1.2, lineHeight: (resolved.lineHeight ?? 24) * 1.2 }, preferences.strongerContrast && resolved.color === colors.muted && { color: colors.ink }]} />;
 }
 export function Page({ children, keyboard = false }: { children: ReactNode; keyboard?: boolean }) {
   const inSheet = useContext(SheetHeaderContext);
-  const Container = inSheet ? SheetScrollView : ScrollView;
+  const header = useContext(PageHeaderContext);
+  const Container = header ? PageScrollView : inSheet ? SheetScrollView : ScrollView;
   return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={styles.page} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>{children}</Container>;
 }
 export function Panel({ children }: { children: ReactNode }) {

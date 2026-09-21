@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActionSheetIOS, Modal, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SetupScreen } from '@/screens/setup';
+import { PageHeaderContext, PageTitleContext } from '@/components/page-scroll-view';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import IconArrowUpRight from '@tabler/icons-react-native/IconArrowUpRight';
@@ -23,9 +24,9 @@ export function OverviewScreen() {
     try { await selectLanguage(language); } catch { setLanguageError(true); } finally { setSaving(false); }
   };
   return <><Page>
-    <Modal visible={settingsOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSettingsOpen(false)}>
+    <PageHeaderContext.Provider value={null}><PageTitleContext.Provider value={null}><Modal visible={settingsOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSettingsOpen(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>{settingsOpen && <SetupScreen editing onDone={() => setSettingsOpen(false)} />}</SafeAreaView>
-    </Modal>
+    </Modal></PageTitleContext.Provider></PageHeaderContext.Provider>
     <SectionHeading number={t('preview')} title={t('overviewTitle')} subtitle={t('overviewDescription')} />
     <Panel><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><IconMap2 size={32} strokeWidth={2} color={colors.primary} /><AppText variant="eyebrow" style={{ color: colors.muted }}>01</AppText></View>
       <AppText variant="section" accessibilityRole="header">{t('mapCardTitle')}</AppText><AppText style={{ color: colors.muted }}>{t('mapCardBody')}</AppText>

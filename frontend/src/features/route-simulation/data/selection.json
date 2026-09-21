@@ -1,0 +1,216 @@
+{
+  "reviewedAt": "2026-09-21",
+  "review": "Source tags and shared-node topology inspected; no field access or safety verification. Only the listed contiguous portions are included. The hall vertex is about 152 m from the fictional sample point because nearer public paths are disconnected or gated. Generic vehicle turn restrictions and vehicle one-way tags do not constrain walking. Any foot restriction or ambiguous barrier is rejected.",
+  "endpoints": {
+    "person": 6331279551,
+    "hall": 13310041375,
+    "center": 4918250834,
+    "buddy": 8503625824
+  },
+  "spans": [
+    {
+      "way": 31768562,
+      "from": 9173660890,
+      "to": 355625167,
+      "name": "Jalan Kemang VI"
+    },
+    {
+      "way": 31769269,
+      "from": 4761465016,
+      "to": 355633892,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 31769270,
+      "from": 355633911,
+      "to": 355633891,
+      "name": "Jalan Kemang Selatan VIII"
+    },
+    {
+      "way": 31769354,
+      "from": 356142880,
+      "to": 355635317,
+      "name": "Jalan Manunggal Juang"
+    },
+    {
+      "way": 31769358,
+      "from": 355635317,
+      "to": 355635351,
+      "name": "Jalan Haji Ami"
+    },
+    {
+      "way": 31769360,
+      "from": 355635307,
+      "to": 9282460941,
+      "name": "Jalan Haji Ambas"
+    },
+    {
+      "way": 31769499,
+      "from": 355636674,
+      "to": 355636686,
+      "name": "Jalan Kemang Selatan X"
+    },
+    {
+      "way": 31779824,
+      "from": 309040917,
+      "to": 7098665041,
+      "name": "Jalan Kemang Raya"
+    },
+    {
+      "way": 32096568,
+      "from": 356142880,
+      "to": 3172622098,
+      "name": "Jalan Bunga Mawar"
+    },
+    {
+      "way": 32122344,
+      "from": 360557035,
+      "to": 4918250838,
+      "name": "Jalan Bunga Melati"
+    },
+    {
+      "way": 32122366,
+      "from": 360557035,
+      "to": 360555790,
+      "name": "Jalan Haji Saidi IV"
+    },
+    {
+      "way": 153007253,
+      "from": 9282460944,
+      "to": 355635351,
+      "name": "Jalan Haji Abdul Kodir"
+    },
+    {
+      "way": 311574662,
+      "from": 3172622097,
+      "to": 3172622098,
+      "name": "Jalan Mawar I"
+    },
+    {
+      "way": 483404952,
+      "from": 355633892,
+      "to": 355633897,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 483404953,
+      "from": 355633891,
+      "to": 4761465016,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 491072479,
+      "from": 355636679,
+      "to": 4832316088,
+      "name": "Jalan Kemang Selatan X A"
+    },
+    {
+      "way": 491072482,
+      "from": 8503625821,
+      "to": 355636674,
+      "name": "Jalan Kemang Selatan X B"
+    },
+    {
+      "way": 500869933,
+      "from": 355635362,
+      "to": 355635307,
+      "name": "Jalan Haji Ambas"
+    },
+    {
+      "way": 500869949,
+      "from": 4918250838,
+      "to": 4918250834,
+      "name": "Gang Haji Yahya"
+    },
+    {
+      "way": 571234576,
+      "from": 5490508868,
+      "to": 4832316088,
+      "name": "Unnamed path"
+    },
+    {
+      "way": 571542081,
+      "from": 360555790,
+      "to": 356143055,
+      "name": "Jalan Abdul Majid Raya"
+    },
+    {
+      "way": 748826675,
+      "from": 356143052,
+      "to": 356143055,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 760574538,
+      "from": 7098665041,
+      "to": 355633911,
+      "name": "Jalan Kemang Raya"
+    },
+    {
+      "way": 760574539,
+      "from": 355633911,
+      "to": 6771012283,
+      "name": "Jalan Kemang Raya"
+    },
+    {
+      "way": 760574540,
+      "from": 6771012283,
+      "to": 355636686,
+      "name": "Jalan Kemang Raya"
+    },
+    {
+      "way": 761351111,
+      "from": 355633897,
+      "to": 355633902,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 761351112,
+      "from": 355633902,
+      "to": 356143052,
+      "name": "Jalan Pelita Abdul Majid"
+    },
+    {
+      "way": 803650296,
+      "from": 355625168,
+      "to": 355625167,
+      "name": "Jalan Kemang VI"
+    },
+    {
+      "way": 915463977,
+      "from": 8503625824,
+      "to": 8503625821,
+      "name": "Unnamed path"
+    },
+    {
+      "way": 992964905,
+      "from": 309040917,
+      "to": 9173660890,
+      "name": "Jalan Kemang VI"
+    },
+    {
+      "way": 998062416,
+      "from": 355633897,
+      "to": 355635307,
+      "name": "Jalan Haji Ambas"
+    },
+    {
+      "way": 1006087262,
+      "from": 9282460941,
+      "to": 9282460944,
+      "name": "Unnamed path"
+    },
+    {
+      "way": 1341986513,
+      "from": 355635351,
+      "to": 355635362,
+      "name": "Jalan Haji Ami"
+    },
+    {
+      "way": 1451248561,
+      "from": 355625168,
+      "to": 13310041375,
+      "name": "Unnamed path"
+    }
+  ]
+}

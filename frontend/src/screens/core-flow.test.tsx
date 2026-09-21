@@ -136,3 +136,16 @@ test('Home quick access opens the matching existing destinations and reports its
   const id = jest.requireActual('../localization/id.json');
   expect([id.homeRiskMap, id.homeSafeRoutes, id.homeReport, id.homePreparedness]).toEqual(['Peta Risiko', 'Rute Aman', 'Laporkan', 'Siaga']);
 });
+
+test('route simulation is reachable from Home only in development', () => {
+  const view = render(<OverviewScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Route simulation' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/route-simulation');
+  view.unmount();
+  const previous = __DEV__;
+  try {
+    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
+    const production = render(<OverviewScreen />);
+    expect(production.queryByRole('button', { name: 'Route simulation' })).toBeNull();
+  } finally { (globalThis as unknown as { __DEV__: boolean }).__DEV__ = previous; }
+});
