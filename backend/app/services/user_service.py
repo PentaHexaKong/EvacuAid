@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import HTTPException
+from geoalchemy2.elements import WKTElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User, UserAccessibility, UserPreference
@@ -35,6 +36,7 @@ async def update_user(session: AsyncSession, user_id: uuid.UUID, payload: UserUp
 async def update_location(session: AsyncSession, user_id: uuid.UUID, payload: LocationUpdate) -> User:
     user = await require_user(session, user_id)
     user.latitude, user.longitude = payload.latitude, payload.longitude
+    user.location = WKTElement(f'POINT({payload.longitude} {payload.latitude})', srid=4326)
     await session.commit()
     await session.refresh(user)
     return user

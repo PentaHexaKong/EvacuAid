@@ -3,6 +3,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from app.models.risk import ActionData, EventData, ExposureData, NavigationData, QualityData, WeatherData
+from app.models.assistance import ContextBuddy
 
 
 class AssistanceStatus(str, Enum):
@@ -29,6 +30,8 @@ class NavigationStatus(str, Enum):
 class ContextAssistanceData(BaseModel):
     required: bool
     status: AssistanceStatus = AssistanceStatus.NOT_REQUESTED
+    requestId: str | None = None
+    buddy: ContextBuddy | None = None
 
 
 class ContextNavigationData(NavigationData):

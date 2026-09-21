@@ -5,12 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models.context import ContextAssistanceData, ContextNavigationData, ContextResponse
+from app.models.assistance import ContextBuddy
 from app.models.risk import RiskRequest
 from app.services import user_service
 from app.services.bmkg_service import BmkgFetchResult, fetch_weather
 from app.services.cacheService import CacheService, getCache
 from app.services.petabencana_service import PetaBencanaFetchResult, fetch_reports
 from app.services.risk_service import aggregate_risk
+from app.services import assistanceService, buddyService
+from app.repositories import buddyRepository
 
 
 router = APIRouter(prefix='/v1', tags=['context'])
@@ -42,6 +45,7 @@ async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheServi
         return result
 
     preferences = user.preferences
+    activeRequest = await assistanceService.getActiveRequest(session, userId)
     risk = await aggregate_risk(
         RiskRequest(
             adm4='31.71.03.1001',
@@ -61,10 +65,21 @@ async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheServi
         exposure=risk.exposure,
         weather=risk.weather,
         action=risk.action,
-        assistance=ContextAssistanceData(required=risk.action.assistance_required),
+        assistance=await contextAssistance(session, risk.action.assistance_required, activeRequest),
         navigation=ContextNavigationData(),
         quality=risk.quality,
     )
+
+
+async def contextAssistance(session: AsyncSession, required: bool, request) -> ContextAssistanceData:
+    if request is None:
+        return ContextAssistanceData(required=required)
+    buddy = None
+    if request.buddyUserId is not None:
+        relationship = await buddyRepository.getRelationshipForPair(session, request.userId, request.buddyUserId)
+        if relationship is not None:
+            buddy = ContextBuddy(userId=request.buddyUserId, level=relationship.level)
+    return ContextAssistanceData(required=required, status=request.status, requestId=str(request.id), buddy=buddy)
 
 
 @router.get('/context', response_model=ContextResponse)
