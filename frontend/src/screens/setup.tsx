@@ -7,7 +7,7 @@ import IconMap2 from '@tabler/icons-react-native/IconMap2';
 import { selectLanguage } from '@/localization';
 import { PreferencesPreview, usePreferences } from '@/features/preferences/context';
 
-export function SetupScreen({ editing = false, onDone, beforePreferences, footer }: { editing?: boolean; onDone?: () => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
+export function SetupScreen({ editing = false, onDone, beforePreferences, footer }: { editing?: boolean; onDone?: () => void | Promise<void>; beforePreferences?: ReactNode; footer?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const { preferences, save } = usePreferences();
   const [step, setStep] = useState(editing ? 'preferences' : 'welcome');
@@ -16,7 +16,7 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
   const [error, setError] = useState(false);
   const finish = async (skip = false) => {
     setBusy(true); setError(false);
-    try { await save({ ...(skip ? preferences : draft), completed: true }); onDone?.(); }
+    try { await save({ ...(skip ? preferences : draft), completed: true }); await onDone?.(); }
     catch { setError(true); } finally { setBusy(false); }
   };
   const changeLanguage = async () => {

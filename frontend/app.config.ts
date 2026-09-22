@@ -21,6 +21,7 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-localization',
+    'expo-secure-store',
     ['expo-splash-screen', { backgroundColor: '#F3F6FA' }],
     ['expo-font', { fonts: [
       './node_modules/@expo-google-fonts/plus-jakarta-sans/400Regular/PlusJakartaSans_400Regular.ttf',

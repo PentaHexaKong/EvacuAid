@@ -18,10 +18,12 @@ import { AppText } from '@/components/ui';
 import { sampleAlerts, sampleDestinations } from '@/features/content/samples';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
+import { useAuth } from '@/features/auth/context';
 import { colors, useTypography } from '@/theme';
 
 export function OverviewScreen() {
   const { t } = useTranslation();
+  const { profile } = useAuth();
   const { name } = useProfile();
   const router = useRouter();
   const { width, fontScale } = useWindowDimensions();
@@ -42,7 +44,7 @@ export function OverviewScreen() {
     <ScrollView contentInsetAdjustmentBehavior="automatic" automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" contentContainerStyle={{ backgroundColor: colors.canvas, paddingBottom: 24 }}>
       <View style={styles.header}>
         <View style={styles.greetingRow}>
-          <View style={{ flex: 1, gap: 8 }}><AppText variant="title" accessibilityRole="header">{name ? t('homeNamedGreeting', { name }) : t('homeGreeting')}</AppText><View style={styles.location}><IconMapPin size={18} color={colors.muted} /><AppText variant="small" style={{ color: colors.muted, flexShrink: 1 }}>{t('exampleArea')}</AppText></View></View>
+          <View style={{ flex: 1, gap: 8 }}><AppText variant="title" accessibilityRole="header">{profile?.name || name ? t('homeNamedGreeting', { name: profile?.name || name }) : t('homeGreeting')}</AppText><View style={styles.location}><IconMapPin size={18} color={colors.muted} /><AppText variant="small" style={{ color: colors.muted, flexShrink: 1 }}>{t('exampleArea')}</AppText></View></View>
         </View>
         <View style={styles.search}>
           <IconSearch size={20} color={colors.muted} />

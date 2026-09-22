@@ -6,16 +6,17 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 from sqlalchemy import text
 
-from app.config import DEFAULT_ADM4, REDIS_URL
+from app.config import AUTH_ALLOWED_ORIGINS, DEFAULT_ADM4, REDIS_URL
 from app.db.session import engine
 from app.models.risk import RiskRequest, RiskResponse
 from app.routers.context import router as context_router
 from app.routers.buddies import router as buddies_router
 from app.routers.assistance import router as assistance_router
-from app.routers.users import router as users_router
+from app.routers.auth import router as auth_router
 from app.services.cacheService import CacheService
 from app.services.bmkg_service import fetch_weather
 from app.services.petabencana_service import fetch_reports
@@ -31,7 +32,14 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
-app.include_router(users_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=AUTH_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=['GET', 'POST', 'PATCH'],
+    allow_headers=['Authorization', 'Content-Type'],
+)
+app.include_router(auth_router)
 app.include_router(context_router)
 app.include_router(buddies_router)
 app.include_router(assistance_router)

@@ -37,6 +37,19 @@ DATABASE_URL = os.getenv(
 )
 REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
 CONTEXT_CACHE_TTL_SECONDS = int(os.getenv('CONTEXT_CACHE_TTL_SECONDS', '60'))
+AUTH_JWT_SECRET = os.getenv('AUTH_JWT_SECRET', '')
+AUTH_ACCESS_TOKEN_MINUTES = int(os.getenv('AUTH_ACCESS_TOKEN_MINUTES', '15'))
+AUTH_REFRESH_DAYS = int(os.getenv('AUTH_REFRESH_DAYS', '30'))
+AUTH_SHORT_REFRESH_DAYS = int(os.getenv('AUTH_SHORT_REFRESH_DAYS', '7'))
+AUTH_ALLOWED_ORIGINS = [value.strip() for value in os.getenv('AUTH_ALLOWED_ORIGINS', '').split(',') if value.strip()]
+GOOGLE_CLIENT_IDS = [value.strip() for value in os.getenv('GOOGLE_CLIENT_IDS', '').split(',') if value.strip()]
+SMTP_HOST = os.getenv('SMTP_HOST', '').strip()
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USERNAME = os.getenv('SMTP_USERNAME', '').strip()
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
+SMTP_FROM = os.getenv('SMTP_FROM', '').strip()
+SMTP_STARTTLS = os.getenv('SMTP_STARTTLS', 'true').strip().lower() == 'true'
+PASSWORD_RESET_URL_BASE = os.getenv('PASSWORD_RESET_URL_BASE', 'evacuaid://reset-password').strip()
 
 
 def ensure_data_directories() -> None:
