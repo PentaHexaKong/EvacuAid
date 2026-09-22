@@ -22,8 +22,11 @@ from app.models.risk import (
     ExposureData,
     ExposureStatus,
     NavigationData,
+    OfficialWarningContext,
     QualityData,
+    ReasonCode,
     RecommendedAction,
+    RequirementsData,
     RiskRequest,
     RiskResponse,
     SignalLevel,
@@ -112,6 +115,8 @@ def _confidence(
 
 
 def _action_for(signal_level: SignalLevel, official_status: str | None) -> RecommendedAction:
+    if official_status == "AWAS":
+        return RecommendedAction.EVACUATE
     if official_status:
         return RecommendedAction.FOLLOW_OFFICIAL_INSTRUCTION
     if signal_level == SignalLevel.ELEVATED:
@@ -119,10 +124,49 @@ def _action_for(signal_level: SignalLevel, official_status: str | None) -> Recom
     return RecommendedAction.MONITOR
 
 
+def _reason_codes(
+    weather: WeatherData | None,
+    nearby_reports: list[dict[str, Any]],
+    nearest: dict[str, Any] | None,
+    official_status: str | None,
+    stale: bool,
+) -> list[ReasonCode]:
+    codes: list[ReasonCode] = []
+    if weather and weather.precipitation is not None and weather.precipitation >= 5:
+        codes.append(ReasonCode.HEAVY_RAIN_FORECAST)
+    if nearby_reports:
+        codes.append(ReasonCode.NEARBY_CITIZEN_REPORTS)
+    if nearest and (nearest.get("distance_to_user_m") or float("inf")) <= 1000:
+        codes.append(ReasonCode.NEAREST_REPORT_WITHIN_1KM)
+    if official_status == "SIAGA":
+        codes.append(ReasonCode.OFFICIAL_SIAGA)
+    if official_status == "AWAS":
+        codes.append(ReasonCode.OFFICIAL_AWAS)
+    if stale:
+        codes.append(ReasonCode.SOURCE_STALE)
+    return codes
+
+
+def _requirements(request: RiskRequest) -> RequirementsData:
+    accessibility = {item.upper() for item in request.accessibility}
+    mobility = request.user_profile == UserProfile.MOBILITY_LIMITATION or "MOBILITY_LIMITATION" in accessibility
+    visual = request.user_profile == UserProfile.BLIND or "VISUAL_IMPAIRMENT" in accessibility
+    hearing = request.user_profile == UserProfile.DEAF or "HEARING_IMPAIRMENT" in accessibility
+    assistance = request.needs_assistance or mobility
+    return RequirementsData(
+        assistance_required=assistance,
+        accessible_route_required=mobility,
+        voice_guidance_required=visual and request.voice_enabled,
+        vibration_guidance_required=(visual or hearing) and request.vibration_enabled,
+        text_guidance_required=not visual and request.text_enabled,
+    )
+
+
 async def aggregate_risk(
     request: RiskRequest,
     weather_fetcher: WeatherFetcher = fetch_weather,
     reports_fetcher: ReportsFetcher = fetch_reports,
+    officialWarning: OfficialWarningContext | None = None,
 ) -> RiskResponse:
     """Combine live source results and user context without inferring official alerts."""
     bmkg_result, reports_result = await asyncio.gather(
@@ -157,17 +201,15 @@ async def aggregate_risk(
     else:
         signal_level = SignalLevel.NORMAL
 
-    official_status = None
-    assistance_required = (
-        request.needs_assistance
-        or request.user_profile == UserProfile.MOBILITY_LIMITATION
-    )
+    official_status = officialWarning.status.value if officialWarning else None
+    requirements = _requirements(request)
     sources = []
     if bmkg_result.available:
         sources.append("BMKG")
     if reports_result.available:
         sources.append("PetaBencana")
 
+    stale = _data_is_stale(bmkg_result.data, reports_result.reports)
     response = RiskResponse(
         event=EventData(
             hazard_type=(
@@ -188,7 +230,9 @@ async def aggregate_risk(
         weather=weather,
         action=ActionData(
             recommended_action=_action_for(signal_level, official_status),
-            assistance_required=assistance_required,
+            assistance_required=requirements.assistance_required,
+            reason_codes=_reason_codes(weather, nearby_reports, nearest, official_status, stale),
+            requirements=requirements,
         ),
         assistance=AssistanceData(buddy_status=None),
         navigation=NavigationData(route_status="NOT_REQUIRED"),

@@ -1,60 +1,116 @@
-# EvacuAid Backend MVP
+# EvacuAid Backend
 
-Small FastAPI backend for EvacuAid. It fetches contextual BMKG weather and current PetaBencana community reports, normalizes them, compares reports to an optional user location, and returns a transparent response for the frontend.
+EvacuAid is a Docker-first FastAPI backend for personalized disaster context. PostgreSQL with PostGIS is the canonical profile store. Redis is a best-effort cache for BMKG and PetaBencana source responses.
 
-It is **not** a hazard-prediction system and does not create official warnings. `official_status` stays `null` because this MVP does not integrate an authoritative warning/instruction feed. BMKG forecasts are contextual weather data; PetaBencana `/reports` data is community reporting. A nearby report can result in `ELEVATED` and `PREPARE`, never `EVACUATE`.
-
-## Folder structure
+## Architecture
 
 ```text
-backend/
-├── app/                 # FastAPI routes, models, fetchers, aggregation logic
-├── data/
-│   ├── raw/             # Untouched successful API responses (generated at runtime)
-│   ├── processed/       # Normalized API responses (generated at runtime)
-│   └── final_output.json # Latest POST /api/risk response (generated at runtime)
-├── tests/
-├── requirements.txt
-└── .env.example
+Frontend -> FastAPI -> PostgreSQL + PostGIS
+                    -> Redis cache
+                    -> BMKG and PetaBencana
 ```
 
-## Install and run
+Community reports are supporting evidence only: without an authoritative warning, they can produce `WATCH`, `ELEVATED`, or `PREPARE`, never `EVACUATE`.
+
+## Start
+
+From `backend`:
 
 ```powershell
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
 Copy-Item .env.example .env
-uvicorn app.main:app --reload
 ```
 
-Open Swagger at <http://127.0.0.1:8000/docs>.
-
-## API examples
+From the repository root:
 
 ```powershell
-curl "http://127.0.0.1:8000/api/weather?adm4=31.71.03.1001"
-
-curl "http://127.0.0.1:8000/api/reports?latitude=-6.1647214778&longitude=106.8453837867&radius_m=5000"
-
-curl -X POST "http://127.0.0.1:8000/api/risk" `
-  -H "Content-Type: application/json" `
-  -d '{"adm4":"31.71.03.1001","latitude":-6.1647214778,"longitude":106.8453837867,"user_profile":"MOBILITY_LIMITATION","needs_assistance":true}'
+docker compose up --build
 ```
 
-## Configuration and limitations
+The API is available at `http://127.0.0.1:8000`; Swagger is at `/docs`.
 
-- `DEFAULT_NEARBY_RADIUS_METERS` is an application search radius, not a scientific danger radius.
-- `MAX_DATA_AGE_MINUTES=1440` reflects BMKG's daily forecast-analysis cycle; it is a data-quality guard, not an alert expiry.
-- PetaBencana documents `GET https://api.petabencana.id/reports` and asks clients to provide a `User-Agent`; this backend requests `geoformat=geojson` for reliable point extraction.
-- PetaBencana can validly return zero current reports. That means no report was returned by that query, not that there is no disaster anywhere.
-- A normal successful response is `MEDIUM` confidence because no authoritative warning source is integrated. `HIGH` is deliberately reserved for future authoritative, fresh warning data.
-- If one source is unavailable, `/api/risk` still returns all usable information with `LOW` confidence. No disaster reports are fabricated.
+## Docker services
 
-## Tests
+- `backend`: FastAPI, migrations applied before Uvicorn starts
+- `postgres`: PostgreSQL 16 with PostGIS 3.4
+- `redis`: transient cache only
+
+Compose defaults are development-only. Configure `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in the root environment or Compose invocation; configure `DATABASE_URL` and `REDIS_URL` in `backend/.env` for non-Compose deployment.
+
+## Migrations and tests
 
 ```powershell
-pytest
+docker compose exec backend alembic upgrade head
+docker compose exec backend pytest
 ```
 
-Tests use mocked source results and never call live APIs.
+The test suite covers profile persistence, coordinate validation, multiple accessibility attributes, preferences, context orchestration, Redis fallback, explainable decision reasons, and the invariant that citizen reports cannot independently trigger evacuation.
+
+## API
+
+Existing MVP endpoints remain available:
+
+- `GET /`
+- `GET /health`
+- `GET /api/weather`
+- `GET /api/reports`
+- `POST /api/risk`
+
+Profile endpoints:
+
+- `POST /v1/users`
+- `GET /v1/users/{userId}`
+- `PATCH /v1/users/{userId}`
+- `PUT /v1/users/{userId}/location`
+- `GET|PUT /v1/users/{userId}/accessibility`
+- `GET|PUT /v1/users/{userId}/preferences`
+- `GET /v1/context?user_id={uuid}`
+- `POST /v1/users/{userId}/buddies/invitations`
+- `GET /v1/users/{userId}/buddies`
+- `GET /v1/users/{userId}/buddies/{relationshipId}`
+- `DELETE /v1/users/{userId}/buddies/{relationshipId}`
+- `GET /v1/users/{buddyUserId}/buddy-invitations`
+- `POST /v1/buddy-invitations/{relationshipId}/accept`
+- `POST /v1/buddy-invitations/{relationshipId}/reject`
+- `GET /v1/users/{userId}/buddy-candidates`
+- `POST /v1/assistance/requests`
+- `GET /v1/assistance/requests/{requestId}`
+- `GET /v1/users/{userId}/assistance/requests`
+- `GET /v1/users/{buddyUserId}/assistance/assignments`
+- `POST /v1/assistance/requests/{requestId}/{notify|accept|decline|depart|arrive|evacuating|safe|cancel}`
+
+`/v1/context` loads the persisted user, location, accessibility, and preferences, then delegates exposure and recommendation generation to the risk service. Its action includes stable `reason_codes` and presentation requirements. Accessibility changes delivery requirements, not hazard severity.
+
+## Buddy and assistance
+
+Buddy relationships are directional: `buddyUserId` assists `userId`; they are not reciprocal. A relationship moves from `PENDING` to `ACTIVE` only when the invited user accepts. It can instead become `REJECTED` or be preserved as `REVOKED` when removed.
+
+Assistance requests use this transition graph:
+
+```text
+REQUESTED -> NOTIFIED -> ACCEPTED -> EN_ROUTE -> ARRIVED -> EVACUATING -> SAFE
+REQUESTED -> CANCELLED
+NOTIFIED -> DECLINED | CANCELLED | EXPIRED
+ACCEPTED | EN_ROUTE -> CANCELLED
+ARRIVED -> SAFE
+```
+
+`NOTIFIED` is internal application state only. It does not confirm delivery by push, SMS, WhatsApp, or any external provider.
+
+Candidate discovery only includes active relationships. It calculates distance with PostGIS `ST_Distance` on geography points, then ranks primary before secondary before community, available before busy, and nearer before farther. Safety remains truthfully `UNKNOWN`; automatic dispatch is not implemented.
+
+## Schema and current scope
+
+The initial Alembic revision creates:
+
+- `users`: UUID profile, optional coordinates, assistance flag, timestamps
+- `user_accessibility`: normalized multi-value attributes with one type per user
+- `user_preferences`: one-to-one voice, vibration, text, and language preferences
+- `buddy_relationships`: directional invitation and active-assistance network
+- `assistance_requests`: canonical assistance workflow, timestamps, and status history
+- `users.location`: indexed PostGIS geography point synchronized when the location API is used
+
+Implemented: profile persistence, profile APIs, buddy invitations, assistance state transitions, PostGIS candidate discovery, v2 explainable risk fields, source caching with graceful Redis failure, and unified context.
+
+Partial: authoritative warning ingestion is future-ready only; no official source is fabricated.
+
+Future: external notification delivery, shelter routing, and navigation. Context returns `NOT_REQUESTED` only where there is no active persisted request, and `NOT_REQUIRED` navigation until routing exists.
