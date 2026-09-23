@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 from redis.exceptions import RedisError
 
 from app.models.user import AccessibilityItem, AccessibilityUpdate, LocationUpdate, PreferencesUpdate, UserCreate
@@ -15,7 +16,7 @@ from app.services.petabencana_service import PetaBencanaFetchResult
 @pytest.mark.asyncio
 async def testContextOrchestratesProfileAndRisk(dbSession, monkeypatch):
     user = await user_service.create_user(dbSession, UserCreate(name='Citra', needs_assistance=True))
-    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.1647, longitude=106.8453))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.1647, longitude=106.8453, observed_at=datetime.now(timezone.utc)))
     await user_service.update_accessibility(dbSession, user.id, AccessibilityUpdate(items=[AccessibilityItem(type='MOBILITY_LIMITATION')]))
     await user_service.update_preferences(dbSession, user.id, PreferencesUpdate(voice_enabled=False))
 
@@ -51,10 +52,10 @@ async def testCacheFailureDoesNotRaise():
 async def testContextShowsOnlyActiveAssistanceRequest(dbSession, monkeypatch):
     user = await user_service.create_user(dbSession, UserCreate(name='Rani', needs_assistance=True))
     buddy = await user_service.create_user(dbSession, UserCreate(name='Sari'))
-    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
     invitation = await buddyService.createInvitation(dbSession, user.id, BuddyInvitationCreate(buddyUserId=buddy.id, level='PRIMARY'))
     await buddyService.acceptInvitation(dbSession, invitation.id, buddy.id)
-    request = await assistanceService.createRequest(dbSession, AssistanceCreate(userId=user.id, buddyUserId=buddy.id))
+    request = await assistanceService.createRequest(dbSession, user.id, AssistanceCreate(buddyUserId=buddy.id))
     await assistanceService.transitionRequest(dbSession, request.id, 'notify', user.id)
     await assistanceService.transitionRequest(dbSession, request.id, 'accept', buddy.id)
 

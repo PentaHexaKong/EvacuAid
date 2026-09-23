@@ -10,7 +10,7 @@ test('new and corrupt storage start with optional setup and no preferences', () 
 test('completion and multiple preferences persist across launches', async () => {
   const first = renderHook(usePreferences, { wrapper: PreferencesProvider });
   await waitFor(() => expect(first.result.current.ready).toBe(true));
-  const value = { completed: true, largerText: true, strongerContrast: true };
+  const value = { ...defaults, completed: true, largerText: true, strongerContrast: true };
   await act(async () => first.result.current.save(value));
   first.unmount();
   const second = renderHook(usePreferences, { wrapper: PreferencesProvider });
@@ -45,5 +45,5 @@ test('logging out restores setup on the next launch without clearing support pre
   first.unmount();
   const next = renderHook(usePreferences, { wrapper: PreferencesProvider });
   await waitFor(() => expect(next.result.current.ready).toBe(true));
-  expect(next.result.current.preferences).toEqual({ completed: false, largerText: true, strongerContrast: true });
+  expect(next.result.current.preferences).toEqual({ ...defaults, completed: false, largerText: true, strongerContrast: true });
 });

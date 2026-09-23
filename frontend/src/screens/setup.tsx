@@ -21,7 +21,8 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
   };
   const changeLanguage = async () => {
     setBusy(true); setError(false);
-    try { await selectLanguage(i18n.language === 'id' ? 'en' : 'id'); } catch { setError(true); } finally { setBusy(false); }
+    const language = i18n.language === 'id' ? 'en' : 'id';
+    try { await save({ ...preferences, language }); setDraft(current => ({ ...current, language })); await selectLanguage(language); } catch { setError(true); } finally { setBusy(false); }
   };
   return <Page>
     <View style={{ gap: 12, paddingTop: 24 }}>
@@ -36,7 +37,7 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
       <ActionButton variant="secondary" label={t('skipSetup')} loading={busy} onPress={() => void finish(true)} />
     </> : <>
       {beforePreferences}
-      <View style={{ gap: 12 }}>{(['largerText', 'strongerContrast'] as const).map((key) => <View key={key} style={{ padding: 20, minHeight: 64, borderRadius: 16, borderWidth: 1, borderColor: draft[key] ? colors.primary : colors.border, backgroundColor: colors.surface, flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+      <View style={{ gap: 12 }}>{(['largerText', 'strongerContrast', 'voiceEnabled', 'vibrationEnabled', 'textEnabled'] as const).map((key) => <View key={key} style={{ padding: 20, minHeight: 64, borderRadius: 16, borderWidth: 1, borderColor: draft[key] ? colors.primary : colors.border, backgroundColor: colors.surface, flexDirection: 'row', gap: 16, alignItems: 'center' }}>
         <View style={{ flex: 1, gap: 8 }}><AppText variant="button">{t(key)}</AppText><AppText variant="small">{t(`${key}Description`)}</AppText></View>
         <Switch hitSlop={8} accessibilityLabel={t(key)} accessibilityHint={t(`${key}Description`)} value={draft[key]} disabled={busy} trackColor={{ true: colors.primary }} onValueChange={value => setDraft(current => ({ ...current, [key]: value }))} />
       </View>)}</View>

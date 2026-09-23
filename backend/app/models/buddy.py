@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class BuddyLevel(str, Enum):
@@ -38,8 +38,6 @@ class BuddyRelationshipResponse(BaseModel):
     createdAt: datetime
     updatedAt: datetime
     acceptedAt: datetime | None
-
-
 class BuddyCandidate(BaseModel):
     buddyUserId: uuid.UUID
     relationshipId: uuid.UUID

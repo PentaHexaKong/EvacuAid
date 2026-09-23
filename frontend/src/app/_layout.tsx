@@ -1,6 +1,6 @@
 import '../../global.css';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Platform, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ProfileProvider } from '@/features/profile/context';
 import { RequestDraftProvider } from '@/features/requests/draft';
@@ -17,6 +17,8 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
 import { colors, FontReadyContext, SystemReduceMotionContext } from '@/theme';
+import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
+import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 Uniwind.setTheme('light');
@@ -25,14 +27,36 @@ export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' 
 
 function FirstRunGate() {
   const { ready, preferences } = usePreferences();
+  const session = useGuestSession();
   const router = useRouter();
   const [returnHome, setReturnHome] = useState(false);
   useEffect(() => {
-    if (preferences.completed && returnHome) router.replace('/');
-  }, [preferences.completed, returnHome, router]);
+    if (preferences.completed && session.status === 'idle') void session.ensureGuest().catch(() => {});
+  }, [preferences.completed, session.status, session.ensureGuest]);
+  useEffect(() => {
+    if (preferences.completed && returnHome && session.status === 'ready') router.replace('/');
+  }, [preferences.completed, returnHome, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
+  if (preferences.completed && session.status !== 'ready') {
+    if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
+    return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
+  }
   return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={() => setReturnHome(true)} /></SafeAreaView>;
+}
+
+function GuestSessionError() {
+  const { t } = useTranslation();
+  const session = useGuestSession();
+  return <Page>
+    <AppText variant="title" accessibilityRole="header">{t('sessionUnavailable')}</AppText>
+    <AppText accessibilityRole="alert">{session.errorKind === 'network' ? t('apiNetworkUnavailable') : session.error}</AppText>
+    <ActionButton label={t('retry')} loading={session.status === 'loading'} onPress={() => void session.ensureGuest().catch(() => {})} />
+    {session.canStartNew && <ActionButton variant="secondary" label={t('startNewGuest')} onPress={() => Alert.alert(t('startNewGuestTitle'), t('startNewGuestBody'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('startNewGuest'), style: 'destructive', onPress: () => void session.startNewGuest().catch(() => {}) },
+    ])} />}
+  </Page>;
 }
 function Navigation() {
   const { t } = useTranslation();
@@ -65,6 +89,6 @@ export default function RootLayout() {
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
     {(!ready || (!fontsLoaded && !fontError)) ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <SystemReduceMotionContext.Provider value={reduceMotion}><FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider></SystemReduceMotionContext.Provider>}
+    <SystemReduceMotionContext.Provider value={reduceMotion}><FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

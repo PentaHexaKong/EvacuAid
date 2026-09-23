@@ -21,16 +21,11 @@ class AssistanceStatus(str, Enum):
 
 
 class AssistanceCreate(BaseModel):
-    userId: uuid.UUID
     buddyUserId: uuid.UUID | None = None
     eventId: str | None = Field(default=None, max_length=128)
 
 
-class AssistanceActor(BaseModel):
-    actorUserId: uuid.UUID
-
-
-class AssistanceNotify(AssistanceActor):
+class AssistanceNotify(BaseModel):
     buddyUserId: uuid.UUID | None = None
 
 

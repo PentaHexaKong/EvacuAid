@@ -2,7 +2,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { PreferencesProvider } from '@/features/preferences/context';
-import { PREFERENCES_KEY } from '@/features/preferences/storage';
+import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import { RequestDraftProvider } from '@/features/requests/draft';
 import { RequestScreen, RequestReviewScreen } from './request';
 import { ContactScreen } from './buddy';
@@ -47,7 +47,7 @@ test('preferences preview is local, cancel does not save, and failed saves remai
   expect(view.getByRole('switch', { name: 'Larger text' })).toHaveProp('value', true);
   fireEvent.press(view.getByRole('button', { name: 'Save preferences' }));
   await waitFor(() => expect(done).toHaveBeenCalledTimes(2));
-  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ completed: true, largerText: true, strongerContrast: true });
+  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: true });
 });
 
 test('request survives screen changes, rejects blank text, and cannot be sent', async () => {
@@ -106,7 +106,7 @@ test('welcome exposes language immediately and skipping setup enters Home withou
   expect(view.getByRole('button', { name: 'Bahasa: Indonesia' })).toBeTruthy();
   expect(view.queryByRole('switch')).toBeNull();
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Skip setup' })));
-  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ completed: true, largerText: false, strongerContrast: false });
+  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true });
 });
 
 test('Home search filters sample destinations and opens the selected destination', () => {

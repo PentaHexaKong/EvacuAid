@@ -5,6 +5,7 @@ import RouteSimulationPage from '@/app/route-simulation';
 import { SimulationMap } from '@/features/route-simulation/map';
 import { endpoints, graph } from '@/features/route-simulation/sample';
 import { PreferencesPreview } from '@/features/preferences/context';
+import { defaults } from '@/features/preferences/storage';
 
 jest.mock('expo-router', () => ({
   Redirect: () => null,
@@ -55,7 +56,7 @@ test('destination, preset, and scenario changes reset playback; explicit unreach
 });
 
 test('completion only reports simulation complete and reset makes replay possible', () => {
-  const view = render(<PreferencesPreview preferences={{ completed: true, largerText: true, strongerContrast: true }}><RouteSimulationScreen /></PreferencesPreview>);
+  const view = render(<PreferencesPreview preferences={{ ...defaults, completed: true, largerText: true, strongerContrast: true }}><RouteSimulationScreen /></PreferencesPreview>);
   expect(view.getByText('Route simulation')).toHaveStyle({ fontSize: 33.6 });
   fireEvent.press(view.getByRole('button', { name: 'Play' }));
   act(() => jest.advanceTimersByTime(30000));

@@ -16,6 +16,7 @@ from app.routers.context import router as context_router
 from app.routers.buddies import router as buddies_router
 from app.routers.assistance import router as assistance_router
 from app.routers.users import router as users_router
+from app.routers.sessions import router as sessions_router
 from app.services.cacheService import CacheService
 from app.services.bmkg_service import fetch_weather
 from app.services.petabencana_service import fetch_reports
@@ -32,6 +33,7 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
 app.include_router(users_router)
+app.include_router(sessions_router)
 app.include_router(context_router)
 app.include_router(buddies_router)
 app.include_router(assistance_router)
