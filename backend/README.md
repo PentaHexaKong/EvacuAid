@@ -57,13 +57,16 @@ Existing MVP endpoints remain available:
 
 Profile endpoints:
 
-- `POST /v1/users`
+- `POST /v1/guest-sessions` — create a guest profile and return its private bearer token once
+- `GET /v1/me` — load the profile owned by the bearer token
+- `DELETE /v1/guest-sessions/current` — delete the signed-in guest profile
 - `GET /v1/users/{userId}`
 - `PATCH /v1/users/{userId}`
 - `PUT /v1/users/{userId}/location`
+- `DELETE /v1/users/{userId}/location`
 - `GET|PUT /v1/users/{userId}/accessibility`
 - `GET|PUT /v1/users/{userId}/preferences`
-- `GET /v1/context?user_id={uuid}`
+- `GET /v1/context`
 - `POST /v1/users/{userId}/buddies/invitations`
 - `GET /v1/users/{userId}/buddies`
 - `GET /v1/users/{userId}/buddies/{relationshipId}`
@@ -80,9 +83,13 @@ Profile endpoints:
 
 `/v1/context` loads the persisted user, location, accessibility, and preferences, then delegates exposure and recommendation generation to the risk service. Its action includes stable `reason_codes` and presentation requirements. Accessibility changes delivery requirements, not hazard severity.
 
+All profile, context, buddy, and assistance endpoints require `Authorization: Bearer <token>`. The API derives the caller from that token; a user ID in a path or request body never grants ownership. The token is returned only when the guest session is created and only its hash is stored in PostgreSQL. The frontend stores the token with Expo SecureStore. Guest profiles have no account recovery: losing the device token means the old profile cannot be reopened. Production deployments must use HTTPS. Set `EXPO_PUBLIC_API_BASE_URL` in the frontend environment; `.env.example` contains only the Android emulator development address.
+
 ## Buddy and assistance
 
 Buddy relationships are directional: `buddyUserId` assists `userId`; they are not reciprocal. A relationship moves from `PENDING` to `ACTIVE` only when the invited user accepts. It can instead become `REJECTED` or be preserved as `REVOKED` when removed.
+
+Location is a user-saved point, not live tracking; context and buddy distance exclude points older than 15 minutes.
 
 Assistance requests use this transition graph:
 

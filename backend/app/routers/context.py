@@ -1,10 +1,13 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.models.context import ContextAssistanceData, ContextResponse
+from app.auth import current_user
+from app.db.models import User
+from app.models.context import ContextAssistanceData, ContextNavigationData, ContextResponse
 from app.models.navigation import NavigationCreate, NavigationResponse, NavigationStatus
 from app.models.assistance import ContextBuddy
 from app.models.risk import RiskRequest
@@ -22,8 +25,10 @@ router = APIRouter(prefix='/v1', tags=['context'])
 
 async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheService | None = None) -> ContextResponse:
     user = await user_service.require_user(session, userId, include_relations=True)
-    if user.latitude is None or user.longitude is None:
+    if user.latitude is None or user.longitude is None or user.locationObservedAt is None:
         raise HTTPException(status_code=409, detail='user location is required for context')
+    if user.locationObservedAt < datetime.now(timezone.utc) - timedelta(minutes=15):
+        raise HTTPException(status_code=409, detail='user location is stale; update location')
 
     async def weatherFetcher(adm4: str) -> BmkgFetchResult:
         cacheKey = f'weather:{adm4}'
@@ -90,5 +95,5 @@ async def contextNavigation(session: AsyncSession, userId: uuid.UUID, action: st
 
 
 @router.get('/context', response_model=ContextResponse)
-async def context(user_id: uuid.UUID, session: AsyncSession = Depends(get_session), cache: CacheService = Depends(getCache)) -> ContextResponse:
-    return await getContext(user_id, session, cache)
+async def context(actor: User = Depends(current_user), session: AsyncSession = Depends(get_session), cache: CacheService = Depends(getCache)) -> ContextResponse:
+    return await getContext(actor.id, session, cache)

@@ -4,6 +4,7 @@ import tokens from './tokens.json';
 
 export const { colors, spacing, radius } = tokens;
 export const FontReadyContext = createContext(false);
+export const SystemReduceMotionContext = createContext(true);
 export type TextVariant = 'body' | 'small' | 'button' | 'section' | 'title' | 'eyebrow';
 const typeStyles: Record<TextVariant, TextStyle> = {
   body: { fontSize: 16, lineHeight: 24 }, small: { fontSize: 14, lineHeight: 20 },

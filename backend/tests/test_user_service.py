@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from app.models.user import AccessibilityItem, AccessibilityUpdate, LocationUpdate, PreferencesUpdate, UserCreate, UserUpdate
@@ -25,7 +26,7 @@ async def testUserProfilePersistsMultipleAttributes(dbSession):
 async def testUserUpdateLocationAndPreferencesPersist(dbSession):
     user = await user_service.create_user(dbSession, UserCreate(name='Bima'))
     updated = await user_service.update_user(dbSession, user.id, UserUpdate(phone='08123'))
-    located = await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8))
+    located = await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
     preferences = await user_service.update_preferences(dbSession, user.id, PreferencesUpdate(voice_enabled=False, language='en'))
     assert updated.phone == '08123'
     assert (located.latitude, located.longitude) == (-6.2, 106.8)
@@ -35,4 +36,4 @@ async def testUserUpdateLocationAndPreferencesPersist(dbSession):
 
 def testLocationValidationRejectsInvalidCoordinates():
     with pytest.raises(ValidationError):
-        LocationUpdate(latitude=91, longitude=106.8)
+        LocationUpdate(latitude=91, longitude=106.8, observed_at=datetime.now(timezone.utc))
