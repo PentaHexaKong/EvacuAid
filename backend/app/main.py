@@ -15,9 +15,12 @@ from app.models.risk import RiskRequest, RiskResponse
 from app.routers.context import router as context_router
 from app.routers.buddies import router as buddies_router
 from app.routers.assistance import router as assistance_router
+from app.routers.navigation import router as navigation_router
+from app.routers.shelters import router as shelters_router
 from app.routers.users import router as users_router
 from app.routers.sessions import router as sessions_router
 from app.services.cacheService import CacheService
+from app.services.valhallaProvider import ValhallaRoutingProvider
 from app.services.bmkg_service import fetch_weather
 from app.services.petabencana_service import fetch_reports
 from app.services.risk_service import aggregate_risk, reports_with_distances
@@ -37,6 +40,8 @@ app.include_router(sessions_router)
 app.include_router(context_router)
 app.include_router(buddies_router)
 app.include_router(assistance_router)
+app.include_router(navigation_router)
+app.include_router(shelters_router)
 
 
 @app.get("/")
@@ -54,12 +59,14 @@ async def health() -> dict[str, object]:
     except Exception:
         database_status = "unavailable"
     redis_status = "healthy" if await CacheService(getattr(app.state, "redisClient", None)).healthy() else "unavailable"
-    status = "healthy" if database_status == "healthy" and redis_status == "healthy" else "degraded"
+    valhalla_status = "healthy" if await ValhallaRoutingProvider().health() else "unavailable"
+    status = "healthy" if database_status == "healthy" and redis_status == "healthy" and valhalla_status == "healthy" else "degraded"
     return {
         "service": "EvacuAid Backend",
         "status": status,
         "database": database_status,
         "redis": redis_status,
+        "valhalla": valhalla_status,
         "sources": {
             "BMKG": {"status": "available" if bmkg.available else "unavailable", "error": bmkg.error},
             "PetaBencana": {

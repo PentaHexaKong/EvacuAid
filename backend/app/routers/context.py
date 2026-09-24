@@ -8,6 +8,7 @@ from app.db.session import get_session
 from app.auth import current_user
 from app.db.models import User
 from app.models.context import ContextAssistanceData, ContextNavigationData, ContextResponse
+from app.models.navigation import NavigationCreate, NavigationResponse, NavigationStatus
 from app.models.assistance import ContextBuddy
 from app.models.risk import RiskRequest
 from app.services import user_service
@@ -15,7 +16,7 @@ from app.services.bmkg_service import BmkgFetchResult, fetch_weather
 from app.services.cacheService import CacheService, getCache
 from app.services.petabencana_service import PetaBencanaFetchResult, fetch_reports
 from app.services.risk_service import aggregate_risk
-from app.services import assistanceService, buddyService
+from app.services import assistanceService, navigationService
 from app.repositories import buddyRepository
 
 
@@ -71,7 +72,7 @@ async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheServi
         weather=risk.weather,
         action=risk.action,
         assistance=await contextAssistance(session, risk.action.assistance_required, activeRequest),
-        navigation=ContextNavigationData(),
+        navigation=await contextNavigation(session, userId, risk.action.recommended_action.value),
         quality=risk.quality,
     )
 
@@ -85,6 +86,12 @@ async def contextAssistance(session: AsyncSession, required: bool, request) -> C
         if relationship is not None:
             buddy = ContextBuddy(userId=request.buddyUserId, level=relationship.level)
     return ContextAssistanceData(required=required, status=request.status, requestId=str(request.id), buddy=buddy)
+
+
+async def contextNavigation(session: AsyncSession, userId: uuid.UUID, action: str) -> NavigationResponse:
+    if action != 'EVACUATE':
+        return NavigationResponse(routeStatus=NavigationStatus.NOT_REQUIRED)
+    return await navigationService.navigationForUser(session, NavigationCreate(userId=userId))
 
 
 @router.get('/context', response_model=ContextResponse)
