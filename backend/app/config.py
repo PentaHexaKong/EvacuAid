@@ -37,6 +37,9 @@ DATABASE_URL = os.getenv(
 )
 REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
 CONTEXT_CACHE_TTL_SECONDS = int(os.getenv('CONTEXT_CACHE_TTL_SECONDS', '60'))
+VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://valhalla:8002').rstrip('/')
+VALHALLA_TIMEOUT_SECONDS = float(os.getenv('VALHALLA_TIMEOUT_SECONDS', '10'))
+ROUTE_HAZARD_RADIUS_METERS = float(os.getenv('ROUTE_HAZARD_RADIUS_METERS', '100'))
 
 
 def ensure_data_directories() -> None:

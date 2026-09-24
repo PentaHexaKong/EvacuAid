@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>Valhalla Route Sandbox</title>
+  <link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 900px; background: #071b2b; color: #e7f0f7; font: 14px Inter, Arial, sans-serif; }
+    #app { display: grid; grid-template-columns: 330px 1fr; height: 100vh; }
+    aside { padding: 28px 22px; background: #0d2a3b; border-right: 1px solid #24465a; }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    p { color: #aac1cf; line-height: 1.5; }
+    .toolbar { display: grid; gap: 9px; margin: 24px 0; }
+    button { padding: 12px; border: 1px solid #315e75; border-radius: 8px; background: #12384d; color: #e7f0f7; cursor: pointer; font: inherit; text-align: left; }
+    button:hover, button.active { background: #1d5a73; border-color: #60c6e8; }
+    button.route { background: #15a36e; border-color: #39d79b; font-weight: 700; text-align: center; }
+    button.reset { background: #592d3b; border-color: #9b4d61; text-align: center; }
+    #status { margin-top: 22px; padding: 14px; border-radius: 8px; background: #092130; color: #b9d2df; line-height: 1.5; }
+    #status.error { background: #4b2027; color: #ffc2c9; }
+    #status.warning { background: #514014; color: #ffe7a0; }
+    #map { height: 100vh; }
+    .legend { display: grid; gap: 7px; margin-top: 20px; color: #bfd2dd; }
+    .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; }
+    .origin { background: #4bb5ff; }
+    .safeHouse { background: #22cf87; }
+    .disaster { background: #ff4d5c; }
+  </style>
+</head>
+<body>
+  <main id='app'>
+    <aside>
+      <h1>Valhalla Route Sandbox</h1>
+      <p>Place an origin, safe house, and disaster marker. Route calculation calls your local Valhalla engine.</p>
+      <div class='toolbar'>
+        <button data-mode='origin'>Place origin</button>
+        <button data-mode='safeHouse'>Place safe house</button>
+        <button data-mode='disaster'>Place disaster</button>
+        <button class='route' id='routeButton'>Route to safe house</button>
+        <button class='reset' id='resetButton'>Reset markers</button>
+      </div>
+      <div class='legend'>
+        <span><i class='dot origin'></i>Origin</span>
+        <span><i class='dot safeHouse'></i>Safe house</span>
+        <span><i class='dot disaster'></i>Disaster marker</span>
+      </div>
+      <div id='status'>Choose a placement mode, then click the map.</div>
+    </aside>
+    <div id='map'></div>
+  </main>
+  <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
+  <script>
+    const map = L.map('map').setView([-6.1754, 106.8272], 13)
+    const state = { mode: 'origin', origin: null, safeHouse: null, disaster: null, routeLayer: null }
+    const markerColors = { origin: '#4bb5ff', safeHouse: '#22cf87', disaster: '#ff4d5c' }
+    const markers = {}
+    const statusElement = document.getElementById('status')
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map)
+
+    function setStatus(message, type = '') {
+      statusElement.textContent = message
+      statusElement.className = type
+    }
+
+    function setMode(mode) {
+      state.mode = mode
+      document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('active', button.dataset.mode === mode))
+      setStatus(`Click the map to place the ${mode === 'safeHouse' ? 'safe house' : mode}.`)
+    }
+
+    function markerIcon(type) {
+      return L.divIcon({
+        className: '',
+        html: `<div style='width:22px;height:22px;border:3px solid white;border-radius:50%;background:${markerColors[type]};box-shadow:0 1px 8px #00111d'></div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      })
+    }
+
+    function placeMarker(type, latLng) {
+      state[type] = latLng
+      if (markers[type]) markers[type].remove()
+      markers[type] = L.marker(latLng, { icon: markerIcon(type) }).addTo(map).bindTooltip(type === 'safeHouse' ? 'Safe house' : type)
+      setStatus(`${type === 'safeHouse' ? 'Safe house' : type} placed at ${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}.`)
+    }
+
+    function routeNearDisaster(coordinates) {
+      if (!state.disaster) return false
+      return coordinates.some(([longitude, latitude]) => L.latLng(latitude, longitude).distanceTo(state.disaster) <= 250)
+    }
+
+    async function requestRoute() {
+      if (!state.origin || !state.safeHouse) {
+        setStatus('Place both an origin and a safe house first.', 'error')
+        return
+      }
+      setStatus('Valhalla is calculating a pedestrian route...')
+      try {
+        const response = await fetch('/route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locations: [
+              { lat: state.origin.lat, lon: state.origin.lng },
+              { lat: state.safeHouse.lat, lon: state.safeHouse.lng }
+            ],
+            costing: 'pedestrian',
+            units: 'kilometers',
+            shape_format: 'geojson'
+          })
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'Valhalla could not find a route.')
+        const leg = data.trip?.legs?.[0]
+        if (!leg?.shape) throw new Error('Valhalla returned no route geometry.')
+        const coordinates = decodePolyline(leg.shape)
+        if (state.routeLayer) state.routeLayer.remove()
+        state.routeLayer = L.polyline(coordinates.map(([longitude, latitude]) => [latitude, longitude]), { color: '#4bb5ff', weight: 6, opacity: 0.85 }).addTo(map)
+        map.fitBounds(state.routeLayer.getBounds(), { padding: [48, 48] })
+        const summary = data.trip.summary
+        const danger = routeNearDisaster(coordinates)
+        setStatus(`${(summary.length * 1000).toFixed(0)} m · ${Math.round(summary.time / 60)} min${danger ? ' · Route passes within 250 m of the disaster marker.' : ' · No nearby disaster marker on the drawn route.'}`, danger ? 'warning' : '')
+      } catch (error) {
+        setStatus(`${error.message} Is Docker and Valhalla running on port 8002?`, 'error')
+      }
+    }
+
+    function decodePolyline(shape) {
+      const coordinates = []
+      let index = 0
+      let latitude = 0
+      let longitude = 0
+      while (index < shape.length) {
+        const values = []
+        for (let valueIndex = 0; valueIndex < 2; valueIndex += 1) {
+          let shift = 0
+          let value = 0
+          let encoded
+          do {
+            encoded = shape.charCodeAt(index) - 63
+            index += 1
+            value |= (encoded & 31) << shift
+            shift += 5
+          } while (encoded >= 32)
+          values.push(value & 1 ? ~(value >> 1) : value >> 1)
+        }
+        latitude += values[0]
+        longitude += values[1]
+        coordinates.push([longitude / 1000000, latitude / 1000000])
+      }
+      return coordinates
+    }
+
+    document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)))
+    document.getElementById('routeButton').addEventListener('click', requestRoute)
+    document.getElementById('resetButton').addEventListener('click', () => {
+      Object.values(markers).forEach((marker) => marker.remove())
+      Object.keys(markers).forEach((key) => delete markers[key])
+      if (state.routeLayer) state.routeLayer.remove()
+      Object.assign(state, { origin: null, safeHouse: null, disaster: null, routeLayer: null })
+      setStatus('Markers cleared. Choose a placement mode, then click the map.')
+    })
+    map.on('click', (event) => placeMarker(state.mode, event.latlng))
+    setMode('origin')
+  </script>
+</body>
+</html>

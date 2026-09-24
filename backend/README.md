@@ -114,3 +114,22 @@ Implemented: profile persistence, profile APIs, buddy invitations, assistance st
 Partial: authoritative warning ingestion is future-ready only; no official source is fabricated.
 
 Future: external notification delivery, shelter routing, and navigation. Context returns `NOT_REQUESTED` only where there is no active persisted request, and `NOT_REQUIRED` navigation until routing exists.
+
+## Shelters and navigation
+
+Shelters are persistent PostGIS geography points with source provenance. Production imports must use verified shelter data; test fixtures use `source=TEST_FIXTURE` and are not official destinations. Nearby discovery uses `ST_DWithin` and `ST_Distance` rather than loading all shelters into Python.
+
+Shelters are rejected when closed, full, capacity-exhausted, or explicitly not wheelchair-accessible for a mobility-limited user. Unknown occupancy and accessibility remain unknown in the response; they are never treated as available or compatible.
+
+`POST /v1/navigation/routes` accepts `userId` and optional `destinationShelterId`. The backend selects a suitable shelter, asks Valhalla for a pedestrian route, then evaluates accessibility and nearby PetaBencana report points. A nearby report makes the route `POTENTIALLY_EXPOSED`; it is supporting evidence, not a flood polygon or authoritative unsafe declaration.
+
+OpenStreetMap supplies road data. Valhalla performs road-graph routing and geometry generation. EvacuAid selects shelters and evaluates accessibility and hazard evidence. The first implementation requests one pedestrian route; alternative routes and authoritative hazard polygons are future work.
+
+Valhalla is an optional Compose profile because routing tiles must be prepared once from a bounded OSM extract. It uses a persistent `valhalla_tiles` volume and does not download the planet or rebuild tiles on normal backend startup. With the provided Java extract at `backend/data/valhallaData/java-260920.osm.pbf`, prepare tiles and start routing with:
+
+```powershell
+docker run --rm --cpus 1 -v evacuaid_valhalla_tiles:/data/valhalla -v "${PWD}/backend/data/valhallaData:/input:ro" --entrypoint valhalla_build_tiles ghcr.io/interline-io/valhalla-docker/valhalla:latest -j 1 -c /build/valhalla.json /input/java-260920.osm.pbf
+docker compose --profile routing up -d valhalla
+```
+
+Until tiles are prepared, `/health` reports Valhalla unavailable and the backend as degraded; profile, context, risk, buddy, and assistance APIs remain available. Navigation then truthfully returns `UNAVAILABLE` when invoked.

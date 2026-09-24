@@ -6,6 +6,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-evacuaid}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-evacuaid}
       REDIS_URL: redis://redis:6379/0
+      VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
     ports:
       - "8000:8000"
     volumes:
@@ -50,6 +51,20 @@ services:
       timeout: 3s
       retries: 10
 
+  valhalla:
+    image: ghcr.io/interline-io/valhalla-docker/valhalla:latest
+    profiles: ['routing']
+    ports:
+      - '8002:8002'
+    volumes:
+      - valhalla_tiles:/data/valhalla:ro
+    healthcheck:
+      test: ['CMD', 'sh', '-c', 'wget -qO- http://localhost:8002/status >/dev/null']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:
+  valhalla_tiles:
