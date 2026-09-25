@@ -43,6 +43,12 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend pytest
 ```
 
+### Adding a migration
+
+- Before merging, rebase on `main` and set `down_revision` to the current head (`alembic heads`).
+- Never reuse a revision ID; use the next `YYYYMMDD_NN` suffix.
+- CI (`.github/workflows/backend-checks.yml`) fails the PR if there is more than one head or the app fails to import.
+
 The test suite covers profile persistence, coordinate validation, multiple accessibility attributes, preferences, context orchestration, Redis fallback, explainable decision reasons, and the invariant that citizen reports cannot independently trigger evacuation.
 
 ## API
