@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_session
 from app.auth import current_user
 from app.db.models import User
-from app.models.context import ContextAssistanceData, ContextNavigationData, ContextResponse
+from app.models.context import ContextAssistanceData, ContextResponse
 from app.models.navigation import NavigationCreate, NavigationResponse, NavigationStatus
 from app.models.assistance import ContextBuddy
 from app.models.risk import RiskRequest
