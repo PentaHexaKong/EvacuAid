@@ -16,12 +16,15 @@ const css = `@import 'tailwindcss';
 @import 'heroui-native/styles';
 
 @theme {
-  --font-sans: 'PlusJakartaSans_400Regular';
+  --font-sans: 'System';
   --field-radius: 12px;
 }
 
 @layer theme {
   :root {
+    @variant android {
+      --font-sans: 'Inter';
+    }
     @variant light {
 ${Object.entries(roles).map(([k, v]) => `      --${k}: ${v};`).join('\n')}
     }

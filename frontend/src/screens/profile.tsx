@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Switch, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -23,8 +23,13 @@ export function ProfileScreen() {
   const [busy, setBusy] = useState(false);
   const label = name || t('profileFallback');
   const initials = label.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const observedAt = profile?.location_observed_at ? new Date(profile.location_observed_at) : null;
-  const locationFresh = observedAt !== null && Date.now() - observedAt.getTime() < 15 * 60_000;
+  const locationFresh = observedAt !== null && now - observedAt.getTime() < 15 * 60_000;
 
   const saveDeviceLocation = async () => {
     if (busy) return;

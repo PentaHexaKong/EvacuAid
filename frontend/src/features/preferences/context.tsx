@@ -71,7 +71,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }
   }, [token, user?.id, localReady]);
 
-  useEffect(() => { void sync(); }, [sync]);
+  useEffect(() => { void Promise.resolve().then(sync); }, [sync]);
 
   const save = async (value: Preferences) => {
     setError(null);

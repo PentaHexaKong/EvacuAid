@@ -9,14 +9,13 @@ import { PreferencesProvider, usePreferences } from '@/features/preferences/cont
 import { SetupScreen } from '@/screens/setup';
 import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
-import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
-import { colors, FontReadyContext, SystemReduceMotionContext } from '@/theme';
+import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
@@ -77,7 +76,6 @@ function Navigation() {
   </Stack></RequestDraftProvider>;
 }
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
   const [ready, setReady] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(true);
   useEffect(() => {
@@ -88,7 +86,7 @@ export default function RootLayout() {
     return () => { mounted = false; sub.remove(); };
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
-    {(!ready || (!fontsLoaded && !fontError)) ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <SystemReduceMotionContext.Provider value={reduceMotion}><FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider></SystemReduceMotionContext.Provider>}
+    {!ready ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
+    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></HeroUINativeProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

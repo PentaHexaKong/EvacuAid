@@ -3,12 +3,15 @@
 @import 'heroui-native/styles';
 
 @theme {
-  --font-sans: 'PlusJakartaSans_400Regular';
+  --font-sans: 'System';
   --field-radius: 12px;
 }
 
 @layer theme {
   :root {
+    @variant android {
+      --font-sans: 'Inter';
+    }
     @variant light {
       --background: #F3F6FA;
       --foreground: #12284B;

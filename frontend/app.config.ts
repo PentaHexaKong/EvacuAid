@@ -33,13 +33,15 @@ const config: ExpoConfig = {
     'expo-secure-store',
     ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to save your current location when you choose.' }],
     ['expo-splash-screen', { backgroundColor: '#F3F6FA' }],
-    ['expo-font', { fonts: [
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/400Regular/PlusJakartaSans_400Regular.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/500Medium/PlusJakartaSans_500Medium.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/600SemiBold/PlusJakartaSans_600SemiBold.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/700Bold/PlusJakartaSans_700Bold.ttf',
-    ] }],
+    ['expo-font', { android: { fonts: [{ fontFamily: 'Inter', fontDefinitions: [
+      { path: './node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf', weight: 400 },
+      { path: './node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf', weight: 500 },
+      { path: './node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf', weight: 600 },
+      { path: './node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf', weight: 700 },
+    ] }] } }],
     ['react-native-maps', { androidGoogleMapsApiKey: process.env.ANDROID_GOOGLE_MAPS_API_KEY || '' }],
+    '@rnmapbox/maps',
+    './plugins/with-ios-scene-lifecycle',
   ],
 };
 

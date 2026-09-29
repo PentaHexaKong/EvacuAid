@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import Constants, { AppOwnership } from 'expo-constants';
-import { SimulationMap } from './map.native';
+import { SimulationMap } from './map.rnmaps';
 import { selectRoute, graph, endpoints, presets } from './sample';
 import { interpolate } from './routing';
 import { colors } from '@/theme';

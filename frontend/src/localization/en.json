@@ -19,7 +19,7 @@
   "componentsDescription": "A preview of the controls and states that will shape EvacuAid.",
   "typeTitle": "Type that gives words room",
   "typeBody": "Important information should stay readable, even when you make your text larger.",
-  "typeCaption": "Plus Jakarta Sans · Regular / Medium / Semibold / Bold",
+  "typeCaption": "SF Pro (iOS) · Inter (Android) · Regular / Medium / Semibold / Bold",
   "actions": "Clear next steps",
   "addBuddy": "Add Buddy",
   "ordinaryButton": "Continue",

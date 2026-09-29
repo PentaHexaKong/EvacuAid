@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { DiscoverMap } from './discover-map.native';
+import { DiscoverMap } from './discover-map.rnmaps';
 import type { DiscoverMapProps } from './discover-map';
 
 const mockFit = jest.fn();

@@ -69,7 +69,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    void retry().catch(() => {});
+    void Promise.resolve().then(retry).catch(() => {});
   }, [token, retry]);
 
   const saveProfile = async (patch: Partial<Pick<UserProfile, 'name' | 'phone' | 'needs_assistance' | 'share_location_with_buddies'>> & { accessibility?: AccessibilityItem[] }) => {
