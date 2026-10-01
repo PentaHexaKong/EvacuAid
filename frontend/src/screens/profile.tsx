@@ -3,13 +3,12 @@ import { Alert, Switch, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Input } from 'heroui-native/input';
-import { ActionButton, AppText, Page } from '@/components/ui';
+import { ActionButton, AppText, Field, Page } from '@/components/ui';
 import { ContentRow } from '@/components/content';
 import { useProfile, type AccessibilityType } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
 import { useGuestSession } from '@/features/profile/session';
-import { colors, useTypography } from '@/theme';
+import { colors } from '@/theme';
 
 const accessibilityTypes: AccessibilityType[] = ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT', 'MOBILITY_LIMITATION', 'ELDERLY', 'OTHER'];
 
@@ -124,12 +123,10 @@ function ProfileForm() {
   const [name, setName] = useState(profile?.name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [needsAssistance, setNeedsAssistance] = useState(profile?.needs_assistance ?? false);
-  const [selected, setSelected] = useState<AccessibilityType[]>(accessibility.map(item => item.type));
+  const [selected, setSelected] = useState<AccessibilityType[]>(() => accessibility.map(item => item.type));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const pending = useRef(false);
-  const typography = useTypography('body');
-  const { preferences } = usePreferences();
   const save = async () => {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(false);
@@ -147,8 +144,8 @@ function ProfileForm() {
   return <Page keyboard>
     <AppText variant="title" accessibilityRole="header">{t('editProfile')}</AppText>
     <AppText>{t('profileDetails')}</AppText>
-    <Input accessibilityLabel={t('profileNameLabel')} value={name} onChangeText={setName} maxLength={60} editable={!busy} autoCapitalize="words" placeholder={t('profileNameLabel')} style={[typography, { minHeight: 52, height: 'auto', backgroundColor: colors.surface, padding: 16 }, preferences.largerText && { fontSize: 19.2, lineHeight: 28.8 }]} />
-    <Input accessibilityLabel={t('phoneNumber')} value={phone} onChangeText={setPhone} maxLength={32} editable={!busy} keyboardType="phone-pad" placeholder={t('phoneNumber')} style={[typography, { minHeight: 52, height: 'auto', backgroundColor: colors.surface, padding: 16 }, preferences.largerText && { fontSize: 19.2, lineHeight: 28.8 }]} />
+    <Field accessibilityLabel={t('profileNameLabel')} value={name} onChangeText={setName} maxLength={60} editable={!busy} autoCapitalize="words" placeholder={t('profileNameLabel')} />
+    <Field accessibilityLabel={t('phoneNumber')} value={phone} onChangeText={setPhone} maxLength={32} editable={!busy} keyboardType="phone-pad" placeholder={t('phoneNumber')} />
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><AppText style={{ flex: 1 }}>{t('needsAssistance')}</AppText><Switch accessibilityLabel={t('needsAssistance')} value={needsAssistance} disabled={busy} onValueChange={setNeedsAssistance} /></View>
     <AppText variant="section" accessibilityRole="header">{t('accessibilityNeeds')}</AppText>
     {accessibilityTypes.map(type => <View key={type} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

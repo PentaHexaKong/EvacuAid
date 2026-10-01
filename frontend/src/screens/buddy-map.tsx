@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Constants from 'expo-constants';
@@ -19,12 +19,13 @@ function ParticipantRow({ participant, now }: { participant: Participant; now: n
   const status = positionStatus(position, now);
   const Icon = id === 'you' ? IconNavigation : IconMapPin;
   const locale = i18n.language === 'id' ? 'id-ID' : 'en-US';
+  const formats = useMemo(() => ({ time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }), coordinate: new Intl.NumberFormat(locale, { minimumFractionDigits: 5, maximumFractionDigits: 5 }), meters: new Intl.NumberFormat(locale) }), [locale]);
   return <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 16, gap: 8 }}>
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><Icon size={24} strokeWidth={2} color={id === 'you' ? colors.ink : colors.primary} /><AppText variant="button" style={{ flex: 1 }}>{t(id)}</AppText></View>
     <AppText variant="small" style={{ color: status === 'current' ? colors.primary : colors.caution }}>{t(status)}</AppText>
-    {position && <><AppText variant="small" style={{ color: colors.muted }}>{t('updated', { time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(position.observedAt) })}</AppText>
-      <AppText selectable variant="small" style={{ color: colors.muted }}>{t('coordinates', { latitude: new Intl.NumberFormat(locale, { minimumFractionDigits: 5, maximumFractionDigits: 5 }).format(position.latitude), longitude: new Intl.NumberFormat(locale, { minimumFractionDigits: 5, maximumFractionDigits: 5 }).format(position.longitude) })}</AppText>
-      {position.accuracy !== undefined && <AppText variant="small" style={{ color: colors.muted }}>{t('accuracy', { meters: new Intl.NumberFormat(locale).format(position.accuracy) })}</AppText>}</>}
+    {position && <><AppText variant="small" style={{ color: colors.muted }}>{t('updated', { time: formats.time.format(position.observedAt) })}</AppText>
+      <AppText selectable variant="small" style={{ color: colors.muted }}>{t('coordinates', { latitude: formats.coordinate.format(position.latitude), longitude: formats.coordinate.format(position.longitude) })}</AppText>
+      {position.accuracy !== undefined && <AppText variant="small" style={{ color: colors.muted }}>{t('accuracy', { meters: formats.meters.format(position.accuracy) })}</AppText>}</>}
   </View>;
 }
 function SimulationControls({ source, disconnected }: { source: ReturnType<typeof useBuddyPreview>['source']; disconnected: boolean }) {

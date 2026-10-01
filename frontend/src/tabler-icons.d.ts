@@ -72,3 +72,13 @@ declare module '@tabler/icons-react-native/IconHeart' {
   const Icon: typeof import('@tabler/icons-react-native').IconHeart;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconCurrentLocation' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCurrentLocation;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCheck' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCheck;
+  export default Icon;
+}

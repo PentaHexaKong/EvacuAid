@@ -1,20 +1,22 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppText } from '@/components/ui';
 import { DiscoverScreen } from './discover';
 import { EditNameScreen, ProfileScreen } from './profile';
 import { AlertsScreen, AlertScreen } from './alerts';
-import { OverviewScreen } from './overview';
 import { ProfileProvider, PROFILE_KEY, useProfile } from '@/features/profile/context';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { PREFERENCES_KEY } from '@/features/preferences/storage';
-import { sampleAlerts, sampleDestinations } from '@/features/content/samples';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
+import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
 let mockMapProps: DiscoverMapProps;
+let mockEvac: EvacuationState & { findRoute: jest.Mock; locate: jest.Mock; clearRoute: jest.Mock };
+const mockSnapToIndex = jest.fn();
+const mockEnsureGuest = jest.fn();
 let mockId = 'rain';
 let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
@@ -26,22 +28,28 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, pa
 }, i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/components/discover-map', () => ({ DiscoverMap: (props: DiscoverMapProps) => { mockMapProps = props; return null; } }));
-jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: jest.fn(), deleteGuest: jest.fn(), startNewGuest: jest.fn() }) }));
+jest.mock('@gorhom/bottom-sheet', () => {
+  const React = jest.requireActual('react');
+  const { View, ScrollView } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: React.forwardRef(function MockSheet({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) {
+      React.useImperativeHandle(ref, () => ({ snapToIndex: mockSnapToIndex }));
+      return <View>{children}</View>;
+    }),
+    BottomSheetScrollView: ScrollView,
+    useBottomSheetSpringConfigs: (config: object) => config,
+  };
+});
+jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => mockEvac }));
+jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: jest.fn(), startNewGuest: jest.fn() }) }));
 jest.mock('@/features/profile/api', () => ({ apiRequest: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Card: Object.assign(({ children }: { children: React.ReactNode }) => <View>{children}</View>, { Body: View }) };
-});
-jest.mock('heroui-native/button', () => {
-  const { Pressable } = jest.requireActual('react-native');
-  return { Button: (props: React.ComponentProps<typeof Pressable>) => <Pressable accessibilityRole="button" {...props} /> };
-});
-jest.mock('heroui-native/input', () => ({ Input: jest.requireActual('react-native').TextInput }));
-jest.mock('heroui-native/chip', () => ({ Chip: jest.requireActual('react-native').View }));
 
 beforeEach(async () => {
   jest.restoreAllMocks(); jest.clearAllMocks(); mockId = 'rain'; mockLanguage = 'en'; await AsyncStorage.clear();
+  mockEnsureGuest.mockResolvedValue(undefined);
+  mockEvac = { phase: 'needsLocation', origin: null, shelters: null, route: null, reason: null, errorKind: null, findRoute: jest.fn(), locate: jest.fn(), clearRoute: jest.fn() };
   mockProfile = { id: 'user-1', name: null, phone: null, latitude: null, longitude: null, location_observed_at: null, location_accuracy_m: null, share_location_with_buddies: false, needs_assistance: false };
   mockPreferences = { voice_enabled: true, vibration_enabled: true, text_enabled: true, language: 'en', larger_text: false, stronger_contrast: false };
   (apiRequest as jest.Mock).mockImplementation(async (path: string, _token: string, init?: RequestInit) => {
@@ -56,39 +64,128 @@ beforeEach(async () => {
   });
 });
 
-test('Discover filters markers and cards together, selects markers and opens existing details', () => {
-  const view = render(<DiscoverScreen />);
-  expect(mockMapProps.items).toHaveLength(4);
-  fireEvent.press(view.getByRole('tab', { name: 'Alerts' }));
+const en = jest.requireActual('../localization/en.json');
+const id = jest.requireActual('../localization/id.json');
+const origin = { latitude: -6.26, longitude: 106.81, accuracyM: 10, observedAt: '2026-09-17T01:00:00.000Z' };
+const hall = { id: 's1', name: 'Community hall', latitude: -6.27, longitude: 106.82, status: 'OPEN', wheelchairAccessible: null, capacity: null, currentOccupancy: null, source: null, distanceM: 900 };
+const school = { ...hall, id: 's2', name: 'School gym', distanceM: 2400 };
+const readyRoute = {
+  coordinates: [[106.81, -6.26], [106.82, -6.27]] as [number, number][],
+  computedAt: new Date('2026-09-17T01:05:00.000Z'),
+  response: {
+    routeStatus: 'READY' as const,
+    destination: { shelterId: 's1', name: 'Community hall', latitude: -6.27, longitude: 106.82, source: null },
+    route: { distanceM: 900, durationSec: 660, geometry: null, profile: 'pedestrian' },
+    evaluation: { safetyStatus: 'UNKNOWN' as const, accessibilityStatus: 'UNKNOWN' as const, reasonCodes: [] },
+    selectionReasonCodes: [],
+  },
+};
+function evac(state: Partial<EvacuationState>) { mockEvac = { ...mockEvac, ...state }; }
+
+test('Discover passes safe-area and sheet insets to the fullscreen map and opens alerts from markers', () => {
+  render(<DiscoverScreen />);
+  expect(mockMapProps.topInset).toBe(59);
+  expect(mockMapProps.bottomInset).toBeGreaterThan(34);
+  expect(mockMapProps.route).toBeUndefined();
   expect(mockMapProps.items.map(item => item.kind)).toEqual(['alert', 'alert']);
-  expect(view.queryByText('Community hall · example')).toBeNull();
   act(() => mockMapProps.onSelect('rain'));
-  expect(mockMapProps.selected).toBe('rain');
-  expect(view.getByText('Selected on the map')).toBeTruthy();
-  fireEvent.press(view.getByText(mockMapProps.items[0].title));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
-  fireEvent.press(view.getByRole('tab', { name: 'Destinations' }));
-  expect(mockMapProps.items).toHaveLength(2);
-  expect(mockMapProps.selected).toBeNull();
-  fireEvent.press(view.getByText('Community hall · example'));
-  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/destinations/[id]', params: { id: 'community-hall' } });
-  view.rerender(<DiscoverScreen />);
-  expect(view.getByRole('tab', { name: 'Destinations' })).toHaveProp('accessibilityState', { selected: true });
 });
 
-test('Discover and notifications retain readable empty states', () => {
-  const mutableAlerts = sampleAlerts as unknown as (typeof sampleAlerts)[number][];
-  const mutableDestinations = sampleDestinations as unknown as (typeof sampleDestinations)[number][];
-  const alerts = mutableAlerts.splice(0);
-  const destinations = mutableDestinations.splice(0);
-  try {
-    const discover = render(<DiscoverScreen />);
-    expect(mockMapProps.items).toHaveLength(0);
-    expect(discover.getByText('No examples match this filter. Choose another category.')).toBeTruthy();
-    discover.unmount();
-    const notifications = render(<AlertsScreen sheet />);
-    expect(notifications.getByText(jest.requireActual('../localization/en.json').noAlerts)).toBeTruthy();
-  } finally { mutableAlerts.push(...alerts); mutableDestinations.push(...destinations); }
+test('the status chip opens the current alert', () => {
+  const view = render(<DiscoverScreen />);
+  fireEvent.press(view.getByRole('button', { name: `${en.cautionLabel}. ${en.rainTitle}` }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+});
+
+test('without a location Discover offers to find a route and asks the hook to do it', () => {
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(en.findShelterTitle)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.findRouteToShelter }));
+  expect(mockEvac.findRoute).toHaveBeenCalledTimes(1);
+  expect(mockSnapToIndex).toHaveBeenCalledWith(0);
+  act(() => mockMapProps.onLocate());
+  expect(mockEvac.locate).toHaveBeenCalledTimes(1);
+});
+
+test('a located user sees the nearest shelter, other shelters and can route to a chosen one', () => {
+  evac({ phase: 'located', origin, shelters: [hall, school] });
+  const view = render(<DiscoverScreen />);
+  expect(mockMapProps.items.filter(item => item.kind === 'destination').map(item => item.id)).toEqual(['s1', 's2']);
+  expect(view.getByText(en.nearestShelter)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.routeToShelter }));
+  expect(mockEvac.findRoute).toHaveBeenLastCalledWith(undefined);
+  fireEvent.press(view.getByText('School gym'));
+  expect(mockSnapToIndex).toHaveBeenLastCalledWith(0);
+  view.rerender(<DiscoverScreen />);
+  expect(view.getByText(en.selectedShelter)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.routeHere }));
+  expect(mockEvac.findRoute).toHaveBeenLastCalledWith('s2');
+});
+
+test('a ready route shows the figures, unknown evidence, and hands off to Apple Maps', () => {
+  evac({ phase: 'ready', origin, shelters: [hall], route: readyRoute });
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  const view = render(<DiscoverScreen />);
+  expect(mockMapProps.route).toEqual(readyRoute.coordinates);
+  expect(view.getByText(/^900 m · /)).toBeTruthy();
+  expect(view.getByText('Walk to Community hall')).toBeTruthy();
+  expect(view.getByText(en.hazard_UNKNOWN)).toBeTruthy();
+  expect(view.getByText(en.routeAccess_UNKNOWN)).toBeTruthy();
+  expect(view.getByText(en.externalNavigation)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.openAppleMaps }));
+  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?daddr=-6.27,106.82&dirflg=w');
+  fireEvent.press(view.getByRole('button', { name: en.chooseAnotherShelter }));
+  expect(mockEvac.clearRoute).toHaveBeenCalledTimes(1);
+});
+
+test('an unverified route never claims to be safe', () => {
+  evac({ phase: 'ready', origin, shelters: [hall], route: readyRoute });
+  mockLanguage = 'id';
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(id.hazard_UNKNOWN)).toBeTruthy();
+  expect(view.queryAllByText(/\baman\b/i)).toHaveLength(0);
+});
+
+test('the no-known-hazard note is always paired with its disclaimer', () => {
+  evac({ phase: 'ready', origin, shelters: [hall], route: { ...readyRoute, response: { ...readyRoute.response, evaluation: { safetyStatus: 'NO_KNOWN_HAZARD', accessibilityStatus: 'COMPATIBLE', reasonCodes: [] } } } });
+  mockLanguage = 'id';
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(id.hazard_NO_KNOWN_HAZARD)).toBeTruthy();
+  expect(id.hazard_NO_KNOWN_HAZARD).toMatch(/bukan jaminan/);
+  expect(view.queryAllByText(/\baman\b/i)).toHaveLength(1);
+});
+
+test('an unavailable route explains the reason and offers a retry', () => {
+  evac({ phase: 'unavailable', origin, shelters: [hall], reason: 'ROUTING_PROVIDER_UNAVAILABLE' });
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(en.routeUnavailableTitle)).toBeTruthy();
+  expect(view.getByText(en.routeReason_ROUTING_PROVIDER_UNAVAILABLE)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.tryAgain }));
+  expect(mockEvac.findRoute).toHaveBeenCalledTimes(1);
+});
+
+test('a denied permission points to Settings', () => {
+  evac({ phase: 'denied' });
+  const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(en.locationDeniedTitle)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.openSettings }));
+  expect(openSettings).toHaveBeenCalledTimes(1);
+});
+
+test('a network error shows the connection message and a missing session asks for a new guest instead of routing', () => {
+  evac({ phase: 'error', errorKind: 'network' });
+  const view = render(<DiscoverScreen />);
+  expect(view.getByText(en.routeErrorTitle)).toBeTruthy();
+  expect(view.getByText(en.routeErrorConnection)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: en.tryAgain }));
+  expect(mockEvac.findRoute).toHaveBeenCalledTimes(1);
+  evac({ errorKind: 'session' });
+  view.rerender(<DiscoverScreen />);
+  fireEvent.press(view.getByRole('button', { name: en.tryAgain }));
+  expect(mockEnsureGuest).toHaveBeenCalledTimes(1);
+  expect(mockEvac.findRoute).toHaveBeenCalledTimes(1);
 });
 
 test('notification details stay in the sheet and onward actions dismiss it', () => {
@@ -96,17 +193,20 @@ test('notification details stay in the sheet and onward actions dismiss it', () 
   fireEvent.press(view.getByText(jest.requireActual('../localization/en.json').rainTitle));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alerts/[id]', params: { id: 'rain' } });
   view.rerender(<View><AlertScreen sheet /></View>);
+  expect(view.getByText('Caution')).toBeTruthy();
+  expect(view.getByText('Example')).toBeTruthy();
+  for (const step of ['Pack an emergency bag', 'Charge your phone', 'Follow official updates']) expect(view.getByText(step)).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  expect(mockRouter.dismissTo).toHaveBeenLastCalledWith('/buddy');
-  fireEvent.press(view.getByRole('button', { name: 'View destinations' }));
-  expect(mockRouter.dismissTo).toHaveBeenLastCalledWith('/destinations');
+  expect(mockRouter.dismissTo).toHaveBeenLastCalledWith({ pathname: '/buddy', params: undefined });
+  fireEvent.press(view.getByRole('button', { name: 'Find a route to a gathering point' }));
+  expect(mockRouter.dismissTo).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
   view.rerender(<View><AlertScreen /></View>);
   fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: undefined });
 });
 
 function SavedName() { return <AppText>{useProfile().name || 'fallback'}</AppText>; }
-test('profile form retains failed drafts, retries, and updates Home', async () => {
+test('profile form retains failed drafts and retries', async () => {
   await AsyncStorage.setItem(PROFILE_KEY, '{"name":"Billy"}');
   const view = render(<ProfileProvider><EditNameScreen /><SavedName /></ProfileProvider>);
   await waitFor(() => expect(view.getByDisplayValue('Billy')).toBeTruthy());
@@ -119,8 +219,6 @@ test('profile form retains failed drafts, retries, and updates Home', async () =
   fireEvent.press(view.getByRole('button', { name: 'Save profile' }));
   await waitFor(() => expect(view.getByText('New name')).toBeTruthy());
   expect(await AsyncStorage.getItem(PROFILE_KEY)).toBeNull();
-  view.rerender(<ProfileProvider><OverviewScreen /></ProfileProvider>);
-  expect(view.getByText('Hello, New name')).toBeTruthy();
 });
 
 test('resetting first-time guide keeps server profile and support preferences', async () => {
@@ -138,8 +236,6 @@ test('resetting first-time guide keeps server profile and support preferences', 
 });
 
 test('new copy has Indonesian parity and Profile uses the localized fallback', async () => {
-  const en = jest.requireActual('../localization/en.json');
-  const id = jest.requireActual('../localization/id.json');
   expect(Object.keys(en).sort()).toEqual(Object.keys(id).sort());
   mockLanguage = 'id';
   const view = render(<ProfileProvider><ProfileScreen /></ProfileProvider>);

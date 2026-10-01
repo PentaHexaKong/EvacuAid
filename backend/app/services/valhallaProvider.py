@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 import httpx
@@ -18,6 +19,19 @@ class RouteData:
     distanceM: float
     durationSec: float
     geometry: dict
+
+
+def isFiniteNumber(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def isValidLineString(geometry) -> bool:
+    if not isinstance(geometry, dict) or geometry.get('type') != 'LineString':
+        return False
+    coordinates = geometry.get('coordinates')
+    if not isinstance(coordinates, list) or len(coordinates) < 2:
+        return False
+    return all(isinstance(point, (list, tuple)) and len(point) >= 2 and all(isFiniteNumber(item) for item in point) for point in coordinates)
 
 
 def decodePolyline(shape: str) -> dict:
@@ -75,11 +89,20 @@ class ValhallaRoutingProvider:
         try:
             trip = response.json()['trip']
             summary = trip['summary']
-            geometry = trip.get('geometry') or trip['legs'][0].get('shape')
+            legs = trip.get('legs')
+            geometry = trip.get('geometry')
+            if not geometry:
+                if not isinstance(legs, list) or not legs:
+                    raise ValueError('route has no legs')
+                geometry = legs[0].get('shape')
             if isinstance(geometry, str):
                 geometry = decodePolyline(geometry)
-            if not isinstance(geometry, dict):
-                raise ValueError('route geometry is not GeoJSON')
-            return RouteData(distanceM=float(summary['length']) * 1000, durationSec=float(summary['time']), geometry=geometry)
-        except (KeyError, TypeError, ValueError) as error:
+            if not isValidLineString(geometry):
+                raise ValueError('route geometry is not a valid LineString')
+            distanceM = float(summary['length']) * 1000
+            durationSec = float(summary['time'])
+            if not math.isfinite(distanceM) or not math.isfinite(durationSec) or distanceM < 0 or durationSec < 0:
+                raise ValueError('route summary is invalid')
+            return RouteData(distanceM=distanceM, durationSec=durationSec, geometry=geometry)
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
             raise NoRoute(str(error))

@@ -1,14 +1,11 @@
+import { useContext } from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Animated, ScrollView, Text, View } from 'react-native';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { AppText, Page } from './ui';
-import { pageHeaderLayout } from './page-scroll-view';
+import { PageTitleContext, pageHeaderLayout } from './page-scroll-view';
 import { SystemReduceMotionContext } from '@/theme';
 
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Card: Object.assign(View, { Body: View }) };
-});
 
 test('the native header follows the measured first heading, including reflow and returning to the top', () => {
   const setOptions = jest.fn();
@@ -77,3 +74,27 @@ test('the title fades with the native driver, reverses on scroll, and respects r
   expect(stop).toHaveBeenCalledTimes(start.mock.calls.length);
   timing.mockRestore();
 });
+
+test('crossing the title threshold does not re-render the page text', () => {
+  const measurement = jest.spyOn(Text.prototype, 'measureLayout').mockImplementation((_relative, measured) => measured(0, 60, 240, 40));
+  const probeOptions = jest.fn();
+  const view = render(<HeaderHeightContext.Provider value={64}>{pageHeaderLayout({
+    options: { title: 'Title' }, navigation: { setOptions: probeOptions }, children: <Page>
+      <AppText testID="title" variant="title" accessibilityRole="header">Title</AppText>
+      <Probe />
+    </Page>,
+  })}</HeaderHeightContext.Provider>);
+  fireEvent(view.getByTestId('title'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 240, height: 40 } } });
+  probeRender.mockClear();
+  fireEvent.scroll(view.UNSAFE_getByType(ScrollView), { nativeEvent: { contentOffset: { x: 0, y: 200 }, contentInset: { top: 64 } } });
+  expect(probeOptions).toHaveBeenLastCalledWith(expect.objectContaining({ headerBlurEffect: 'systemUltraThinMaterialLight' }));
+  expect(probeRender).not.toHaveBeenCalled();
+  measurement.mockRestore();
+});
+
+const probeRender = jest.fn();
+function Probe() {
+  useContext(PageTitleContext);
+  probeRender();
+  return null;
+}

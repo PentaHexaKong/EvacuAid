@@ -141,7 +141,7 @@ OpenStreetMap supplies road data. Valhalla performs road-graph routing and geome
 Valhalla is an optional Compose profile because routing tiles must be prepared once from a bounded OSM extract. It uses a persistent `valhalla_tiles` volume and does not download the planet or rebuild tiles on normal backend startup. With the provided Java extract at `backend/data/valhallaData/java-260920.osm.pbf`, prepare tiles and start routing with:
 
 ```powershell
-docker run --rm --cpus 1 -v evacuaid_valhalla_tiles:/data/valhalla -v "${PWD}/backend/data/valhallaData:/input:ro" --entrypoint valhalla_build_tiles ghcr.io/interline-io/valhalla-docker/valhalla:latest -j 1 -c /build/valhalla.json /input/java-260920.osm.pbf
+docker run --rm --cpus 1 -v evacuaid_valhalla_tiles:/data/valhalla -v "${PWD}/backend/data/valhallaData:/input:ro" ghcr.io/valhalla/valhalla:3.9.0 sh -c 'valhalla_build_config --mjolnir-tile-dir /data/valhalla --mjolnir-tile-extract /data/valhalla/tiles.tar > /tmp/valhalla.json && valhalla_build_tiles -j 1 -c /tmp/valhalla.json /input/java-260920.osm.pbf'
 docker compose --profile routing up -d valhalla
 ```
 

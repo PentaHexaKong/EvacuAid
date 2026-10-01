@@ -1,4 +1,3 @@
-import '../../global.css';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -11,16 +10,13 @@ import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { HeroUINativeProvider } from 'heroui-native/provider';
 import { I18nextProvider, useTranslation } from 'react-i18next';
-import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
 import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
-Uniwind.setTheme('light');
 
 export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' };
 
@@ -28,20 +24,20 @@ function FirstRunGate() {
   const { ready, preferences } = usePreferences();
   const session = useGuestSession();
   const router = useRouter();
-  const [returnHome, setReturnHome] = useState(false);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   useEffect(() => {
     if (preferences.completed && session.status === 'idle') void session.ensureGuest().catch(() => {});
   }, [preferences.completed, session.status, session.ensureGuest]);
   useEffect(() => {
-    if (preferences.completed && returnHome && session.status === 'ready') router.replace('/');
-  }, [preferences.completed, returnHome, session.status, router]);
+    if (preferences.completed && returnTo && session.status === 'ready') router.replace(returnTo as '/');
+  }, [preferences.completed, returnTo, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (preferences.completed && session.status !== 'ready') {
     if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
-  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={() => setReturnHome(true)} /></SafeAreaView>;
+  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={target => setReturnTo(target ?? '/')} /></SafeAreaView>;
 }
 
 function GuestSessionError() {
@@ -63,8 +59,8 @@ function Navigation() {
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
     <Stack.Screen name="contact/[id]" options={{ title: t('contactTitle') }} />
-    <Stack.Screen name="destinations/index" options={{ title: t('destinationsTitle') }} />
-    <Stack.Screen name="destinations/[id]" options={{ title: t('destinationTitle') }} />
+    <Stack.Screen name="destinations/index" options={{ headerShown: false }} />
+    <Stack.Screen name="destinations/[id]" options={{ headerShown: false }} />
     <Stack.Screen name="request/index" options={{ title: t('requestHelp') }} />
     <Stack.Screen name="request/review" options={{ title: t('reviewRequest') }} />
     {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
@@ -87,6 +83,6 @@ export default function RootLayout() {
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
     {!ready ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></HeroUINativeProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
+    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

@@ -32,6 +32,7 @@ export async function apiRequest<T>(path: string, token?: string, init: RequestI
       },
     });
   } catch (cause) {
+    if ((cause as Error)?.name === 'AbortError') throw cause;
     const error = new Error('Cannot reach EvacuAid API. Check the backend address, that it is running, and that this device can reach the computer.') as ApiError;
     error.kind = 'network';
     error.originalCause = cause;

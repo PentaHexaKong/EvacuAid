@@ -9,10 +9,6 @@ import { routeFromValhalla } from './valhalla';
 
 const mockFit = jest.fn();
 let mockFail = false;
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Card: Object.assign(View, { Body: View }) };
-});
 jest.mock('expo-constants', () => ({ __esModule: true, default: { appOwnership: 'expo', expoConfig: { extra: { androidMapConfigured: false } } }, AppOwnership: { Expo: 'expo' } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, values?: Record<string, unknown>) => {
   let text = jest.requireActual('../../localization/en.json')[key] ?? key;
