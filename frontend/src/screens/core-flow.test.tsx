@@ -16,18 +16,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  const Card = Object.assign(({ children }: { children: React.ReactNode }) => <View>{children}</View>, { Body: View });
-  return { Card };
-});
 
-jest.mock('heroui-native/button', () => {
-  const { Pressable } = jest.requireActual('react-native');
-  return { Button: (props: React.ComponentProps<typeof Pressable>) => <Pressable accessibilityRole="button" {...props} /> };
-});
-jest.mock('heroui-native/input', () => ({ Input: jest.requireActual('react-native').TextInput }));
-jest.mock('heroui-native/chip', () => ({ Chip: jest.requireActual('react-native').View }));
 
 beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockContactId = 'raka'; await AsyncStorage.clear(); });
 
@@ -109,32 +98,56 @@ test('welcome exposes language immediately and skipping setup enters Home withou
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true });
 });
 
-test('Home search filters sample destinations and opens the selected destination', () => {
-  const view = render(<OverviewScreen />);
-  expect(view.getByText('Live conditions are not connected yet. Explore the example alerts below.')).toBeTruthy();
-  const search = view.getByLabelText('Find a destination');
-  fireEvent.changeText(search, 'center');
-  expect(view.getByText('Community center · example')).toBeTruthy();
-  expect(view.queryByText('Community hall · example')).toBeNull();
-  fireEvent.press(view.getByText('Community center · example'));
-  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/destinations/[id]', params: { id: 'community-center' } });
-  expect(search).toHaveProp('value', '');
-  fireEvent.changeText(search, 'no-such-place');
-  expect(view.getByText('No example destinations match your search.')).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'Request help' })).toBeNull();
+test('onboarding walks welcome, help and an example warning, saving the chosen help', async () => {
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 1 });
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
+  const larger = view.getByRole('checkbox', { name: 'Larger text' });
+  expect(larger).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
+  fireEvent.press(larger);
+  expect(view.getByRole('checkbox', { name: 'Larger text' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
+  expect(view.queryByRole('switch')).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(view.getByText('Pack an emergency bag')).toBeTruthy();
+  expect(view.queryByRole('button', { name: /Read the warning aloud/i })).toBeNull();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Request help' })));
+  expect(done).toHaveBeenCalledWith('/buddy');
+  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual(expect.objectContaining({ completed: true }));
 });
 
-test('Home quick access opens the matching existing destinations and reports its unavailable action', () => {
-  const alert = jest.spyOn(Alert, 'alert');
+test('finishing onboarding from the warning step returns Home', async () => {
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Continue to home' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+});
+
+test('Home shows the sample alert level with its label and routes to a gathering point', () => {
   const view = render(<OverviewScreen />);
-  for (const [label, route] of [['Risk Map', '/discover'], ['Safe Routes', '/destinations'], ['Preparedness', '/alerts']]) {
-    fireEvent.press(view.getByRole('button', { name: label }));
-    expect(mockRouter.navigate).toHaveBeenLastCalledWith(route);
-  }
-  fireEvent.press(view.getByRole('button', { name: 'Report' }));
-  expect(alert).toHaveBeenCalledWith('Report', 'Reporting is not available yet. No report has been created or sent.');
-  const id = jest.requireActual('../localization/id.json');
-  expect([id.homeRiskMap, id.homeSafeRoutes, id.homeReport, id.homePreparedness]).toEqual(['Peta Risiko', 'Rute Aman', 'Laporkan', 'Siaga']);
+  expect(view.getByRole('header', { name: 'Caution' })).toBeTruthy();
+  expect(view.getByText('Example')).toBeTruthy();
+  expect(view.getByLabelText('EvacuAid')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Find a route to a gathering point' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
+  expect(view.queryByLabelText('Find a destination')).toBeNull();
+  expect(view.queryByText(/safe route/i)).toBeNull();
+});
+
+test('Home lists the suggested steps in order and opens the latest alert', () => {
+  const view = render(<OverviewScreen />);
+  expect(view.getByRole('header', { name: 'Suggested steps' })).toBeTruthy();
+  for (const step of ['Pack an emergency bag', 'Charge your phone', 'Follow official updates']) expect(view.getByText(step)).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'See all' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
+  fireEvent.press(view.getAllByText('Heavy rain and strong winds')[1]);
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
 });
 
 test('route simulation is reachable from Home only in development', () => {

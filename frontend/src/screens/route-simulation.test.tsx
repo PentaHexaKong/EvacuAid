@@ -17,10 +17,6 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
   return text;
 } }) }));
 jest.mock('@/features/route-simulation/map', () => ({ SimulationMap: jest.fn(() => null) }));
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Card: Object.assign(View, { Body: View }) };
-});
 
 beforeEach(() => { jest.useFakeTimers(); jest.clearAllMocks(); Object.defineProperty(AppState, 'currentState', { value: 'active', writable: true }); });
 afterEach(() => jest.useRealTimers());

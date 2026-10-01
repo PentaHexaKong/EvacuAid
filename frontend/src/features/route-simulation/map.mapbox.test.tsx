@@ -30,10 +30,6 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
   for (const [name, value] of Object.entries(values ?? {})) text = text.replaceAll(`{{${name}}}`, String(value));
   return text;
 } }) }));
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Card: Object.assign(View, { Body: View }) };
-});
 
 const telemetryAtImport = [...(jest.requireMock('@rnmapbox/maps').default.setTelemetryEnabled as jest.Mock).mock.calls];
 const origin = graph.nodes.find(n => n.id === endpoints.person)!.coordinate;

@@ -11,7 +11,7 @@ const routes = {
   _layout: () => <Stack><Stack.Screen name="alerts" dangerouslySingular options={{ presentation: 'formSheet', headerShown: false }} /><Stack.Screen name="profile" dangerouslySingular options={{ presentation: 'formSheet', headerShown: false }} /></Stack>,
   index: () => <Text>Home content</Text>,
   buddy: () => <Text>Buddy content</Text>,
-  destinations: () => <Text>Destination content</Text>,
+  discover: () => <Text>Discover content</Text>,
   'alerts/_layout': { default: SheetStack, unstable_settings: { initialRouteName: 'index' } },
   'alerts/index': () => <Text>Notification list</Text>,
   'alerts/[id]': () => <Text>Notification detail</Text>,
@@ -42,8 +42,8 @@ test('onward navigation removes the complete notification stack and settings red
   const view = renderRouter(routes);
   act(() => router.navigate('/alerts'));
   act(() => router.push('/alerts/rain'));
-  act(() => router.dismissTo('/destinations'));
-  expect(view.getPathname()).toBe('/destinations');
+  act(() => router.dismissTo('/discover'));
+  expect(view.getPathname()).toBe('/discover');
   expect(view.getRouterState()?.routes[0]?.state?.routes.some(route => route.name === 'alerts')).toBe(false);
   act(() => router.navigate('/settings'));
   expect(view.getPathname()).toBe('/profile/settings');

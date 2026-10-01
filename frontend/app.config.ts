@@ -11,7 +11,9 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   userInterfaceStyle: 'light',
   platforms: ['ios', 'android'],
+  icon: './assets/brand/app-icon/icon.png',
   ios: {
+    icon: './assets/brand/app-icon/EvacuAid.icon',
     bundleIdentifier: process.env.IOS_BUNDLE_IDENTIFIER || 'dev.evacuaid.foundation',
     supportsTablet: false,
     infoPlist: {
@@ -24,15 +26,20 @@ const config: ExpoConfig = {
   },
   android: {
     package: process.env.ANDROID_PACKAGE || 'dev.evacuaid.foundation',
+    adaptiveIcon: {
+      foregroundImage: './assets/brand/app-icon/android-foreground.png',
+      backgroundImage: './assets/brand/app-icon/android-background.png',
+    },
     blockedPermissions: ['android.permission.RECORD_AUDIO'],
   },
   extra: { androidMapConfigured: Boolean(process.env.ANDROID_GOOGLE_MAPS_API_KEY) },
+  experiments: { reactCompiler: true },
   plugins: [
     'expo-router',
     'expo-localization',
     'expo-secure-store',
     ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to save your current location when you choose.' }],
-    ['expo-splash-screen', { backgroundColor: '#F3F6FA' }],
+    ['expo-splash-screen', { backgroundColor: '#0055A0', image: './assets/brand/logo-lockup-white.png', imageWidth: 220 }],
     ['expo-font', { android: { fonts: [{ fontFamily: 'Inter', fontDefinitions: [
       { path: './node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf', weight: 400 },
       { path: './node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf', weight: 500 },
