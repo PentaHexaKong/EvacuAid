@@ -52,10 +52,9 @@ services:
       retries: 10
 
   valhalla:
-    image: ghcr.io/interline-io/valhalla-docker/valhalla:latest
+    image: ghcr.io/valhalla/valhalla:3.9.0
     profiles: ['routing']
-    ports:
-      - '8002:8002'
+    command: ['sh', '-c', 'valhalla_build_config --mjolnir-tile-dir /data/valhalla --mjolnir-tile-extract /data/valhalla/tiles.tar > /tmp/valhalla.json && exec valhalla_service /tmp/valhalla.json 1']
     volumes:
       - valhalla_tiles:/data/valhalla:ro
     healthcheck:
