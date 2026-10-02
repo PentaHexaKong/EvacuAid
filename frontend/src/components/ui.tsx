@@ -20,11 +20,11 @@ export function AppText({ variant = 'body', style, ...props }: TextProps & { var
   const resolved = StyleSheet.flatten([typography, style]);
   return <Text ref={text} allowFontScaling {...props} onLayout={event => { if (props.accessibilityRole === 'header') measureTitle?.(text.current); props.onLayout?.(event); }} style={[typography, style, preferences.largerText && { fontSize: (resolved.fontSize ?? 16) * 1.2, lineHeight: (resolved.lineHeight ?? 24) * 1.2 }, preferences.strongerContrast && resolved.color === colors.muted && { color: colors.ink }]} />;
 }
-export function Page({ children, keyboard = false, transparent = false, fill = false, edgeInsets }: { children: ReactNode; keyboard?: boolean; transparent?: boolean; fill?: boolean; edgeInsets?: { top: number; bottom: number } }) {
+export function Page({ children, keyboard = false, transparent = false, fill = false, edgeInsets, contentStyle }: { children: ReactNode; keyboard?: boolean; transparent?: boolean; fill?: boolean; edgeInsets?: { top: number; bottom: number }; contentStyle?: StyleProp<ViewStyle> }) {
   const inSheet = useContext(SheetHeaderContext);
   const header = useContext(PageHeaderContext);
   const Container = header ? PageScrollView : inSheet ? SheetScrollView : ScrollView;
-  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior={edgeInsets ? 'never' : 'automatic'} contentContainerStyle={[styles.content, fill && { flexGrow: 1 }, edgeInsets && { paddingTop: edgeInsets.top + 12, paddingBottom: edgeInsets.bottom + 12 }]}>{children}</Container>;
+  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior={edgeInsets ? 'never' : 'automatic'} contentContainerStyle={[styles.content, fill && { flexGrow: 1 }, edgeInsets && { paddingTop: edgeInsets.top + 12, paddingBottom: edgeInsets.bottom + 12 }, contentStyle]}>{children}</Container>;
 }
 export function Panel({ children }: { children: ReactNode }) {
   return <View style={styles.panel}>{children}</View>;
@@ -55,15 +55,15 @@ function buttonPalette(variant: ButtonVariant, pressed: boolean, focused: boolea
   return { background: pressed ? colors.ink : colors.primary, text: colors.surface, spinner: colors.surface, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
 }
 
-export function ActionButton({ label, onPress, icon, variant = 'primary', disabled = false, loading = false }: { label: string; onPress?: () => void; icon?: ReactNode; variant?: ButtonVariant; disabled?: boolean; loading?: boolean }) {
+export function ActionButton({ label, onPress, icon, variant = 'primary', disabled = false, loading = false, compact = false }: { label: string; onPress?: () => void; icon?: ReactNode; variant?: ButtonVariant; disabled?: boolean; loading?: boolean; compact?: boolean }) {
   const [focused, setFocused] = useState(false);
   const press = usePressScale(0.96);
   const palette = buttonPalette(variant, press.pressed, focused);
   const showGradient = variant === 'gradient' && !press.pressed;
   return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || loading, busy: loading }} disabled={disabled || loading} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
-    <Animated.View style={[styles.button, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: palette.borderWidth }, disabled && styles.disabled, press.style]}>
+    <Animated.View style={[styles.button, compact && styles.buttonCompact, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: palette.borderWidth }, disabled && styles.disabled, press.style]}>
       {showGradient && <LinearGradient pointerEvents="none" colors={[colors.gradientTop, colors.primary]} style={StyleSheet.absoluteFill} />}
-      <View style={styles.buttonContent}>{loading ? <ActivityIndicator color={palette.spinner} /> : icon}<AppText variant="button" style={{ color: palette.text, flexShrink: 1, textAlign: 'center' }}>{label}</AppText></View>
+      <View style={[styles.buttonContent, compact && styles.buttonContentCompact]}>{loading ? <ActivityIndicator color={palette.spinner} /> : icon}<AppText variant="button" style={{ color: palette.text, flexShrink: 1, textAlign: 'center' }}>{label}</AppText></View>
     </Animated.View>
   </Pressable>;
 }
@@ -145,6 +145,8 @@ const styles = StyleSheet.create({
   tap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, ...corner(radius.md) },
   pill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: 28, paddingHorizontal: 11, paddingVertical: 4, borderRadius: radius.pill },
   button: { minHeight: 52, borderRadius: radius.pill, overflow: 'hidden', justifyContent: 'center' },
+  buttonCompact: { minHeight: 44 },
+  buttonContentCompact: { paddingHorizontal: 18, paddingVertical: 8 },
   disabled: { opacity: 0.5 },
   buttonContent: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   option: { minHeight: 52, paddingVertical: 14, paddingHorizontal: 16, ...corner(radius.md), borderWidth: 1.5, flexDirection: 'row', gap: 16, alignItems: 'center' },

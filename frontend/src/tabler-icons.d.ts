@@ -127,3 +127,78 @@ declare module '@tabler/icons-react-native/IconArrowRight' {
   const Icon: typeof import('@tabler/icons-react-native').IconArrowRight;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconTextSize' {
+  const Icon: typeof import('@tabler/icons-react-native').IconTextSize;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconContrast' {
+  const Icon: typeof import('@tabler/icons-react-native').IconContrast;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconVolume' {
+  const Icon: typeof import('@tabler/icons-react-native').IconVolume;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconDeviceMobileVibration' {
+  const Icon: typeof import('@tabler/icons-react-native').IconDeviceMobileVibration;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconTextCaption' {
+  const Icon: typeof import('@tabler/icons-react-native').IconTextCaption;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconWaveSine' {
+  const Icon: typeof import('@tabler/icons-react-native').IconWaveSine;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconLanguage' {
+  const Icon: typeof import('@tabler/icons-react-native').IconLanguage;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconAccessible' {
+  const Icon: typeof import('@tabler/icons-react-native').IconAccessible;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconIdBadge' {
+  const Icon: typeof import('@tabler/icons-react-native').IconIdBadge;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconUsers' {
+  const Icon: typeof import('@tabler/icons-react-native').IconUsers;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconRefresh' {
+  const Icon: typeof import('@tabler/icons-react-native').IconRefresh;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconDatabase' {
+  const Icon: typeof import('@tabler/icons-react-native').IconDatabase;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconTrash' {
+  const Icon: typeof import('@tabler/icons-react-native').IconTrash;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconSelector' {
+  const Icon: typeof import('@tabler/icons-react-native').IconSelector;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconMapPinOff' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMapPinOff;
+  export default Icon;
+}

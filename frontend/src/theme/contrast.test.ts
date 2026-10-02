@@ -31,6 +31,11 @@ test('status text meets 4.5:1 across every step of each alert-level sky', () => 
   }
 });
 
+test('quiet settings labels stay readable on canvas and white', () => {
+  expect(contrast(colors.quiet, colors.canvas)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.quiet, colors.surface)).toBeGreaterThanOrEqual(4.5);
+});
+
 test('soft fills from the design system keep their text readable', () => {
   expect(contrast(colors.muted, colors.chip)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.caution, colors.cautionSoft)).toBeGreaterThanOrEqual(4.5);

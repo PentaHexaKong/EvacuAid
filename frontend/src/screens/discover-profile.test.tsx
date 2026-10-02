@@ -27,6 +27,21 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, pa
   return params?.name ? text.replace('{{name}}', params.name) : text;
 }, i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
+jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
+jest.mock('@expo/ui/swift-ui', () => {
+  const { Pressable, Text, View } = jest.requireActual('react-native');
+  const label = (modifiers: { accessibilityLabel?: string }[] = []) => modifiers.find(item => item.accessibilityLabel)?.accessibilityLabel;
+  return {
+    Host: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    HStack: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    Image: () => null,
+    Text: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
+    Menu: ({ modifiers, children }: { modifiers?: { accessibilityLabel?: string }[]; children: React.ReactNode }) => <View accessible accessibilityRole="button" accessibilityLabel={label(modifiers)}>{children}</View>,
+    Picker: ({ children, onSelectionChange }: { children: React.ReactElement<{ modifiers: { tag?: string }[]; children: string }>[]; onSelectionChange: (value: string) => void }) => <View>{children.map(option => <Pressable key={option.props.children} accessibilityRole="menuitem" accessibilityLabel={option.props.children} onPress={() => onSelectionChange(option.props.modifiers.find(item => item.tag)!.tag!)} />)}</View>,
+  };
+});
+jest.mock('@expo/ui/swift-ui/modifiers', () => ({ accessibilityLabel: (accessibilityLabel: string) => ({ accessibilityLabel }), font: () => ({}), foregroundStyle: () => ({}), tag: (tag: string) => ({ tag }) }));
+
 jest.mock('@/components/discover-map', () => ({ DiscoverMap: (props: DiscoverMapProps) => { mockMapProps = props; return null; } }));
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = jest.requireActual('react');
@@ -43,7 +58,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
 });
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => mockEvac }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: jest.fn(), startNewGuest: jest.fn() }) }));
-jest.mock('@/features/profile/api', () => ({ apiRequest: jest.fn() }));
+jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/profile/api'), apiRequest: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 
 beforeEach(async () => {
@@ -226,7 +241,7 @@ test('resetting first-time guide keeps server profile and support preferences', 
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true,"largerText":true,"strongerContrast":true}');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
   await waitFor(() => expect(view.getByText('Billy')).toBeTruthy());
-  fireEvent.press(view.getByRole('button', { name: 'Replay guide' }));
+  fireEvent.press(view.getByRole('button', { name: 'Replay guide, Start' }));
   await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!).completed).toBe(false));
   expect(mockProfile.name).toBe('Billy');
   expect(await AsyncStorage.getItem(PROFILE_KEY)).toBeNull();
@@ -239,5 +254,36 @@ test('new copy has Indonesian parity and Profile uses the localized fallback', a
   mockLanguage = 'id';
   const view = render(<ProfileProvider><ProfileScreen /></ProfileProvider>);
   await waitFor(() => expect(view.getByText('Profil Anda')).toBeTruthy());
-  expect(view.getByText('Disinkronkan ke profil tamu')).toBeTruthy();
+  expect(view.getByText('Profil tamu · perangkat ini')).toBeTruthy();
+});
+
+test('settings toggles save immediately, without a Save button', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByText('Your profile')).toBeTruthy());
+  expect(view.queryByRole('button', { name: 'Save changes' })).toBeNull();
+  fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
+  await waitFor(() => expect(mockPreferences.larger_text).toBe(true));
+  expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Reduce motion, System' })).toBeTruthy();
+});
+
+test('the status card asks to save a location, then offers an update once one is shared', async () => {
+  const first = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(first.getByText('No location saved')).toBeTruthy());
+  expect(first.getByRole('button', { name: 'Save location' })).toBeTruthy();
+  expect(first.queryByLabelText('Share distance with contacts')).toBeNull();
+  first.unmount();
+  mockProfile = { ...mockProfile, latitude: -6.2, longitude: 106.8, location_observed_at: new Date(Date.now() - 2 * 60_000).toISOString(), location_accuracy_m: 20 };
+  const second = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(second.getByText('Location shared')).toBeTruthy());
+  expect(second.getByRole('button', { name: 'Update' })).toBeTruthy();
+  expect(second.getByLabelText('Share distance with contacts')).toBeTruthy();
+});
+
+test('the language row opens a native menu whose choice saves the language', async () => {
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy());
+  fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
+  await waitFor(() => expect(mockPreferences.language).toBe('id'));
 });

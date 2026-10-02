@@ -27,6 +27,8 @@ import { PreferencesPreview, usePreferences } from '@/features/preferences/conte
 import { defaults, type Preferences } from '@/features/preferences/storage';
 import { ONBOARDING_NEEDS_KEY, type AccessibilityType } from '@/features/profile/context';
 
+// React Native's iOS Switch composes alignSelf: 'flex-start', which pins it to the top of a centred row.
+const SWITCH_CENTER = { alignSelf: 'center' } as const;
 const OPTIONS = ['voiceEnabled', 'vibrationEnabled', 'largerText', 'strongerContrast', 'textEnabled'] as const;
 type Option = typeof OPTIONS[number];
 type Step = 'welcome' | 'help' | 'warning';
@@ -252,7 +254,7 @@ function PreferenceSwitches({ draft, busy, onChange }: { draft: Preferences; bus
   const { t } = useTranslation();
   return <View style={{ gap: 10 }}>{OPTIONS.map(key => <View key={key} style={[styles.switchRow, { borderColor: draft[key] ? colors.primary : colors.border, backgroundColor: draft[key] ? colors.selected : colors.surface }]}>
     <View style={{ flex: 1, gap: 4 }}><AppText variant="button">{t(key)}</AppText><AppText variant="small" style={{ color: colors.muted }}>{t(`${key}Description`)}</AppText></View>
-    <Switch hitSlop={8} accessibilityLabel={t(key)} accessibilityHint={t(`${key}Description`)} value={draft[key]} disabled={busy} trackColor={{ true: colors.primary }} onValueChange={value => onChange(key, value)} />
+    <Switch style={SWITCH_CENTER} hitSlop={8} accessibilityLabel={t(key)} accessibilityHint={t(`${key}Description`)} value={draft[key]} disabled={busy} trackColor={{ true: colors.primary }} onValueChange={value => onChange(key, value)} />
   </View>)}</View>;
 }
 
