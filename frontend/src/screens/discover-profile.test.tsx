@@ -194,11 +194,10 @@ test('notification details stay in the sheet and onward actions dismiss it', () 
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alerts/[id]', params: { id: 'rain' } });
   view.rerender(<View><AlertScreen sheet /></View>);
   expect(view.getByText('Caution')).toBeTruthy();
-  expect(view.getByText('Example')).toBeTruthy();
   for (const step of ['Pack an emergency bag', 'Charge your phone', 'Follow official updates']) expect(view.getByText(step)).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Request help' }));
   expect(mockRouter.dismissTo).toHaveBeenLastCalledWith({ pathname: '/buddy', params: undefined });
-  fireEvent.press(view.getByRole('button', { name: 'Find a route to a gathering point' }));
+  fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));
   expect(mockRouter.dismissTo).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
   view.rerender(<View><AlertScreen /></View>);
   fireEvent.press(view.getByRole('button', { name: 'Request help' }));
@@ -227,7 +226,7 @@ test('resetting first-time guide keeps server profile and support preferences', 
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true,"largerText":true,"strongerContrast":true}');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
   await waitFor(() => expect(view.getByText('Billy')).toBeTruthy());
-  fireEvent.press(view.getByRole('button', { name: 'Repeat first-time guide' }));
+  fireEvent.press(view.getByRole('button', { name: 'Replay guide' }));
   await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!).completed).toBe(false));
   expect(mockProfile.name).toBe('Billy');
   expect(await AsyncStorage.getItem(PROFILE_KEY)).toBeNull();

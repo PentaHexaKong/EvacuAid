@@ -2,12 +2,13 @@ import { SheetHeaderContext, SheetScrollView } from './sheet-scroll-view';
 import { PageHeaderContext, PageScrollView, PageTitleContext } from './page-scroll-view';
 import { usePreferences } from '@/features/preferences/context';
 import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ImageSourcePropType, type PressableProps, type StyleProp, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { motion, usePressScale } from './press';
 import { LinearGradient } from 'expo-linear-gradient';
 import IconCheck from '@tabler/icons-react-native/IconCheck';
-import { colors, radius, SystemReduceMotionContext, useTypography, type TextVariant } from '@/theme';
+import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
+import { colors, corner, radius, SystemReduceMotionContext, useTypography, type TextVariant } from '@/theme';
 import { duration, ease } from '@/theme/motion';
 import { useHaptics } from '@/features/feedback/haptics';
 
@@ -19,11 +20,11 @@ export function AppText({ variant = 'body', style, ...props }: TextProps & { var
   const resolved = StyleSheet.flatten([typography, style]);
   return <Text ref={text} allowFontScaling {...props} onLayout={event => { if (props.accessibilityRole === 'header') measureTitle?.(text.current); props.onLayout?.(event); }} style={[typography, style, preferences.largerText && { fontSize: (resolved.fontSize ?? 16) * 1.2, lineHeight: (resolved.lineHeight ?? 24) * 1.2 }, preferences.strongerContrast && resolved.color === colors.muted && { color: colors.ink }]} />;
 }
-export function Page({ children, keyboard = false, transparent = false, fill = false }: { children: ReactNode; keyboard?: boolean; transparent?: boolean; fill?: boolean }) {
+export function Page({ children, keyboard = false, transparent = false, fill = false, edgeInsets }: { children: ReactNode; keyboard?: boolean; transparent?: boolean; fill?: boolean; edgeInsets?: { top: number; bottom: number } }) {
   const inSheet = useContext(SheetHeaderContext);
   const header = useContext(PageHeaderContext);
   const Container = header ? PageScrollView : inSheet ? SheetScrollView : ScrollView;
-  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, fill && { flexGrow: 1 }]}>{children}</Container>;
+  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior={edgeInsets ? 'never' : 'automatic'} contentContainerStyle={[styles.content, fill && { flexGrow: 1 }, edgeInsets && { paddingTop: edgeInsets.top + 12, paddingBottom: edgeInsets.bottom + 12 }]}>{children}</Container>;
 }
 export function Panel({ children }: { children: ReactNode }) {
   return <View style={styles.panel}>{children}</View>;
@@ -45,9 +46,11 @@ export function SectionHeading({ number, title, subtitle }: { number: string; ti
 }
 
 
-type ButtonVariant = 'primary' | 'gradient' | 'secondary';
+type ButtonVariant = 'primary' | 'gradient' | 'secondary' | 'light' | 'ghostLight';
 
 function buttonPalette(variant: ButtonVariant, pressed: boolean, focused: boolean) {
+  if (variant === 'light') return { background: pressed ? colors.selected : colors.surface, text: colors.primary, spinner: colors.primary, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
+  if (variant === 'ghostLight') return { background: pressed ? 'rgba(255,255,255,0.16)' : 'transparent', text: colors.surface, spinner: colors.surface, border: focused ? colors.surface : 'rgba(255,255,255,0.6)', borderWidth: 1.5 };
   if (variant === 'secondary') return { background: pressed ? colors.selected : 'transparent', text: colors.primary, spinner: colors.primary, border: focused ? colors.ink : colors.borderStrong, borderWidth: 1.5 };
   return { background: pressed ? colors.ink : colors.primary, text: colors.surface, spinner: colors.surface, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
 }
@@ -84,6 +87,41 @@ export function CheckOption({ label, description, checked, disabled = false, onT
   </Pressable>;
 }
 
+export function SupportTile({ icon, label, description, checked, disabled = false, wide = false, onToggle }: { icon: ReactNode; label: string; description: string; checked: boolean; disabled?: boolean; wide?: boolean; onToggle: (checked: boolean) => void }) {
+  const reduceMotion = useContext(SystemReduceMotionContext);
+  const press = usePressScale(0.97);
+  const haptics = useHaptics();
+  return <Pressable {...press.handlers} style={{ flexGrow: 1 }} accessibilityRole="checkbox" accessibilityLabel={label} accessibilityHint={description} accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => { haptics.selection(); onToggle(!checked); }}>
+    <Animated.View style={[styles.tile, wide && styles.tileRow, { borderColor: checked ? colors.primary : colors.border, backgroundColor: checked ? colors.selected : colors.surface }, press.style]}>
+      <View style={[styles.tileIcon, { backgroundColor: checked ? colors.surface : colors.accentSoft }]}>{icon}</View>
+      <View style={{ gap: 4, flex: wide ? 1 : undefined }}>
+        <AppText variant="button" style={{ paddingRight: wide ? 0 : 24 }}>{label}</AppText>
+        <AppText variant="small" style={{ color: colors.muted }}>{description}</AppText>
+      </View>
+      <View style={[styles.checkRing, !wide && styles.tileCheck]}>
+        <Animated.View style={[styles.checkFill, motion.checkTransition, { opacity: checked ? 1 : 0, transform: [{ scale: checked || reduceMotion ? 1 : 0.25 }] }]}>
+          <IconCheck size={14} strokeWidth={3} color={colors.surface} />
+        </Animated.View>
+      </View>
+    </Animated.View>
+  </Pressable>;
+}
+
+export function QuickTile({ title, detail, image, onPress }: { title: string; detail: string; image: ImageSourcePropType; onPress: () => void }) {
+  const press = usePressScale(0.97);
+  const haptics = useHaptics();
+  return <Pressable {...press.handlers} style={{ flexGrow: 1 }} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={detail} onPress={() => { haptics.tap(); onPress(); }}>
+    <Animated.View style={[styles.quick, press.style]}>
+      <View style={styles.quickTitle}>
+        <AppText variant="section" style={{ flexShrink: 1 }}>{title}</AppText>
+        <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />
+      </View>
+      <AppText variant="small" style={{ color: colors.muted, marginBottom: 10 }}>{detail}</AppText>
+      <View style={styles.quickArt}><Image source={image} accessible={false} style={styles.quickImage} /></View>
+    </Animated.View>
+  </Pressable>;
+}
+
 export function StepList({ steps }: { steps: readonly string[] }) {
   return <View style={{ gap: 12 }}>{steps.map((step, index) => <View key={step} accessible accessibilityLabel={`${index + 1}. ${step}`} style={styles.step}>
     <View style={styles.stepBadge}><AppText variant="small" style={styles.stepNumber}>{index + 1}</AppText></View>
@@ -102,17 +140,25 @@ export function Enter({ index = 0, children, style }: { index?: number; children
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: 24, gap: 24, maxWidth: 680, width: '100%', alignSelf: 'center' },
-  panel: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, borderWidth: 1, borderColor: colors.border, gap: 16 },
-  field: { minHeight: 52, borderRadius: radius.button, backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1 },
-  tap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.button },
+  panel: { backgroundColor: colors.surface, ...corner(radius.lg), padding: 20, borderWidth: 1, borderColor: colors.border, gap: 16 },
+  field: { minHeight: 52, ...corner(radius.md), backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1 },
+  tap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, ...corner(radius.md) },
   pill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: 28, paddingHorizontal: 11, paddingVertical: 4, borderRadius: radius.pill },
-  button: { minHeight: 52, borderRadius: radius.button, overflow: 'hidden', justifyContent: 'center' },
+  button: { minHeight: 52, borderRadius: radius.pill, overflow: 'hidden', justifyContent: 'center' },
   disabled: { opacity: 0.5 },
   buttonContent: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  option: { minHeight: 52, paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.option, borderWidth: 1.5, flexDirection: 'row', gap: 16, alignItems: 'center' },
-  checkRing: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
-  checkFill: { position: 'absolute', top: -1.5, left: -1.5, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  option: { minHeight: 52, paddingVertical: 14, paddingHorizontal: 16, ...corner(radius.md), borderWidth: 1.5, flexDirection: 'row', gap: 16, alignItems: 'center' },
+  checkRing: { width: 24, height: 24, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  checkFill: { position: 'absolute', top: -1.5, left: -1.5, width: 24, height: 24, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  tile: { flexGrow: 1, minHeight: 132, padding: 16, gap: 12, ...corner(radius.lg), borderWidth: 1.5 },
+  tileRow: { minHeight: 0, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  tileIcon: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  tileCheck: { position: 'absolute', top: 14, right: 14 },
+  quick: { flexGrow: 1, padding: 14, gap: 4, ...corner(radius.lg), borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  quickTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  quickArt: { marginTop: 'auto', height: 92, ...corner(radius.sm), backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' },
+  quickImage: { width: 96, height: 96, marginBottom: -6 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  stepNumber: { color: colors.primary, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  stepBadge: { width: 26, height: 26, borderRadius: radius.pill, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  stepNumber: { color: colors.primary, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

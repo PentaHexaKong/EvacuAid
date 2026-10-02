@@ -8,7 +8,7 @@ import { ContentRow } from '@/components/content';
 import { useProfile, type AccessibilityType } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
 import { useGuestSession } from '@/features/profile/session';
-import { colors } from '@/theme';
+import { colors, radius } from '@/theme';
 
 const accessibilityTypes: AccessibilityType[] = ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT', 'MOBILITY_LIMITATION', 'ELDERLY', 'OTHER'];
 
@@ -78,7 +78,7 @@ export function ProfileScreen() {
 
   return <Page>
     <View style={{ alignItems: 'center', gap: 12 }}>
-      <View accessible={false} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}><AppText variant="title" style={{ color: colors.primary }}>{initials}</AppText></View>
+      <View accessible={false} style={{ width: 80, height: 80, borderRadius: radius.pill, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }}><AppText variant="title" style={{ color: colors.primary }}>{initials}</AppText></View>
       <AppText variant="title" accessibilityRole="header">{label}</AppText>
       <AppText style={{ color: colors.muted }}>{t('savedToServer')}</AppText>
     </View>

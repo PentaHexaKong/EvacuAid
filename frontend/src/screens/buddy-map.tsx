@@ -9,7 +9,7 @@ import IconFocus2 from '@tabler/icons-react-native/IconFocus2';
 import IconWifi from '@tabler/icons-react-native/IconWifi';
 import IconWifiOff from '@tabler/icons-react-native/IconWifiOff';
 import { ActionButton, AppText, Page, Panel, SectionHeading } from '@/components/ui';
-import { colors } from '@/theme';
+import { colors, corner, radius } from '@/theme';
 import { useBuddyPreview } from '@/features/buddy-map/use-buddy-preview';
 import { positionStatus, type Participant } from '@/features/buddy-map/location-source';
 
@@ -69,6 +69,6 @@ export function BuddyMapScreen() {
   </Page>;
 }
 const styles = StyleSheet.create({
-  mapFrame: { height: 320, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  marker: { padding: 10, borderWidth: 3, borderColor: colors.surface, borderRadius: 999 },
+  mapFrame: { height: 320, ...corner(radius.lg), overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  marker: { padding: 10, borderWidth: 3, borderColor: colors.surface, borderRadius: radius.pill },
 });

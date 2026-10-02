@@ -1,7 +1,7 @@
 import { AppText } from './ui';
 import { useTranslation } from 'react-i18next';
 import type { useAnimatedStyle } from 'react-native-reanimated';
-import type { Coordinate } from '@/features/route-simulation/routing';
+import type { Coordinate } from '@/features/navigation/api';
 
 export type LatLng = { latitude: number; longitude: number };
 export type DiscoverMarker = { id: string; title: string; kind: 'alert' | 'destination'; coordinate: LatLng };

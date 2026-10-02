@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import { ProfileProvider } from '@/features/profile/context';
 import { RequestDraftProvider } from '@/features/requests/draft';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,7 +11,7 @@ import { SetupScreen } from '@/screens/setup';
 import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { i18n, localizationReady } from '@/localization';
 import { colors, SystemReduceMotionContext } from '@/theme';
@@ -25,19 +27,42 @@ function FirstRunGate() {
   const session = useGuestSession();
   const router = useRouter();
   const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
+  useEffect(() => {
+    const notification = (value: Notifications.NotificationResponse | null) => {
+      const data = value?.notification.request.content.data;
+      const id = data?.requestId;
+      if (typeof id === 'string') setBuddyTarget(`/buddy?requestId=${encodeURIComponent(id)}`);
+      else if (typeof data?.inboxId === 'string' || typeof data?.invitationId === 'string') setBuddyTarget('/buddy');
+    };
+    const link = (url: string) => {
+      const parsed = Linking.parse(url);
+      const code = parsed.queryParams?.code;
+      if ((parsed.path === 'buddy-invite' || parsed.hostname === 'buddy-invite') && typeof code === 'string') setBuddyTarget(`/buddy?code=${encodeURIComponent(code)}`);
+    };
+    const response = Notifications.addNotificationResponseReceivedListener(notification);
+    const links = Linking.addEventListener('url', value => link(value.url));
+    void Notifications.getLastNotificationResponseAsync().then(notification).catch(() => {});
+    void Linking.getInitialURL().then(url => { if (url) link(url); }).catch(() => {});
+    return () => { response.remove(); links.remove(); };
+  }, []);
   useEffect(() => {
     if (preferences.completed && session.status === 'idle') void session.ensureGuest().catch(() => {});
   }, [preferences.completed, session.status, session.ensureGuest]);
   useEffect(() => {
-    if (preferences.completed && returnTo && session.status === 'ready') router.replace(returnTo as '/');
-  }, [preferences.completed, returnTo, session.status, router]);
+    if (preferences.completed && session.status === 'ready' && (buddyTarget || returnTo)) {
+      router.replace((buddyTarget || returnTo) as '/');
+      void Promise.resolve().then(() => { setBuddyTarget(null); setReturnTo(null); });
+      void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    }
+  }, [preferences.completed, buddyTarget, returnTo, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (preferences.completed && session.status !== 'ready') {
     if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
-  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={target => setReturnTo(target ?? '/')} /></SafeAreaView>;
+  return preferences.completed ? <Navigation /> : <SetupScreen onDone={target => setReturnTo(target ?? '/')} />;
 }
 
 function GuestSessionError() {
@@ -66,7 +91,6 @@ function Navigation() {
     {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
     <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
-    <Stack.Screen name="route-simulation" options={{ title: t('routeSimulation') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />
     <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
   </Stack></RequestDraftProvider>;

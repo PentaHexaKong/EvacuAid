@@ -82,3 +82,48 @@ declare module '@tabler/icons-react-native/IconCheck' {
   const Icon: typeof import('@tabler/icons-react-native').IconCheck;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconEye' {
+  const Icon: typeof import('@tabler/icons-react-native').IconEye;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconEar' {
+  const Icon: typeof import('@tabler/icons-react-native').IconEar;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconWheelchair' {
+  const Icon: typeof import('@tabler/icons-react-native').IconWheelchair;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconOld' {
+  const Icon: typeof import('@tabler/icons-react-native').IconOld;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconUser' {
+  const Icon: typeof import('@tabler/icons-react-native').IconUser;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowLeft' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowLeft;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconChevronDown' {
+  const Icon: typeof import('@tabler/icons-react-native').IconChevronDown;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconChevronRight' {
+  const Icon: typeof import('@tabler/icons-react-native').IconChevronRight;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowRight' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowRight;
+  export default Icon;
+}

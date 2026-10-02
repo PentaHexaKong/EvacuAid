@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppText, Pill } from './ui';
 import { usePressScale } from './press';
 import { levelLabels } from '@/features/content/samples';
-import { colors, radius, sky, type AlertLevel } from '@/theme';
+import { colors, corner, radius, sky, type AlertLevel } from '@/theme';
 
 export function SampleNotice() {
   const { t } = useTranslation();
@@ -41,7 +41,7 @@ export function LevelChip({ level }: { level: AlertLevel }) {
 }
 
 const styles = StyleSheet.create({
-  row: { borderColor: colors.border, borderWidth: 1, borderRadius: radius.card, padding: 20, minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 16 },
-  leading: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  row: { borderColor: colors.border, borderWidth: 1, ...corner(radius.lg), padding: 20, minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 16 },
+  leading: { width: 48, height: 48, borderRadius: radius.pill, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 7, height: 7, borderRadius: radius.pill },
 });

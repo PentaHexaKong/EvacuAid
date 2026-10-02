@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from './ui';
 import { MapBoundary, MapFallback } from './map-boundary';
 import { mapboxStyleUrl, mapboxToken } from './map-engine';
-import { colors, SystemReduceMotionContext } from '@/theme';
+import { colors, corner, radius, SystemReduceMotionContext } from '@/theme';
 import type { DiscoverMapProps, DiscoverMarker, LatLng } from './discover-map';
 import { visibleBounds, type Bounds } from './map-framing';
 
@@ -96,7 +96,7 @@ function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, t
         const active = selected === item.id;
         const tint = item.kind === 'alert' ? colors.caution : colors.primary;
         return <MarkerView key={item.id} coordinate={markerPosition(item)} allowOverlap allowOverlapWithPuck>
-          <Pressable accessibilityRole="button" accessibilityLabel={item.title} accessibilityState={{ selected: active }} onPress={() => onSelect(item.id)} hitSlop={4} style={{ padding: active ? 12 : 10, backgroundColor: active ? tint : colors.surface, borderRadius: 999, borderWidth: 2, borderColor: tint }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={item.title} accessibilityState={{ selected: active }} onPress={() => onSelect(item.id)} hitSlop={4} style={{ padding: active ? 12 : 10, backgroundColor: active ? tint : colors.surface, borderRadius: radius.pill, borderWidth: 2, borderColor: tint }}>
             <Icon size={active ? 26 : 22} color={active ? colors.surface : tint} />
           </Pressable>
         </MarkerView>;
@@ -113,6 +113,6 @@ function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, t
 
 const styles = StyleSheet.create({
   locateWrap: { position: 'absolute', right: 16 },
-  locate: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(18, 40, 75, 0.14), 0 0 0 1px rgba(18, 40, 75, 0.05)' },
-  notice: { position: 'absolute', left: 16, right: 16, padding: 12, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  locate: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(18, 40, 75, 0.14), 0 0 0 1px rgba(18, 40, 75, 0.05)' },
+  notice: { position: 'absolute', left: 16, right: 16, padding: 12, ...corner(radius.md), backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
 });

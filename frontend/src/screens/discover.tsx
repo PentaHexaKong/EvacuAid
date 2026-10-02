@@ -15,7 +15,7 @@ import { DEMO_SOURCE, type Shelter } from '@/features/navigation/api';
 import { useEvacuationRoute, type EvacuationState } from '@/features/navigation/use-evacuation-route';
 import { useGuestSession } from '@/features/profile/session';
 import { useHaptics } from '@/features/feedback/haptics';
-import { colors, radius } from '@/theme';
+import { colors, corner, radius } from '@/theme';
 import { spring } from '@/theme/motion';
 
 const MIN_PEEK = 176;
@@ -107,7 +107,7 @@ function Explore() {
         </View>}
         <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('nearbyAlerts')}</AppText>
-          {sampleAlerts.map(item => <ContentRow key={item.id} title={t(item.title)} detail={`${t(item.severity)}\n${t(item.source)} · ${item.issued}`} onPress={() => openAlert(item.id)} />)}
+          {sampleAlerts.map(item => <ContentRow key={item.id} title={t(item.title)} detail={`${t(item.severity)} · ${item.issued}`} onPress={() => openAlert(item.id)} />)}
         </View>
       </BottomSheetScrollView>
     </BottomSheet>
@@ -227,9 +227,9 @@ function formatTime(date: Date, locale: string) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   status: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 16, borderRadius: radius.pill, boxShadow: '0 2px 10px rgba(18, 40, 75, 0.14), 0 0 0 1px rgba(18, 40, 75, 0.05)' },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, boxShadow: '0 -2px 16px rgba(18, 40, 75, 0.10)' },
-  evidence: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: radius.button },
+  dot: { width: 10, height: 10, borderRadius: radius.pill },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderCurve: 'continuous', boxShadow: '0 -2px 16px rgba(18, 40, 75, 0.10)' },
+  evidence: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, ...corner(radius.sm) },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   statusWrap: { position: 'absolute', left: 16, maxWidth: '72%' },
 });

@@ -146,3 +146,15 @@ docker compose --profile routing up -d valhalla
 ```
 
 Until tiles are prepared, `/health` reports Valhalla unavailable and the backend as degraded; profile, context, risk, buddy, and assistance APIs remain available. Navigation then truthfully returns `UNAVAILABLE` when invoked.
+
+## Buddy pilot
+
+`/v1/buddy-pilot` uses existing private guest bearer sessions. Invitations are redeemed by code and confirmed by their owner before becoming directional trusted contacts. `/contacts`, `/contacts/incoming`, contact removal and primary selection operate on the existing Buddy relationship store.
+
+Manual `/requests` persist in the canonical `assistance_requests` table; `pilot_attempts` records separate trusted and sequential nearby offers. Creation requires `sharingConsent` and `idempotencyKey`. Acceptance/decline identify `attemptId`; acceptance also requires consent. Trusted offers expire after 120 seconds. `/requests/{id}/nearby` requires explicit requester action and a fresh origin, then offers up to five enrolled opted-in helpers within 5 km for 30 seconds each. Set `BUDDY_PILOT_ENROLLMENT_CODE` privately to enroll controlled pilot participants; a blank value disables enrollment.
+
+Session actions include acceptance, departure, arrival, requester meeting confirmation, evacuation, helper completion report, requester completion confirmation and either participant interruption. Legacy action endpoints reject pilot sessions. `/requests/current` and `/inbox` support polling and restart recovery.
+
+Accepted participants alone can read/write `/location`, `/messages`, `/contact`, `/phone-sharing` and `/route`. First location publication requires `sharingConsent:true` and the actor `sharingVersion` returned by the location GET; deleting the participant location increments that version and revokes it. Delayed grants with an older version are rejected. Phone consent is independent of location. Routes support `TO_REQUESTER` and `TO_SHELTER`, structured maneuvers, shared shelter selection and walking/wheelchair costing. Wheelchair data quality remains `UNKNOWN`; provider costing does not verify curb, slope or surface accessibility.
+
+The API lifespan starts a PostgreSQL-backed worker for expiry, transactional inbox/outbox delivery and retention. The worker can also run as `python -m app.services.pilotWorker`; row locking allows multiple processes. Register Expo tokens through `/push-token`. Tickets and receipts record provider responses, never proof that a person saw a notification. Session coordinates clear on termination, chat expires after 24 hours and terminal pilot requests/inbox events expire after 30 days. Push receipt, background updates and route guidance still require two-iPhone and live-provider acceptance.

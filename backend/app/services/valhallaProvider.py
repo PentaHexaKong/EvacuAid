@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -19,6 +19,7 @@ class RouteData:
     distanceM: float
     durationSec: float
     geometry: dict
+    maneuvers: list = field(default_factory=list)
 
 
 def isFiniteNumber(value) -> bool:
@@ -75,8 +76,10 @@ class ValhallaRoutingProvider:
         except httpx.HTTPError:
             return False
 
-    async def route(self, origin: tuple[float, float], destination: tuple[float, float]) -> RouteData:
+    async def route(self, origin: tuple[float, float], destination: tuple[float, float], profile: str = 'WALKING') -> RouteData:
         payload = {'locations': [{'lat': origin[0], 'lon': origin[1]}, {'lat': destination[0], 'lon': destination[1]}], 'costing': 'pedestrian', 'units': 'kilometers', 'shape_format': 'geojson'}
+        if profile == 'WHEELCHAIR':
+            payload['costing_options'] = {'pedestrian': {'type': 'wheelchair', 'step_penalty': 100000, 'max_hiking_difficulty': 0}}
         try:
             async with httpx.AsyncClient(timeout=self.timeoutSeconds) as client:
                 response = await client.post(f'{self.baseUrl}/route', json=payload)
@@ -103,6 +106,16 @@ class ValhallaRoutingProvider:
             durationSec = float(summary['time'])
             if not math.isfinite(distanceM) or not math.isfinite(durationSec) or distanceM < 0 or durationSec < 0:
                 raise ValueError('route summary is invalid')
-            return RouteData(distanceM=distanceM, durationSec=durationSec, geometry=geometry)
+            maneuvers = []
+            for maneuver in (legs[0].get('maneuvers', []) if legs else []):
+                begin, end = int(maneuver['begin_shape_index']), int(maneuver['end_shape_index'])
+                if not 0 <= begin <= end < len(geometry['coordinates']):
+                    raise ValueError('invalid maneuver shape indices')
+                maneuver_distance = float(maneuver.get('length', 0)) * 1000
+                maneuver_time = float(maneuver.get('time', 0))
+                if not isFiniteNumber(maneuver_distance) or not isFiniteNumber(maneuver_time) or maneuver_distance < 0 or maneuver_time < 0:
+                    raise ValueError('invalid maneuver summary')
+                maneuvers.append({'instruction': str(maneuver['instruction']), 'beginShapeIndex': begin, 'endShapeIndex': end, 'distanceM': maneuver_distance, 'durationSec': maneuver_time, 'type': int(maneuver.get('type', 0))})
+            return RouteData(distanceM=distanceM, durationSec=durationSec, geometry=geometry, maneuvers=maneuvers)
         except (KeyError, TypeError, ValueError, AttributeError) as error:
             raise NoRoute(str(error))

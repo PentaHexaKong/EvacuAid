@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { useGuestSession } from '@/features/profile/session';
 import type { ApiError } from '@/features/profile/api';
-import type { Coordinate } from '@/features/route-simulation/routing';
-import { nearbyShelters, requestRoute, toCoordinates, type NavigationResponse, type Origin, type Shelter } from './api';
+import { nearbyShelters, requestRoute, toCoordinates, type Coordinate, type NavigationResponse, type Origin, type Shelter } from './api';
 
 export type Phase = 'needsLocation' | 'locating' | 'denied' | 'located' | 'routing' | 'ready' | 'unavailable' | 'error';
 export type RouteResult = { coordinates: Coordinate[]; response: NavigationResponse; computedAt: Date };

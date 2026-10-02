@@ -1,6 +1,6 @@
 import { apiRequest } from '@/features/profile/api';
-import type { Coordinate } from '@/features/route-simulation/routing';
 
+export type Coordinate = [number, number];
 export type Origin = { latitude: number; longitude: number; accuracyM: number | null; observedAt: string };
 export type Shelter = { id: string; name: string; latitude: number; longitude: number; status: string; wheelchairAccessible: boolean | null; capacity: number | null; currentOccupancy: number | null; source: string | null; distanceM: number };
 export type HazardStatus = 'NO_KNOWN_HAZARD' | 'POTENTIALLY_EXPOSED' | 'UNKNOWN';

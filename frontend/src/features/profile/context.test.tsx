@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { apiRequest } from './api';
-import { parseProfile, PROFILE_KEY, ProfileProvider, useProfile } from './context';
+import { ONBOARDING_NEEDS_KEY, parseNeeds, parseProfile, PROFILE_KEY, ProfileProvider, useProfile } from './context';
 
 jest.mock('./session', () => ({ useGuestSession: () => ({ token: 'guest-token', user: { id: 'user-1' } }) }));
 jest.mock('./api', () => ({ apiRequest: jest.fn() }));
@@ -60,4 +60,16 @@ test('failed server loads and saves never replace confirmed profile values', asy
   expect(view.result.current.ready).toBe(true);
   await act(async () => { await expect(view.result.current.saveName('New')).rejects.toThrow('save failed'); });
   expect(view.result.current.name).toBe('');
+});
+
+test('onboarding support needs are sent once when the profile has none, then cleared', async () => {
+  expect(parseNeeds('["ELDERLY","OTHER","nope"]')).toEqual([{ type: 'ELDERLY', severity: null }]);
+  expect(parseNeeds('{')).toEqual([]);
+  await AsyncStorage.setItem(ONBOARDING_NEEDS_KEY, JSON.stringify(['VISUAL_IMPAIRMENT', 'MOBILITY_LIMITATION']));
+  const view = renderHook(useProfile, { wrapper: ProfileProvider });
+  await waitFor(() => expect(view.result.current.ready).toBe(true));
+  const needs = [{ type: 'VISUAL_IMPAIRMENT', severity: null }, { type: 'MOBILITY_LIMITATION', severity: null }];
+  expect(request).toHaveBeenCalledWith('/v1/users/user-1', 'guest-token', { method: 'PATCH', body: JSON.stringify({ accessibility: needs }) });
+  expect(view.result.current.accessibility).toEqual(needs);
+  expect(await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY)).toBeNull();
 });

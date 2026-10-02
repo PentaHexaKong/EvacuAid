@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
+import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
 import { RequestDraftProvider } from '@/features/requests/draft';
 import { RequestScreen, RequestReviewScreen } from './request';
 import { ContactScreen } from './buddy';
@@ -12,6 +13,7 @@ import { OverviewScreen } from './overview';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
 let mockContactId = 'raka';
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockContactId }) }));
+jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 0 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/en.json')[key] ?? key, i18n: { language: 'en' } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
@@ -26,15 +28,15 @@ test('preferences preview is local, cancel does not save, and failed saves remai
   await act(async () => {});
   fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
   fireEvent(view.getByRole('switch', { name: 'Stronger text contrast' }), 'valueChange', true);
-  expect(view.getByText('Important information, with room to read.')).toHaveStyle({ fontSize: 19.2, color: '#12284B' });
+  expect(view.getByText('Important information, with room to read.')).toHaveStyle({ fontSize: 19.2, color: '#0B1F52' });
   fireEvent.press(view.getByRole('button', { name: 'Cancel' }));
   expect(done).toHaveBeenCalledTimes(1);
   expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBeNull();
   jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage'));
-  fireEvent.press(view.getByRole('button', { name: 'Save preferences' }));
+  fireEvent.press(view.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(view.getByText('Could not save your preferences. Please try again.')).toBeTruthy());
   expect(view.getByRole('switch', { name: 'Larger text' })).toHaveProp('value', true);
-  fireEvent.press(view.getByRole('button', { name: 'Save preferences' }));
+  fireEvent.press(view.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(done).toHaveBeenCalledTimes(2));
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: true });
 });
@@ -102,21 +104,37 @@ test('onboarding walks welcome, help and an example warning, saving the chosen h
   const done = jest.fn();
   const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
   await act(async () => {});
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 1 });
+  expect(view.queryByRole('progressbar')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
-  const larger = view.getByRole('checkbox', { name: 'Larger text' });
-  expect(larger).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
-  fireEvent.press(larger);
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 1 });
+  expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Older adult' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Limited mobility' }));
+  expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
+  expect(view.queryByRole('checkbox', { name: 'Larger text' })).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Adjust details' }));
   expect(view.getByRole('checkbox', { name: 'Larger text' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Stronger text contrast' }));
   expect(view.queryByRole('switch')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 2 });
   expect(view.getByText('Pack an emergency bag')).toBeTruthy();
   expect(view.queryByRole('button', { name: /Read the warning aloud/i })).toBeNull();
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Request help' })));
   expect(done).toHaveBeenCalledWith('/buddy');
-  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual(expect.objectContaining({ completed: true }));
+  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: false });
+  expect(JSON.parse((await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY))!)).toEqual(['ELDERLY', 'MOBILITY_LIMITATION']);
+});
+
+test('choosing Standard clears support tiles and restores default help', async () => {
+  const view = render(<PreferencesProvider><SetupScreen /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Blind or low vision' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Standard' }));
+  expect(view.getByRole('checkbox', { name: 'Blind or low vision' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
+  fireEvent.press(view.getByRole('button', { name: 'Adjust details' }));
+  expect(view.getByRole('checkbox', { name: 'Larger text' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
 });
 
 test('finishing onboarding from the warning step returns Home', async () => {
@@ -125,40 +143,37 @@ test('finishing onboarding from the warning step returns Home', async () => {
   await act(async () => {});
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
-  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Continue to home' })));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
   expect(done).toHaveBeenCalledWith(undefined);
 });
 
 test('Home shows the sample alert level with its label and routes to a gathering point', () => {
   const view = render(<OverviewScreen />);
-  expect(view.getByRole('header', { name: 'Caution' })).toBeTruthy();
-  expect(view.getByText('Example')).toBeTruthy();
+  expect(view.getByRole('header', { name: 'Caution for heavy rain and strong winds, 08:30 to 11:30 WIB.' })).toBeTruthy();
   expect(view.getByLabelText('EvacuAid')).toBeTruthy();
-  fireEvent.press(view.getByRole('button', { name: 'Find a route to a gathering point' }));
+  fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
   expect(view.queryByLabelText('Find a destination')).toBeNull();
   expect(view.queryByText(/safe route/i)).toBeNull();
 });
 
-test('Home lists the suggested steps in order and opens the latest alert', () => {
+test('Home opens the latest alert and the full list', () => {
   const view = render(<OverviewScreen />);
-  expect(view.getByRole('header', { name: 'Suggested steps' })).toBeTruthy();
-  for (const step of ['Pack an emergency bag', 'Charge your phone', 'Follow official updates']) expect(view.getByText(step)).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'See all' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
-  fireEvent.press(view.getAllByText('Heavy rain and strong winds')[1]);
+  expect(view.getByText('Open alert')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Caution. Heavy rain and strong winds. Open alert' }));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
 });
 
-test('route simulation is reachable from Home only in development', () => {
+test('Home quick-access tiles open the map, help request, Buddy and alerts', () => {
   const view = render(<OverviewScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Route simulation' }));
-  expect(mockRouter.push).toHaveBeenLastCalledWith('/route-simulation');
-  view.unmount();
-  const previous = __DEV__;
-  try {
-    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
-    const production = render(<OverviewScreen />);
-    expect(production.queryByRole('button', { name: 'Route simulation' })).toBeNull();
-  } finally { (globalThis as unknown as { __DEV__: boolean }).__DEV__ = previous; }
+  fireEvent.press(view.getByRole('button', { name: 'Risk map' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+  fireEvent.press(view.getByRole('button', { name: 'Get help' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/request');
+  fireEvent.press(view.getByRole('button', { name: 'Buddy' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  fireEvent.press(view.getByRole('button', { name: 'Alerts' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
 });

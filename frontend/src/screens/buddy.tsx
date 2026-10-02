@@ -5,7 +5,7 @@ import { ActionButton, AppText, Page, Panel } from '@/components/ui';
 import { ContentRow, EmptyContent, SampleNotice, SectionTitle } from '@/components/content';
 import { sampleContacts } from '@/features/content/samples';
 import { useRequestDraft } from '@/features/requests/draft';
-import { colors } from '@/theme';
+import { colors, radius } from '@/theme';
 
 export function BuddyScreen() {
   const { t } = useTranslation();
@@ -31,7 +31,7 @@ export function ContactScreen() {
     } else open();
   };
   return <Page><SampleNotice />
-    <View style={{ gap: 12, alignItems: 'center', paddingVertical: 16 }}><View accessible={false} style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}><AppText variant="title" style={{ color: colors.primary }}>{contact.initials}</AppText></View><AppText variant="title" accessibilityRole="header">{contact.name}</AppText><AppText style={{ color: colors.muted }}>{t(contact.relationship)}</AppText></View>
+    <View style={{ gap: 12, alignItems: 'center', paddingVertical: 16 }}><View accessible={false} style={{ width: 88, height: 88, borderRadius: radius.pill, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}><AppText variant="title" style={{ color: colors.primary }}>{contact.initials}</AppText></View><AppText variant="title" accessibilityRole="header">{contact.name}</AppText><AppText style={{ color: colors.muted }}>{t(contact.relationship)}</AppText></View>
     <Panel><SectionTitle>{t('helpFromSomeone')}</SectionTitle><AppText>{t('contactExplanation')}</AppText></Panel>
     <ActionButton label={t('requestHelp')} onPress={start} /><AppText variant="small" style={{ color: colors.muted }}>{t('sharingOff')}</AppText>
   </Page>;

@@ -85,7 +85,7 @@ async def contextAssistance(session: AsyncSession, required: bool, request) -> C
         relationship = await buddyRepository.getRelationshipForPair(session, request.userId, request.buddyUserId)
         if relationship is not None:
             buddy = ContextBuddy(userId=request.buddyUserId, level=relationship.level)
-    return ContextAssistanceData(required=required, status=request.status, requestId=str(request.id), buddy=buddy)
+    return ContextAssistanceData(required=required, status=assistanceService.legacyStatus(request.status), requestId=str(request.id), buddy=buddy)
 
 
 async def contextNavigation(session: AsyncSession, userId: uuid.UUID, action: str) -> NavigationResponse:
