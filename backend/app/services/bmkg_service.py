@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ import httpx
 
 from app.config import (
     BMKG_BASE_URL,
+    BMKG_QUAKE_URL,
     HTTP_TIMEOUT_SECONDS,
     PROCESSED_DATA_DIR,
     RAW_DATA_DIR,
@@ -125,3 +127,67 @@ async def fetch_weather(adm4: str) -> BmkgFetchResult:
         return BmkgFetchResult(data=normalized)
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         return BmkgFetchResult(data=None, error=f"BMKG unavailable: {exc}")
+
+
+@dataclass
+class BmkgQuakeResult:
+    quakes: list[dict[str, Any]] | None
+    error: str | None = None
+
+    @property
+    def available(self) -> bool:
+        return self.quakes is not None and self.error is None
+
+
+def _cap(value: Any, limit: int = 160) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text[:limit] or None
+
+
+def _coordinates(value: Any) -> tuple[float | None, float | None]:
+    try:
+        lat_text, lon_text = str(value).split(",")
+        latitude, longitude = float(lat_text), float(lon_text)
+    except ValueError:
+        return None, None
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return None, None
+    return latitude, longitude
+
+
+def normalize_earthquakes(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """BMKG felt earthquakes; malformed rows are skipped rather than failing the feed."""
+    rows = (payload.get("Infogempa") or {}).get("gempa") or []
+    if isinstance(rows, dict):
+        rows = [rows]
+    quakes: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        occurred = _parse_datetime(row.get("DateTime"))
+        magnitude = _as_number(row.get("Magnitude"))
+        if occurred is None or magnitude is None or not math.isfinite(magnitude):
+            continue
+        depth = _as_number(str(row.get("Kedalaman") or "").split(" ")[0])
+        latitude, longitude = _coordinates(row.get("Coordinates"))
+        quakes.append({
+            "occurredAt": occurred.astimezone(timezone.utc).isoformat(),
+            "magnitude": magnitude,
+            "depthKm": depth if depth is not None and math.isfinite(depth) else None,
+            "latitude": latitude,
+            "longitude": longitude,
+            "region": _cap(row.get("Wilayah")),
+            "felt": _cap(row.get("Dirasakan")),
+        })
+    return quakes
+
+
+async def fetch_felt_earthquakes() -> BmkgQuakeResult:
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS, headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(BMKG_QUAKE_URL)
+            response.raise_for_status()
+            payload = response.json()
+        return BmkgQuakeResult(quakes=normalize_earthquakes(payload))
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        return BmkgQuakeResult(quakes=None, error=f"BMKG earthquakes unavailable: {exc}")

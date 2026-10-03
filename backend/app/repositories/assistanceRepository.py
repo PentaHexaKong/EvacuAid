@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AssistanceRequest
 
 
-activeStatuses = ('REQUESTED', 'NOTIFIED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING')
+activeStatuses = ('REQUESTED', 'NOTIFIED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'WAITING', 'FALLBACK_REQUIRED', 'COMPLETION_PENDING')
 
 
 async def getRequest(session: AsyncSession, requestId: uuid.UUID, lock: bool = False) -> AssistanceRequest | None:

@@ -11,7 +11,9 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   userInterfaceStyle: 'light',
   platforms: ['ios', 'android'],
+  icon: './assets/brand/app-icon/icon.png',
   ios: {
+    icon: './assets/brand/app-icon/EvacuAid.icon',
     bundleIdentifier: process.env.IOS_BUNDLE_IDENTIFIER || 'dev.evacuaid.foundation',
     supportsTablet: false,
     infoPlist: {
@@ -24,22 +26,30 @@ const config: ExpoConfig = {
   },
   android: {
     package: process.env.ANDROID_PACKAGE || 'dev.evacuaid.foundation',
-    blockedPermissions: ['android.permission.RECORD_AUDIO'],
+    adaptiveIcon: {
+      foregroundImage: './assets/brand/app-icon/android-foreground.png',
+      backgroundImage: './assets/brand/app-icon/android-background.png',
+    },
   },
-  extra: { androidMapConfigured: Boolean(process.env.ANDROID_GOOGLE_MAPS_API_KEY) },
+  extra: { androidMapConfigured: Boolean(process.env.ANDROID_GOOGLE_MAPS_API_KEY), ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } } : {}) },
+  experiments: { reactCompiler: true },
   plugins: [
     'expo-router',
     'expo-localization',
     'expo-secure-store',
-    ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to save your current location when you choose.' }],
-    ['expo-splash-screen', { backgroundColor: '#F3F6FA' }],
-    ['expo-font', { fonts: [
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/400Regular/PlusJakartaSans_400Regular.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/500Medium/PlusJakartaSans_500Medium.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/600SemiBold/PlusJakartaSans_600SemiBold.ttf',
-      './node_modules/@expo-google-fonts/plus-jakarta-sans/700Bold/PlusJakartaSans_700Bold.ttf',
-    ] }],
+    ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to share your location during an accepted Buddy session.', locationAlwaysAndWhenInUsePermission: 'Allow EvacuAid to continue Buddy location sharing while your phone is locked.', isIosBackgroundLocationEnabled: true, isAndroidBackgroundLocationEnabled: true, isAndroidForegroundServiceEnabled: true }],
+    'expo-notifications',
+    ['expo-speech-recognition', { microphonePermission: 'Allow EvacuAid to hear a command when you tap the microphone.', speechRecognitionPermission: 'Allow EvacuAid to transcribe your spoken Buddy commands.' }],
+    ['expo-splash-screen', { backgroundColor: '#3A60F4', image: './assets/brand/logo-lockup-white.png', imageWidth: 220 }],
+    ['expo-font', { android: { fonts: [{ fontFamily: 'Inter', fontDefinitions: [
+      { path: './node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf', weight: 400 },
+      { path: './node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf', weight: 500 },
+      { path: './node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf', weight: 600 },
+      { path: './node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf', weight: 700 },
+    ] }] } }],
     ['react-native-maps', { androidGoogleMapsApiKey: process.env.ANDROID_GOOGLE_MAPS_API_KEY || '' }],
+    '@rnmapbox/maps',
+    './plugins/with-ios-scene-lifecycle',
   ],
 };
 

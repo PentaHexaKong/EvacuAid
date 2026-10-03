@@ -9,6 +9,7 @@ from app.db.models import AssistanceRequest
 from app.models.assistance import AssistanceCreate, AssistanceResponse, AssistanceStatus
 from app.repositories import assistanceRepository, buddyRepository
 from app.services import user_service
+from app.services import pilotService
 
 
 transitionTargets = {
@@ -24,10 +25,13 @@ transitionTargets = {
 
 
 def requestResponse(request: AssistanceRequest) -> AssistanceResponse:
-    return AssistanceResponse(id=request.id, userId=request.userId, buddyUserId=request.buddyUserId, eventId=request.eventId, status=request.status, requestedAt=request.requestedAt, notifiedAt=request.notifiedAt, acceptedAt=request.acceptedAt, enRouteAt=request.enRouteAt, arrivedAt=request.arrivedAt, evacuatingAt=request.evacuatingAt, safeAt=request.safeAt, cancelledAt=request.cancelledAt, expiredAt=request.expiredAt, updatedAt=request.updatedAt)
+    return AssistanceResponse(id=request.id, userId=request.userId, buddyUserId=request.buddyUserId, eventId=request.eventId, status=legacyStatus(request.status), requestedAt=request.requestedAt, notifiedAt=request.notifiedAt, acceptedAt=request.acceptedAt, enRouteAt=request.enRouteAt, arrivedAt=request.arrivedAt, evacuatingAt=request.evacuatingAt, safeAt=request.safeAt, cancelledAt=request.cancelledAt, expiredAt=request.expiredAt, updatedAt=request.updatedAt)
 
 
 async def createRequest(session: AsyncSession, userId: uuid.UUID, payload: AssistanceCreate) -> AssistanceRequest:
+    await pilotService.lock_users(session, [userId] + ([payload.buddyUserId] if payload.buddyUserId else []))
+    if await pilotService.occupied(session, userId) or (payload.buddyUserId and await pilotService.occupied(session, payload.buddyUserId)):
+        raise HTTPException(status_code=409, detail='an active assistance request already exists')
     await user_service.require_user(session, userId)
     if payload.buddyUserId is not None:
         await user_service.require_user(session, payload.buddyUserId)
@@ -58,6 +62,13 @@ async def getActiveRequest(session: AsyncSession, userId: uuid.UUID) -> Assistan
 
 async def transitionRequest(session: AsyncSession, requestId: uuid.UUID, command: str, actorUserId: uuid.UUID, buddyUserId: uuid.UUID | None = None) -> AssistanceRequest:
     request = await requireRequest(session, requestId, lock=True)
+    if request.pilot:
+        raise HTTPException(status_code=409, detail='use Buddy pilot session actions')
+    if command == 'notify':
+        assigned = buddyUserId or request.buddyUserId
+        await pilotService.lock_users(session, [request.userId] + ([assigned] if assigned else []))
+        if assigned and await pilotService.occupied(session, assigned, request.id):
+            raise HTTPException(status_code=409, detail='assigned buddy already has an active request')
     current, target, timestampField = transitionTargets[command]
     allowedCurrent = current if isinstance(current, tuple) else (current,)
     if request.status not in allowedCurrent:
@@ -83,3 +94,7 @@ async def transitionRequest(session: AsyncSession, requestId: uuid.UUID, command
         raise HTTPException(status_code=409, detail='assigned buddy already has an active request')
     await session.refresh(request)
     return request
+
+
+def legacyStatus(status):
+    return {'WAITING': 'REQUESTED', 'FALLBACK_REQUIRED': 'REQUESTED', 'COMPLETION_PENDING': 'EVACUATING', 'COMPLETED': 'SAFE', 'INTERRUPTED': 'CANCELLED', 'UNANSWERED': 'EXPIRED'}.get(status, status)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
@@ -12,12 +14,15 @@ from sqlalchemy import text
 from app.config import DEFAULT_ADM4, REDIS_URL
 from app.db.session import engine, SessionLocal
 from app.models.risk import RiskRequest, RiskResponse
+from app.routers.pilot import router as pilot_router
+from app.services.pilotWorker import run as run_pilot_worker
 from app.routers.context import router as context_router
 from app.routers.externalData import router as external_data_router
 from app.routers.buddies import router as buddies_router
 from app.routers.assistance import router as assistance_router
 from app.routers.navigation import router as navigation_router
 from app.routers.shelters import router as shelters_router
+from app.routers.hazards import router as hazards_router
 from app.routers.users import router as users_router
 from app.routers.sessions import router as sessions_router
 from app.services.cacheService import CacheService
@@ -34,12 +39,17 @@ configureLogging()
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     application.state.redisClient = Redis.from_url(REDIS_URL, decode_responses=True)
+    worker = asyncio.create_task(run_pilot_worker())
     yield
+    worker.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await worker
     await application.state.redisClient.aclose()
     await engine.dispose()
 
 
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
+app.include_router(pilot_router)
 app.include_router(users_router)
 app.include_router(sessions_router)
 app.include_router(context_router)
@@ -48,6 +58,10 @@ app.include_router(buddies_router)
 app.include_router(assistance_router)
 app.include_router(navigation_router)
 app.include_router(shelters_router)
+app.include_router(hazards_router)
+if os.getenv('PILOT_DEV_SIMULATION') == '1':
+    from app.routers.pilot_dev import router as pilot_dev_router
+    app.include_router(pilot_dev_router)
 
 
 @app.get("/")

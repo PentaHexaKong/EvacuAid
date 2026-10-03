@@ -1,85 +1,108 @@
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button } from 'heroui-native/button';
-import { Card } from 'heroui-native/card';
-import { Chip } from 'heroui-native/chip';
-import { Input } from 'heroui-native/input';
-import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
+import IconArrowRight from '@tabler/icons-react-native/IconArrowRight';
 import IconMapPin from '@tabler/icons-react-native/IconMapPin';
 import IconNavigation from '@tabler/icons-react-native/IconNavigation';
-import IconMap2 from '@tabler/icons-react-native/IconMap2';
-import IconSearch from '@tabler/icons-react-native/IconSearch';
-import IconBell from '@tabler/icons-react-native/IconBell';
+import { LevelChip } from '@/components/content';
+import { DiscoverDisaster } from '@/features/hazards/discover-disaster';
+import { usePressScale } from '@/components/press';
+import { Logo } from '@/components/logo';
 import { SettingsMenu } from '@/components/settings-menu';
-import { AppText } from '@/components/ui';
-import { sampleAlerts, sampleDestinations } from '@/features/content/samples';
-import { useProfile } from '@/features/profile/context';
-import { usePreferences } from '@/features/preferences/context';
-import { colors, useTypography } from '@/theme';
+import { ActionButton, AppText, QuickTile, Tap } from '@/components/ui';
+import mapArt from '../../assets/brand/quick/map.png';
+import helpArt from '../../assets/brand/quick/help.png';
+import buddyArt from '../../assets/brand/quick/buddy.png';
+import alertsArt from '../../assets/brand/quick/alerts.png';
+import rainArt from '../../assets/brand/alerts/rain.png';
+import floodArt from '../../assets/brand/hazards/flood.png';
+import { levelLabels, sampleAlerts } from '@/features/content/samples';
+import { colors, corner, radius, sky } from '@/theme';
+
+const SKY_OVERSCROLL = 600;
+const ALERT_ART: Record<string, ImageSourcePropType> = { rain: rainArt, water: floodArt };
+
+// Tinted with the alert level's own sky, so other levels follow automatically; the whole card opens the alert.
+function RecentAlertCard({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation();
+  const alert = sampleAlerts[0];
+  const { stops } = sky[alert.level];
+  const press = usePressScale(0.98);
+  const time = alert.issued.split(' · ').pop();
+  return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={`${t(levelLabels[alert.level])}. ${t(alert.title)}. ${t('openAlert')}`} onPress={onOpen}>
+    <Animated.View style={[styles.alertCard, { backgroundColor: stops[2], borderColor: stops[1] }, press.style]}>
+      <View style={styles.alertHead}>
+        <View style={{ flex: 1, gap: 10 }}>
+          <LevelChip level={alert.level} />
+          <AppText variant="section">{t(alert.title)}</AppText>
+        </View>
+        <Image source={ALERT_ART[alert.id] ?? rainArt} accessible={false} style={styles.alertArt} />
+      </View>
+      <View style={styles.alertMeta}>
+        <IconMapPin size={16} color={colors.muted} />
+        <AppText variant="small" style={{ color: colors.muted, flexShrink: 1, fontVariant: ['tabular-nums'] }}>{t(alert.area)} · {time}</AppText>
+      </View>
+      <View style={styles.alertButton}>
+        <AppText variant="button" style={{ color: colors.primary }}>{t('openAlert')}</AppText>
+        <IconArrowRight size={18} strokeWidth={2.25} color={colors.primary} />
+      </View>
+    </Animated.View>
+  </Pressable>;
+}
+// Faded words sit at 75% of the level's ink; contrast.test.ts holds them to 3:1 (large text) on every sky.
+export const HEADLINE_FADE = 'BF';
+const lowerFirst = (value: string) => value.charAt(0).toLocaleLowerCase() + value.slice(1);
+
+// Ducat-style sentence: the level and hazard in full ink, connecting words faded, the time in italics.
+function Headline({ template, parts, ink }: { template: string; parts: Record<'level' | 'hazard' | 'window', string>; ink: string }) {
+  const pieces = template.split(/\{\{(\w+)\}\}/);
+  return <AppText variant="title" accessibilityRole="header" style={{ color: ink + HEADLINE_FADE }}>
+    {pieces.map((piece, index) => {
+      if (index % 2 === 0) return piece;
+      const key = piece as keyof typeof parts;
+      return <Text key={index} style={key === 'window' ? { fontStyle: 'italic' } : { color: ink }}>{parts[key]}</Text>;
+    })}
+  </AppText>;
+}
 
 export function OverviewScreen() {
   const { t } = useTranslation();
-  const { name } = useProfile();
   const router = useRouter();
-  const { width, fontScale } = useWindowDimensions();
-  const { preferences } = usePreferences();
-  const inputStyle = useTypography('body');
-  const [query, setQuery] = useState('');
   const alert = sampleAlerts[0];
-  const search = query.trim().toLocaleLowerCase();
-  const results = sampleDestinations.filter(item => `${t(item.name)} ${t(item.address)}`.toLocaleLowerCase().includes(search));
-  const expandedText = preferences.largerText || fontScale > 1.2 || width < 360;
-  const actions = [
-    { label: 'homeRiskMap', Icon: IconMap2, href: '/discover' },
-    { label: 'homeSafeRoutes', Icon: IconNavigation, href: '/destinations' },
-    { label: 'homeReport', Icon: IconAlertTriangle, href: null },
-    { label: 'homePreparedness', Icon: IconBell, href: '/alerts' },
-  ] as const;
+  const { stops, ink } = sky[alert.level];
+  const activeAlerts = sampleAlerts.filter(item => item.level !== 'normal').length;
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
   return <View style={styles.root}>
-    <ScrollView contentInsetAdjustmentBehavior="automatic" automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" contentContainerStyle={{ backgroundColor: colors.canvas, paddingBottom: 24 }}>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 32 }}>
       <View style={styles.header}>
-        <View style={styles.greetingRow}>
-          <View style={{ flex: 1, gap: 8 }}><AppText variant="title" accessibilityRole="header">{name ? t('homeNamedGreeting', { name }) : t('homeGreeting')}</AppText><View style={styles.location}><IconMapPin size={18} color={colors.muted} /><AppText variant="small" style={{ color: colors.muted, flexShrink: 1 }}>{t('exampleArea')}</AppText></View></View>
+        <LinearGradient pointerEvents="none" colors={[stops[0], stops[0], stops[1], stops[2], colors.canvas]} locations={[0, 0.62, 0.78, 0.92, 1]} style={styles.sky} />
+        {/* The native toolbar's buttons sit in the 44pt directly below the safe area; pull the logo up into that same band. */}
+        <View style={[styles.brand, { marginTop: insets.top - headerHeight }]}><Logo height={32} /></View>
+        <View style={{ gap: 10 }}>
+          <View style={styles.meta}>
+            <View style={styles.area}><IconMapPin size={16} color={ink} /><AppText variant="small" style={{ color: ink, flexShrink: 1 }}>{t(alert.area)}</AppText></View>
+          </View>
+          <Headline template={t(alert.window ? 'homeHeadline' : 'homeHeadlineNoWindow')} ink={ink} parts={{ level: t(levelLabels[alert.level]), hazard: lowerFirst(t(alert.title)), window: alert.window ? t(alert.window) : '' }} />
         </View>
-        <View style={styles.search}>
-          <IconSearch size={20} color={colors.muted} />
-          <Input value={query} onChangeText={setQuery} accessibilityLabel={t('homeSearch')} placeholder={t('homeSearch')} placeholderTextColor={preferences.strongerContrast ? colors.ink : colors.muted} returnKeyType="search" clearButtonMode="while-editing" autoCorrect={false} style={[inputStyle, styles.searchInput, preferences.largerText && { fontSize: 19.2, lineHeight: 28.8 }]} />
-        </View>
-        {search.length > 0 && <View style={{ gap: 8 }}>
-          <AppText variant="small" accessibilityLiveRegion="polite" style={{ color: colors.muted }}>{t(results.length ? 'homeSearchResults' : 'homeNoResults')}</AppText>
-          {results.map(item => <Button key={item.id} variant="ghost" onPress={() => { setQuery(''); router.push({ pathname: '/destinations/[id]', params: { id: item.id } }); }} style={styles.searchResult}><AppText style={{ color: colors.primary, flex: 1 }}>{t(item.name)}</AppText><IconNavigation size={18} color={colors.primary} /></Button>)}
-        </View>}
       </View>
       <View style={styles.content}>
-        <Card style={styles.statusCard}>
-          <LinearGradient colors={[colors.primary, colors.gradientTop]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <View pointerEvents="none" accessible={false} style={styles.statusRing} />
-          <Card.Body style={{ gap: 16 }}>
-            <View style={styles.statusTop}><Chip size="sm" style={styles.statusChip}><AppText variant="small" style={{ color: colors.surface }}>{t('homeAreaStatus')}</AppText></Chip><AppText variant="small" style={{ color: colors.surface }}>{t('homeExample')}</AppText></View>
-            <View style={{ gap: 8 }}><AppText variant="section" accessibilityRole="header" style={{ color: colors.surface }}>{t('homeStatusTitle')}</AppText><AppText style={{ color: colors.surface }}>{t('homeStatusBody')}</AppText></View>
-          </Card.Body>
-        </Card>
-        <View style={{ gap: 18 }}>
-          <AppText variant="section" accessibilityRole="header">{t('homeQuickActions')}</AppText>
-          <View style={styles.quickGrid}>{actions.map(({ label, Icon, href }) => <View key={label} style={{ width: expandedText ? '47%' : '22%', alignItems: 'center', gap: 10 }}>
-            <Button isIconOnly variant="outline" accessibilityLabel={t(label)} onPress={() => href ? router.navigate(href) : Alert.alert(t('homeReport'), t('homeReportUnavailable'))} style={styles.quickButton}><Icon size={26} strokeWidth={1.7} color={colors.primary} /></Button>
-            <AppText variant="button" accessible={false} style={{ textAlign: 'center', fontSize: 14, lineHeight: 20 }}>{t(label)}</AppText>
-          </View>)}</View>
-          {__DEV__ && <Button variant="secondary" onPress={() => router.push('/route-simulation')} style={{ minHeight: 48, height: 'auto', paddingVertical: 12 }}><AppText variant="button" style={{ color: colors.primary }}>{t('routeSimulation')}</AppText></Button>}
+        <ActionButton variant="gradient" label={t('findRouteToShelter')} icon={<IconNavigation size={20} color={colors.surface} />} onPress={() => router.navigate({ pathname: '/discover', params: { route: String(Date.now()) } })} />
+        <View style={styles.quickGrid}>
+          <View style={styles.quickCell}><QuickTile title={t('quickMap')} detail={t('quickMapDetail')} image={mapArt} onPress={() => router.navigate('/discover')} /></View>
+          <View style={styles.quickCell}><QuickTile title={t('quickHelp')} detail={t('quickHelpDetail')} image={helpArt} onPress={() => router.navigate('/buddy')} /></View>
+          <View style={styles.quickCell}><QuickTile title={t('quickBuddy')} detail={t('quickBuddyDetail')} image={buddyArt} onPress={() => router.navigate('/buddy')} /></View>
+          <View style={styles.quickCell}><QuickTile title={t('quickAlerts')} detail={t('quickAlertsDetail', { count: activeAlerts })} image={alertsArt} onPress={() => router.navigate('/alerts')} /></View>
         </View>
         <View style={{ gap: 12 }}>
-          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t('homeRecentAlert')}</AppText><Button variant="ghost" size="sm" onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Button></View>
-          <Card style={styles.alertCard}><Card.Body style={{ gap: 14 }}>
-            <View style={styles.statusTop}><Chip variant="soft" color="warning" style={{ height: 'auto', minHeight: 32, paddingVertical: 6 }}><IconAlertTriangle size={16} color={colors.caution} /><AppText variant="small" style={{ color: colors.caution }}>{t('cautionLabel')}</AppText></Chip><AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>08:30 WIB</AppText></View>
-            <AppText variant="section" accessibilityRole="header">{t(alert.title)}</AppText>
-            <AppText style={{ color: colors.muted }}>{t(alert.area)}. {t(alert.source)}</AppText>
-            <Button variant="secondary" onPress={() => router.push({ pathname: '/alert/[id]', params: { id: alert.id } })} style={styles.readButton}><AppText variant="button" style={{ color: colors.primary }}>{t('viewAlert')}</AppText><IconNavigation size={18} color={colors.primary} /></Button>
-          </Card.Body></Card>
+          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t('homeRecentAlert')}</AppText><Tap onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
+          <RecentAlertCard onOpen={() => router.push({ pathname: '/alert/[id]', params: { id: alert.id } })} />
         </View>
-        <AppText variant="small" style={{ color: colors.muted }}>{t('sampleExplanation')}</AppText>
+        <DiscoverDisaster />
       </View>
     </ScrollView>
     <SettingsMenu notifications />
@@ -88,20 +111,18 @@ export function OverviewScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
-  header: { backgroundColor: colors.surface, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 22 },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  location: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderRadius: 16, backgroundColor: colors.canvas },
-  searchInput: { flex: 1, backgroundColor: 'transparent', borderWidth: 0, minHeight: 54, height: 'auto', paddingHorizontal: 0, paddingVertical: 14, boxShadow: 'none' },
-  searchResult: { justifyContent: 'flex-start', minHeight: 48, height: 'auto', paddingVertical: 12 },
-  content: { padding: 20, gap: 28, maxWidth: 680, width: '100%', alignSelf: 'center' },
-  statusCard: { borderRadius: 24, padding: 20, overflow: 'hidden', backgroundColor: colors.primary, borderWidth: 0, boxShadow: '0 8px 20px rgba(0, 85, 160, 0.12)' },
-  statusRing: { position: 'absolute', width: 190, height: 190, borderRadius: 95, borderWidth: 22, borderColor: 'rgba(18,40,75,0.1)', right: -60, top: -60 },
-  statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
-  statusChip: { backgroundColor: 'rgba(18,40,75,0.2)', minHeight: 32, height: 'auto', paddingVertical: 6 },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 20 },
-  quickButton: { width: 58, height: 58, borderRadius: 19, backgroundColor: colors.surface, borderColor: colors.border, boxShadow: '0 3px 8px rgba(18,40,75,0.04)' },
+  header: { paddingHorizontal: 20, paddingBottom: 36, gap: 24 },
+  brand: { height: 44, marginLeft: -4, justifyContent: 'center', alignSelf: 'flex-start' },
+  sky: { position: 'absolute', left: 0, right: 0, top: -SKY_OVERSCROLL, bottom: -40 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  area: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  content: { paddingHorizontal: 20, gap: 28, maxWidth: 680, width: '100%', alignSelf: 'center' },
+  alertCard: { padding: 20, gap: 12, ...corner(radius.xl), borderWidth: 1 },
+  alertHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  alertArt: { width: 84, height: 84, marginTop: -10, marginRight: -8 },
+  alertMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  alertButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 18, borderRadius: radius.pill, backgroundColor: colors.surface },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  quickCell: { flexGrow: 1, flexBasis: '45%', flexDirection: 'row' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
-  alertCard: { padding: 18, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, boxShadow: 'none' },
-  readButton: { alignSelf: 'flex-start', height: 'auto', minHeight: 44, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: colors.canvas },
 });

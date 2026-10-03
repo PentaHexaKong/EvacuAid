@@ -7,6 +7,15 @@ export const PROFILE_KEY = 'evacuaid.profile.v1';
 export type AccessibilityType = 'VISUAL_IMPAIRMENT' | 'HEARING_IMPAIRMENT' | 'MOBILITY_LIMITATION' | 'ELDERLY' | 'OTHER';
 export type AccessibilityItem = { type: AccessibilityType; severity: string | null };
 
+export const ONBOARDING_NEEDS_KEY = 'evacuaid.onboarding-needs.v1';
+const NEED_TYPES: AccessibilityType[] = ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT', 'MOBILITY_LIMITATION', 'ELDERLY'];
+export function parseNeeds(value: string | null): AccessibilityItem[] {
+  try {
+    const data = JSON.parse(value ?? 'null');
+    return Array.isArray(data) ? NEED_TYPES.filter(type => data.includes(type)).map(type => ({ type, severity: null })) : [];
+  } catch { return []; }
+}
+
 export function parseProfile(value: string | null): string {
   try {
     const data = JSON.parse(value ?? 'null');
@@ -49,7 +58,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const current = await apiRequest<UserProfile>('/v1/me', token);
-      const items = await apiRequest<AccessibilityItem[]>(`/v1/users/${current.id}/accessibility`, token);
+      let items = await apiRequest<AccessibilityItem[]>(`/v1/users/${current.id}/accessibility`, token);
+      const needs = parseNeeds(await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY));
+      if (needs.length && !items.length) {
+        await apiRequest<UserProfile>(`/v1/users/${current.id}`, token, { method: 'PATCH', body: JSON.stringify({ accessibility: needs }) });
+        items = needs;
+      }
+      await AsyncStorage.removeItem(ONBOARDING_NEEDS_KEY);
       const localName = await AsyncStorage.getItem(PROFILE_KEY);
       if (localName !== null) {
         const migratedName = parseProfile(localName);
@@ -69,7 +84,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    void retry().catch(() => {});
+    void Promise.resolve().then(retry).catch(() => {});
   }, [token, retry]);
 
   const saveProfile = async (patch: Partial<Pick<UserProfile, 'name' | 'phone' | 'needs_assistance' | 'share_location_with_buddies'>> & { accessibility?: AccessibilityItem[] }) => {

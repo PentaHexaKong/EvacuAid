@@ -2,16 +2,12 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { FieldError } from 'heroui-native/field-error';
-import { Input } from 'heroui-native/input';
-import { Label } from 'heroui-native/label';
-import { TextField } from 'heroui-native/text-field';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
 import IconUserPlus from '@tabler/icons-react-native/IconUserPlus';
 import IconWifiOff from '@tabler/icons-react-native/IconWifiOff';
-import { ActionButton, AppText, Page, Panel, SectionHeading } from '@/components/ui';
-import { colors, useTypography } from '@/theme';
+import { ActionButton, AppText, Field, Page, Panel, SectionHeading } from '@/components/ui';
+import { colors } from '@/theme';
 
 export function ComponentsScreen() {
   const { t } = useTranslation();
@@ -19,8 +15,6 @@ export function ComponentsScreen() {
   const [checked, setChecked] = useState(false);
   const router = useRouter();
   const openSheet = () => router.navigate('/sheet');
-  const bodyStyle = useTypography();
-  const buttonStyle = useTypography('button');
   return <Page>
     <View style={{ gap: 24 }}>
       <SectionHeading number={t('preview')} title={t('componentsTitle')} subtitle={t('componentsDescription')} />
@@ -33,7 +27,7 @@ export function ComponentsScreen() {
         <ActionButton disabled label={t('disabledButton')} /><AppText variant="small" style={{ color: colors.muted }}>{t('disabledReason')}</AppText>
       </Panel>
       <Panel><AppText variant="section" accessibilityRole="header">{t('formTitle')}</AppText>
-        <TextField isInvalid={checked && !name.trim()}><Label style={buttonStyle}>{t('nameLabel')}</Label><Input style={[bodyStyle, { minHeight: 52, height: 'auto', paddingVertical: 12, borderWidth: 1, borderColor: checked && !name.trim() ? colors.critical : colors.border, borderRadius: 12 }]} accessibilityLabel={t('nameLabel')} value={name} onChangeText={(value) => { setName(value); setChecked(false); }} placeholder={t('namePlaceholder')} /><FieldError style={bodyStyle}>{t('nameError')}</FieldError></TextField>
+        <View style={{ gap: 8 }}><AppText variant="button">{t('nameLabel')}</AppText><Field invalid={checked && !name.trim()} accessibilityLabel={t('nameLabel')} value={name} onChangeText={(value) => { setName(value); setChecked(false); }} placeholder={t('namePlaceholder')} />{checked && !name.trim() && <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('nameError')}</AppText>}</View>
         <AppText variant="small" style={{ color: colors.muted }}>{t('nameDescription')}</AppText><ActionButton label={t('checkInput')} onPress={() => setChecked(true)} />
         {checked && !!name.trim() && <AppText accessibilityLiveRegion="polite">{t('inputValid')}</AppText>}
       </Panel>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { Animated, Easing, Platform, ScrollView, StyleSheet, View, useAnimatedValue, type ScrollViewProps, type Text } from 'react-native';
 import { HeaderTitle, useHeaderHeight } from 'expo-router/react-navigation';
 import type { NativeStackNavigationOptions } from 'expo-router/native-stack';
@@ -21,8 +21,8 @@ export function PageScrollView({ children, contentContainerStyle, ...props }: Sc
   const [visible, setVisible] = useState(false);
   const opacity = useAnimatedValue(0);
   const reduceMotion = useContext(SystemReduceMotionContext);
-  const update = () => setVisible(offset.current + headerHeight > (title.current?.bottom ?? (Platform.OS === 'ios' ? 0 : headerHeight)));
-  const measureTitle = (node: Text | null) => {
+  const update = useCallback(() => setVisible(offset.current + headerHeight > (title.current?.bottom ?? (Platform.OS === 'ios' ? 0 : headerHeight))), [headerHeight]);
+  const measureTitle = useCallback((node: Text | null) => {
     if (!node || !content.current) return;
     node.measureLayout(content.current, (_x, y, _width, height) => {
       if (!title.current || title.current.node === node || y < title.current.top) {
@@ -30,7 +30,7 @@ export function PageScrollView({ children, contentContainerStyle, ...props }: Sc
         update();
       }
     });
-  };
+  }, [update]);
   useLayoutEffect(() => {
     setOptions({ headerTitle: props => <HeaderTitle {...props} style={{ opacity }} accessible={visible} accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}>{headerTitle}</HeaderTitle>, headerTransparent: true, headerShadowVisible: false, scrollEdgeEffects: { top: 'hidden' }, headerBlurEffect: visible ? 'systemUltraThinMaterialLight' : undefined, headerStyle: { backgroundColor: visible ? 'rgba(235, 245, 255, 0.08)' : 'transparent' } });
   }, [setOptions, headerTitle, visible, opacity]);

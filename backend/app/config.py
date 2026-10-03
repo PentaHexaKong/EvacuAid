@@ -17,6 +17,7 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 FINAL_OUTPUT_PATH = DATA_DIR / "final_output.json"
 
 BMKG_BASE_URL = os.getenv("BMKG_BASE_URL", "https://api.bmkg.go.id").rstrip("/")
+BMKG_QUAKE_URL = os.getenv("BMKG_QUAKE_URL", "https://data.bmkg.go.id/DataMKG/TEWS/gempadirasakan.json")
 PETABENCANA_BASE_URL = os.getenv(
     "PETABENCANA_BASE_URL", "https://api.petabencana.id"
 ).rstrip("/")

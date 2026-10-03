@@ -1,7 +1,8 @@
-import '../../global.css';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import { ProfileProvider } from '@/features/profile/context';
 import { RequestDraftProvider } from '@/features/requests/draft';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,19 +10,15 @@ import { PreferencesProvider, usePreferences } from '@/features/preferences/cont
 import { SetupScreen } from '@/screens/setup';
 import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
-import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { HeroUINativeProvider } from 'heroui-native/provider';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { I18nextProvider, useTranslation } from 'react-i18next';
-import { Uniwind } from 'uniwind';
 import { i18n, localizationReady } from '@/localization';
-import { colors, FontReadyContext, SystemReduceMotionContext } from '@/theme';
+import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
-Uniwind.setTheme('light');
 
 export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' };
 
@@ -29,20 +26,43 @@ function FirstRunGate() {
   const { ready, preferences } = usePreferences();
   const session = useGuestSession();
   const router = useRouter();
-  const [returnHome, setReturnHome] = useState(false);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
+  useEffect(() => {
+    const notification = (value: Notifications.NotificationResponse | null) => {
+      const data = value?.notification.request.content.data;
+      const id = data?.requestId;
+      if (typeof id === 'string') setBuddyTarget(`/buddy?requestId=${encodeURIComponent(id)}`);
+      else if (typeof data?.inboxId === 'string' || typeof data?.invitationId === 'string') setBuddyTarget('/buddy');
+    };
+    const link = (url: string) => {
+      const parsed = Linking.parse(url);
+      const code = parsed.queryParams?.code;
+      if ((parsed.path === 'buddy-invite' || parsed.hostname === 'buddy-invite') && typeof code === 'string') setBuddyTarget(`/buddy?code=${encodeURIComponent(code)}`);
+    };
+    const response = Notifications.addNotificationResponseReceivedListener(notification);
+    const links = Linking.addEventListener('url', value => link(value.url));
+    void Notifications.getLastNotificationResponseAsync().then(notification).catch(() => {});
+    void Linking.getInitialURL().then(url => { if (url) link(url); }).catch(() => {});
+    return () => { response.remove(); links.remove(); };
+  }, []);
   useEffect(() => {
     if (preferences.completed && session.status === 'idle') void session.ensureGuest().catch(() => {});
   }, [preferences.completed, session.status, session.ensureGuest]);
   useEffect(() => {
-    if (preferences.completed && returnHome && session.status === 'ready') router.replace('/');
-  }, [preferences.completed, returnHome, session.status, router]);
+    if (preferences.completed && session.status === 'ready' && (buddyTarget || returnTo)) {
+      router.replace((buddyTarget || returnTo) as '/');
+      void Promise.resolve().then(() => { setBuddyTarget(null); setReturnTo(null); });
+      void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    }
+  }, [preferences.completed, buddyTarget, returnTo, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (preferences.completed && session.status !== 'ready') {
     if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
-  return preferences.completed ? <Navigation /> : <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}><SetupScreen onDone={() => setReturnHome(true)} /></SafeAreaView>;
+  return preferences.completed ? <Navigation /> : <SetupScreen onDone={target => setReturnTo(target ?? '/')} />;
 }
 
 function GuestSessionError() {
@@ -64,20 +84,18 @@ function Navigation() {
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
     <Stack.Screen name="contact/[id]" options={{ title: t('contactTitle') }} />
-    <Stack.Screen name="destinations/index" options={{ title: t('destinationsTitle') }} />
-    <Stack.Screen name="destinations/[id]" options={{ title: t('destinationTitle') }} />
+    <Stack.Screen name="destinations/index" options={{ headerShown: false }} />
+    <Stack.Screen name="destinations/[id]" options={{ headerShown: false }} />
     <Stack.Screen name="request/index" options={{ title: t('requestHelp') }} />
     <Stack.Screen name="request/review" options={{ title: t('reviewRequest') }} />
     {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
     <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
-    <Stack.Screen name="route-simulation" options={{ title: t('routeSimulation') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />
     <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
   </Stack></RequestDraftProvider>;
 }
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold });
   const [ready, setReady] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(true);
   useEffect(() => {
@@ -88,7 +106,7 @@ export default function RootLayout() {
     return () => { mounted = false; sub.remove(); };
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
-    {(!ready || (!fontsLoaded && !fontError)) ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <SystemReduceMotionContext.Provider value={reduceMotion}><FontReadyContext.Provider value={fontsLoaded}><I18nextProvider i18n={i18n}><HeroUINativeProvider config={{ animation: reduceMotion ? 'disable-all' : undefined, textProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, textInputProps: { allowFontScaling: true, maxFontSizeMultiplier: 0 }, devInfo: { stylingPrinciples: false } }}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></HeroUINativeProvider></I18nextProvider></FontReadyContext.Provider></SystemReduceMotionContext.Provider>}
+    {!ready ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
+    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

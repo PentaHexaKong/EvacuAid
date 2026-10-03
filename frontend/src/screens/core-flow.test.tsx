@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
+import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
 import { RequestDraftProvider } from '@/features/requests/draft';
 import { RequestScreen, RequestReviewScreen } from './request';
 import { ContactScreen } from './buddy';
@@ -12,22 +13,12 @@ import { OverviewScreen } from './overview';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
 let mockContactId = 'raka';
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockContactId }) }));
+jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 0 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/en.json')[key] ?? key, i18n: { language: 'en' } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
-jest.mock('heroui-native/card', () => {
-  const { View } = jest.requireActual('react-native');
-  const Card = Object.assign(({ children }: { children: React.ReactNode }) => <View>{children}</View>, { Body: View });
-  return { Card };
-});
 
-jest.mock('heroui-native/button', () => {
-  const { Pressable } = jest.requireActual('react-native');
-  return { Button: (props: React.ComponentProps<typeof Pressable>) => <Pressable accessibilityRole="button" {...props} /> };
-});
-jest.mock('heroui-native/input', () => ({ Input: jest.requireActual('react-native').TextInput }));
-jest.mock('heroui-native/chip', () => ({ Chip: jest.requireActual('react-native').View }));
 
 beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockContactId = 'raka'; await AsyncStorage.clear(); });
 
@@ -37,15 +28,15 @@ test('preferences preview is local, cancel does not save, and failed saves remai
   await act(async () => {});
   fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
   fireEvent(view.getByRole('switch', { name: 'Stronger text contrast' }), 'valueChange', true);
-  expect(view.getByText('Important information, with room to read.')).toHaveStyle({ fontSize: 19.2, color: '#12284B' });
+  expect(view.getByText('Important information, with room to read.')).toHaveStyle({ fontSize: 19.2, color: '#0B1F52' });
   fireEvent.press(view.getByRole('button', { name: 'Cancel' }));
   expect(done).toHaveBeenCalledTimes(1);
   expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBeNull();
   jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage'));
-  fireEvent.press(view.getByRole('button', { name: 'Save preferences' }));
+  fireEvent.press(view.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(view.getByText('Could not save your preferences. Please try again.')).toBeTruthy());
   expect(view.getByRole('switch', { name: 'Larger text' })).toHaveProp('value', true);
-  fireEvent.press(view.getByRole('button', { name: 'Save preferences' }));
+  fireEvent.press(view.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(done).toHaveBeenCalledTimes(2));
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: true });
 });
@@ -109,43 +100,80 @@ test('welcome exposes language immediately and skipping setup enters Home withou
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true });
 });
 
-test('Home search filters sample destinations and opens the selected destination', () => {
-  const view = render(<OverviewScreen />);
-  expect(view.getByText('Live conditions are not connected yet. Explore the example alerts below.')).toBeTruthy();
-  const search = view.getByLabelText('Find a destination');
-  fireEvent.changeText(search, 'center');
-  expect(view.getByText('Community center · example')).toBeTruthy();
-  expect(view.queryByText('Community hall · example')).toBeNull();
-  fireEvent.press(view.getByText('Community center · example'));
-  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/destinations/[id]', params: { id: 'community-center' } });
-  expect(search).toHaveProp('value', '');
-  fireEvent.changeText(search, 'no-such-place');
-  expect(view.getByText('No example destinations match your search.')).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'Request help' })).toBeNull();
+test('onboarding walks welcome, help and an example warning, saving the chosen help', async () => {
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  expect(view.queryByRole('progressbar')).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 1 });
+  expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Older adult' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Limited mobility' }));
+  expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
+  expect(view.queryByRole('checkbox', { name: 'Larger text' })).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Adjust details' }));
+  expect(view.getByRole('checkbox', { name: 'Larger text' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Stronger text contrast' }));
+  expect(view.queryByRole('switch')).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 2 });
+  expect(view.getByText('Pack an emergency bag')).toBeTruthy();
+  expect(view.queryByRole('button', { name: /Read the warning aloud/i })).toBeNull();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Request help' })));
+  expect(done).toHaveBeenCalledWith('/buddy');
+  expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: false });
+  expect(JSON.parse((await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY))!)).toEqual(['ELDERLY', 'MOBILITY_LIMITATION']);
 });
 
-test('Home quick access opens the matching existing destinations and reports its unavailable action', () => {
-  const alert = jest.spyOn(Alert, 'alert');
-  const view = render(<OverviewScreen />);
-  for (const [label, route] of [['Risk Map', '/discover'], ['Safe Routes', '/destinations'], ['Preparedness', '/alerts']]) {
-    fireEvent.press(view.getByRole('button', { name: label }));
-    expect(mockRouter.navigate).toHaveBeenLastCalledWith(route);
-  }
-  fireEvent.press(view.getByRole('button', { name: 'Report' }));
-  expect(alert).toHaveBeenCalledWith('Report', 'Reporting is not available yet. No report has been created or sent.');
-  const id = jest.requireActual('../localization/id.json');
-  expect([id.homeRiskMap, id.homeSafeRoutes, id.homeReport, id.homePreparedness]).toEqual(['Peta Risiko', 'Rute Aman', 'Laporkan', 'Siaga']);
+test('choosing Standard clears support tiles and restores default help', async () => {
+  const view = render(<PreferencesProvider><SetupScreen /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Blind or low vision' }));
+  fireEvent.press(view.getByRole('checkbox', { name: 'Standard' }));
+  expect(view.getByRole('checkbox', { name: 'Blind or low vision' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
+  fireEvent.press(view.getByRole('button', { name: 'Adjust details' }));
+  expect(view.getByRole('checkbox', { name: 'Larger text' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
 });
 
-test('route simulation is reachable from Home only in development', () => {
+test('finishing onboarding from the warning step returns Home', async () => {
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+});
+
+test('Home shows the sample alert level with its label and routes to a gathering point', () => {
   const view = render(<OverviewScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Route simulation' }));
-  expect(mockRouter.push).toHaveBeenLastCalledWith('/route-simulation');
-  view.unmount();
-  const previous = __DEV__;
-  try {
-    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
-    const production = render(<OverviewScreen />);
-    expect(production.queryByRole('button', { name: 'Route simulation' })).toBeNull();
-  } finally { (globalThis as unknown as { __DEV__: boolean }).__DEV__ = previous; }
+  expect(view.getByRole('header', { name: 'Caution for heavy rain and strong winds, 08:30 to 11:30 WIB.' })).toBeTruthy();
+  expect(view.getByLabelText('EvacuAid')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
+  expect(view.queryByLabelText('Find a destination')).toBeNull();
+  expect(view.queryByText(/safe route/i)).toBeNull();
+});
+
+test('Home opens the latest alert and the full list', () => {
+  const view = render(<OverviewScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'See all' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
+  expect(view.getByText('Open alert')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Caution. Heavy rain and strong winds. Open alert' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+});
+
+test('Home quick-access tiles open the map, help request, Buddy and alerts', () => {
+  const view = render(<OverviewScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Risk map' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+  fireEvent.press(view.getByRole('button', { name: 'Get help' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  fireEvent.press(view.getByRole('button', { name: 'Buddy' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  fireEvent.press(view.getByRole('button', { name: 'Alerts' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
 });

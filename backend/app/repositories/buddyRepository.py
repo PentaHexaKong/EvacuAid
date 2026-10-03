@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AssistanceRequest, BuddyRelationship, User
 
 
-activeStatuses = ('REQUESTED', 'NOTIFIED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING')
+activeStatuses = ('REQUESTED', 'NOTIFIED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'WAITING', 'FALLBACK_REQUIRED', 'COMPLETION_PENDING')
 
 
 async def getRelationship(session: AsyncSession, relationshipId: uuid.UUID, lock: bool = False) -> BuddyRelationship | None:

@@ -95,11 +95,13 @@ def normalize_reports(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return normalized
 
 
-async def fetch_reports() -> PetaBencanaFetchResult:
+async def fetch_reports(timeperiod: int | None = None) -> PetaBencanaFetchResult:
     """Call the public reports endpoint with a required identifying User-Agent."""
     params: dict[str, str] = {"geoformat": "geojson"}
     if PETABENCANA_ADMIN:
         params["admin"] = PETABENCANA_ADMIN
+    if timeperiod:
+        params["timeperiod"] = str(timeperiod)
     try:
         async with httpx.AsyncClient(
             timeout=HTTP_TIMEOUT_SECONDS, headers={"User-Agent": USER_AGENT}
