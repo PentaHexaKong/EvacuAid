@@ -54,6 +54,8 @@ class OfficialWarningStatus(str, Enum):
 
 class OfficialWarningContext(BaseModel):
     status: OfficialWarningStatus
+    hazardType: str | None = None
+    source: str | None = None
 
 
 class ConfidenceLevel(str, Enum):

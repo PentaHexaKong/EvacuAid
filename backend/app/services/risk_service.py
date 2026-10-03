@@ -209,10 +209,12 @@ async def aggregate_risk(
     if reports_result.available:
         sources.append("PetaBencana")
 
+    if officialWarning and officialWarning.source:
+        sources.append(officialWarning.source)
     stale = _data_is_stale(bmkg_result.data, reports_result.reports)
     response = RiskResponse(
         event=EventData(
-            hazard_type=(
+            hazard_type=officialWarning.hazardType if officialWarning and officialWarning.hazardType else (
                 str(nearest.get("disaster_type")).upper()
                 if nearest and nearest.get("disaster_type")
                 else None

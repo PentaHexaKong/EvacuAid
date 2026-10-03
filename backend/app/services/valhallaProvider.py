@@ -1,9 +1,9 @@
-import math
 from dataclasses import dataclass, field
 
 import httpx
 
 from app.config import VALHALLA_TIMEOUT_SECONDS, VALHALLA_URL
+from app.config import ROUTE_MAX_ALTERNATIVES
 
 
 class RoutingUnavailable(Exception):
@@ -19,20 +19,7 @@ class RouteData:
     distanceM: float
     durationSec: float
     geometry: dict
-    maneuvers: list = field(default_factory=list)
-
-
-def isFiniteNumber(value) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-
-
-def isValidLineString(geometry) -> bool:
-    if not isinstance(geometry, dict) or geometry.get('type') != 'LineString':
-        return False
-    coordinates = geometry.get('coordinates')
-    if not isinstance(coordinates, list) or len(coordinates) < 2:
-        return False
-    return all(isinstance(point, (list, tuple)) and len(point) >= 2 and all(isFiniteNumber(item) for item in point) for point in coordinates)
+    accessibilityEvidence: list[dict] = field(default_factory=list)
 
 
 def decodePolyline(shape: str) -> dict:
@@ -76,10 +63,14 @@ class ValhallaRoutingProvider:
         except httpx.HTTPError:
             return False
 
-    async def route(self, origin: tuple[float, float], destination: tuple[float, float], profile: str = 'WALKING') -> RouteData:
-        payload = {'locations': [{'lat': origin[0], 'lon': origin[1]}, {'lat': destination[0], 'lon': destination[1]}], 'costing': 'pedestrian', 'units': 'kilometers', 'shape_format': 'geojson'}
-        if profile == 'WHEELCHAIR':
-            payload['costing_options'] = {'pedestrian': {'type': 'wheelchair', 'step_penalty': 100000, 'max_hiking_difficulty': 0}}
+    async def route(self, origin: tuple[float, float], destination: tuple[float, float]) -> RouteData:
+        return (await self.routes(origin, destination, maxCandidates=1))[0]
+
+    async def routes(self, origin: tuple[float, float], destination: tuple[float, float], waypoints: list[tuple[float, float]] | None = None, maxCandidates: int = ROUTE_MAX_ALTERNATIVES) -> list[RouteData]:
+        locations = [origin, *(waypoints or []), destination]
+        payload = {'locations': [{'lat': point[0], 'lon': point[1], 'type': 'break'} for point in locations], 'costing': 'pedestrian', 'units': 'kilometers', 'shape_format': 'geojson'}
+        if not waypoints and maxCandidates > 1:
+            payload['alternates'] = min(maxCandidates - 1, ROUTE_MAX_ALTERNATIVES - 1)
         try:
             async with httpx.AsyncClient(timeout=self.timeoutSeconds) as client:
                 response = await client.post(f'{self.baseUrl}/route', json=payload)
@@ -90,32 +81,29 @@ class ValhallaRoutingProvider:
         if not response.is_success:
             raise RoutingUnavailable(f'valhalla returned {response.status_code}')
         try:
-            trip = response.json()['trip']
-            summary = trip['summary']
-            legs = trip.get('legs')
-            geometry = trip.get('geometry')
-            if not geometry:
-                if not isinstance(legs, list) or not legs:
-                    raise ValueError('route has no legs')
-                geometry = legs[0].get('shape')
-            if isinstance(geometry, str):
-                geometry = decodePolyline(geometry)
-            if not isValidLineString(geometry):
-                raise ValueError('route geometry is not a valid LineString')
-            distanceM = float(summary['length']) * 1000
-            durationSec = float(summary['time'])
-            if not math.isfinite(distanceM) or not math.isfinite(durationSec) or distanceM < 0 or durationSec < 0:
-                raise ValueError('route summary is invalid')
-            maneuvers = []
-            for maneuver in (legs[0].get('maneuvers', []) if legs else []):
-                begin, end = int(maneuver['begin_shape_index']), int(maneuver['end_shape_index'])
-                if not 0 <= begin <= end < len(geometry['coordinates']):
-                    raise ValueError('invalid maneuver shape indices')
-                maneuver_distance = float(maneuver.get('length', 0)) * 1000
-                maneuver_time = float(maneuver.get('time', 0))
-                if not isFiniteNumber(maneuver_distance) or not isFiniteNumber(maneuver_time) or maneuver_distance < 0 or maneuver_time < 0:
-                    raise ValueError('invalid maneuver summary')
-                maneuvers.append({'instruction': str(maneuver['instruction']), 'beginShapeIndex': begin, 'endShapeIndex': end, 'distanceM': maneuver_distance, 'durationSec': maneuver_time, 'type': int(maneuver.get('type', 0))})
-            return RouteData(distanceM=distanceM, durationSec=durationSec, geometry=geometry, maneuvers=maneuvers)
-        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            body = response.json()
+            trips = [body['trip']] + [item['trip'] for item in body.get('alternates', [])]
+            routes = []
+            for trip in trips[:maxCandidates]:
+                summary = trip['summary']
+                coordinates = []
+                if trip.get('geometry'):
+                    shapes = [trip['geometry']]
+                else:
+                    shapes = [leg['shape'] for leg in trip['legs']]
+                for geometry in shapes:
+                    geometry = decodePolyline(geometry) if isinstance(geometry, str) else geometry
+                    if not isinstance(geometry, dict) or geometry.get('type') != 'LineString':
+                        raise ValueError('route geometry is not a GeoJSON LineString')
+                    legCoordinates = geometry['coordinates']
+                    if coordinates and coordinates[-1] != legCoordinates[0]:
+                        raise ValueError('disconnected Valhalla legs')
+                    coordinates.extend(legCoordinates[1:] if coordinates else legCoordinates)
+                distance, duration = float(summary['length']) * 1000, float(summary['time'])
+                from math import isfinite
+                if not isfinite(distance) or not isfinite(duration) or distance <= 0 or duration <= 0:
+                    raise ValueError('invalid route summary')
+                routes.append(RouteData(distanceM=distance, durationSec=duration, geometry={'type': 'LineString', 'coordinates': coordinates}))
+            return routes
+        except (KeyError, TypeError, ValueError, IndexError) as error:
             raise NoRoute(str(error))

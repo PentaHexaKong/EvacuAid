@@ -1,4 +1,3 @@
-<!doctype html>
 <html lang='en'>
 <head>
   <meta charset='utf-8'>
@@ -17,7 +16,7 @@
     button:hover, button.active { background: #1d5a73; border-color: #60c6e8; }
     button.route { background: #15a36e; border-color: #39d79b; font-weight: 700; text-align: center; }
     button.reset { background: #592d3b; border-color: #9b4d61; text-align: center; }
-    #status { margin-top: 22px; padding: 14px; border-radius: 8px; background: #092130; color: #b9d2df; line-height: 1.5; }
+    #status, #weather { margin-top: 18px; padding: 14px; border-radius: 8px; background: #092130; color: #b9d2df; line-height: 1.5; }
     #status.error { background: #4b2027; color: #ffc2c9; }
     #status.warning { background: #514014; color: #ffe7a0; }
     #map { height: 100vh; }
@@ -32,27 +31,29 @@
   <main id='app'>
     <aside>
       <h1>Valhalla Route Sandbox</h1>
-      <p>Place an origin, safe house, and disaster marker. Route calculation calls your local Valhalla engine.</p>
+      <p>Place an origin and candidate destination. EvacuAid scores route distance, time, hazard exposure, and accessibility uncertainty.</p>
       <div class='toolbar'>
         <button data-mode='origin'>Place origin</button>
-        <button data-mode='safeHouse'>Place safe house</button>
+        <button data-mode='safeHouse'>Place candidate destination</button>
         <button data-mode='disaster'>Place disaster</button>
-        <button class='route' id='routeButton'>Route to safe house</button>
+        <button id='liveDataButton'>Load live BMKG and PetaBencana</button>
+        <button class='route' id='routeButton'>Evaluate destination</button>
         <button class='reset' id='resetButton'>Reset markers</button>
       </div>
       <div class='legend'>
         <span><i class='dot origin'></i>Origin</span>
-        <span><i class='dot safeHouse'></i>Safe house</span>
-        <span><i class='dot disaster'></i>Disaster marker</span>
+        <span><i class='dot safeHouse'></i>Unverified destination</span>
+        <span><i class='dot disaster'></i>Scenario hazard</span>
       </div>
       <div id='status'>Choose a placement mode, then click the map.</div>
+      <div id='weather'>BMKG weather has not been loaded.</div>
     </aside>
     <div id='map'></div>
   </main>
   <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
   <script>
     const map = L.map('map').setView([-6.1754, 106.8272], 13)
-    const state = { mode: 'origin', origin: null, safeHouse: null, disaster: null, routeLayer: null }
+    const state = { mode: 'origin', origin: null, safeHouse: null, disaster: null, routeLayer: null, reportsLayer: L.layerGroup().addTo(map) }
     const markerColors = { origin: '#4bb5ff', safeHouse: '#22cf87', disaster: '#ff4d5c' }
     const markers = {}
     const statusElement = document.getElementById('status')
@@ -70,7 +71,7 @@
     function setMode(mode) {
       state.mode = mode
       document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('active', button.dataset.mode === mode))
-      setStatus(`Click the map to place the ${mode === 'safeHouse' ? 'safe house' : mode}.`)
+      setStatus(`Click the map to place the ${mode === 'safeHouse' ? 'candidate destination' : mode}.`)
     }
 
     function markerIcon(type) {
@@ -85,13 +86,59 @@
     function placeMarker(type, latLng) {
       state[type] = latLng
       if (markers[type]) markers[type].remove()
-      markers[type] = L.marker(latLng, { icon: markerIcon(type) }).addTo(map).bindTooltip(type === 'safeHouse' ? 'Safe house' : type)
-      setStatus(`${type === 'safeHouse' ? 'Safe house' : type} placed at ${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}.`)
+      markers[type] = L.marker(latLng, { icon: markerIcon(type) }).addTo(map).bindTooltip(type === 'safeHouse' ? 'Unverified destination' : type)
+      setStatus(`${type === 'safeHouse' ? 'Candidate destination' : type} placed at ${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}.`)
     }
 
-    function routeNearDisaster(coordinates) {
-      if (!state.disaster) return false
-      return coordinates.some(([longitude, latitude]) => L.latLng(latitude, longitude).distanceTo(state.disaster) <= 250)
+    function formatTime(value) {
+      return value ? new Date(value).toLocaleString() : 'not available'
+    }
+
+    function escapeHtml(value) {
+      const element = document.createElement('div')
+      element.textContent = String(value ?? 'Unknown')
+      return element.innerHTML
+    }
+
+    function renderWeather(weather, weatherStatus) {
+      const forecast = weather?.forecasts?.[0]
+      if (!forecast) {
+        document.getElementById('weather').textContent = `BMKG data unavailable. Last fetch: ${formatTime(weatherStatus?.fetchedAt)}.`
+        return
+      }
+      document.getElementById('weather').textContent = `BMKG: ${forecast.weather_desc || 'Unknown'} · ${forecast.temperature_c ?? '?'}°C · humidity ${forecast.humidity_pct ?? '?'}% · fetched ${formatTime(weatherStatus.fetchedAt)}`
+    }
+
+    function renderReports(reports) {
+      state.reportsLayer.clearLayers()
+      let count = 0
+      reports.forEach((report) => {
+        if (!Number.isFinite(report.latitude) || !Number.isFinite(report.longitude)) return
+        count += 1
+        L.circleMarker([report.latitude, report.longitude], { radius: 7, color: '#ff9f43', fillColor: '#ff5c57', fillOpacity: 0.85, weight: 2 })
+          .bindPopup(`<strong>PetaBencana report</strong><br>${escapeHtml(report.disaster_type)}<br>Status: ${escapeHtml(report.status)}<br>Age: ${escapeHtml(report.report_age_minutes)} min<br><small>Supporting evidence, not an authoritative evacuation order.</small>`)
+          .addTo(state.reportsLayer)
+      })
+      return count
+    }
+
+    async function loadExternalData() {
+      const button = document.getElementById('liveDataButton')
+      button.disabled = true
+      setStatus('Fetching BMKG and PetaBencana, then persisting the latest map snapshot...')
+      try {
+        const response = await fetch('/api/external/sync?adm4=31.71.03.1001', { method: 'POST' })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'External data sync failed.')
+        const count = renderReports(data.reports || [])
+        renderWeather(data.weather, data.weatherStatus)
+        const reportMessage = data.reportsStatus.available ? `${count} persisted PetaBencana reports` : `PetaBencana unavailable: ${data.reportsStatus.error}`
+        setStatus(`${reportMessage}. BMKG snapshot: ${data.weatherStatus.available ? 'available' : data.weatherStatus.error || 'unavailable'}.`)
+      } catch (error) {
+        setStatus(`${error.message} Is the EvacuAid backend running on port 8000?`, 'error')
+      } finally {
+        button.disabled = false
+      }
     }
 
     async function requestRoute() {
@@ -99,34 +146,31 @@
         setStatus('Place both an origin and a safe house first.', 'error')
         return
       }
-      setStatus('Valhalla is calculating a pedestrian route...')
+      setStatus('EvacuAid is evaluating the destination with Valhalla, persisted PetaBencana evidence, and accessibility uncertainty...')
       try {
-        const response = await fetch('/route', {
+        const response = await fetch('/api/navigation/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            locations: [
-              { lat: state.origin.lat, lon: state.origin.lng },
-              { lat: state.safeHouse.lat, lon: state.safeHouse.lng }
-            ],
-            costing: 'pedestrian',
-            units: 'kilometers',
-            shape_format: 'geojson'
+            originLatitude: state.origin.lat,
+            originLongitude: state.origin.lng,
+            destinationLatitude: state.safeHouse.lat,
+            destinationLongitude: state.safeHouse.lng,
+            scenarioHazards: state.disaster ? [{ latitude: state.disaster.lat, longitude: state.disaster.lng }] : []
           })
         })
         const data = await response.json()
-        if (!response.ok) throw new Error(data.error || 'Valhalla could not find a route.')
-        const leg = data.trip?.legs?.[0]
-        if (!leg?.shape) throw new Error('Valhalla returned no route geometry.')
-        const coordinates = decodePolyline(leg.shape)
+        if (!response.ok || data.routeStatus !== 'READY') throw new Error(data.error || data.selectionReasonCodes?.join(', ') || 'EvacuAid could not evaluate a route.')
+        const coordinates = data.route.geometry.coordinates
         if (state.routeLayer) state.routeLayer.remove()
-        state.routeLayer = L.polyline(coordinates.map(([longitude, latitude]) => [latitude, longitude]), { color: '#4bb5ff', weight: 6, opacity: 0.85 }).addTo(map)
+        const exposed = data.evaluation.safetyStatus === 'POTENTIALLY_EXPOSED'
+        state.routeLayer = L.polyline(coordinates.map(([longitude, latitude]) => [latitude, longitude]), { color: exposed ? '#ff4d5c' : '#f4b942', weight: 6, opacity: 0.85 }).addTo(map)
         map.fitBounds(state.routeLayer.getBounds(), { padding: [48, 48] })
-        const summary = data.trip.summary
-        const danger = routeNearDisaster(coordinates)
-        setStatus(`${(summary.length * 1000).toFixed(0)} m · ${Math.round(summary.time / 60)} min${danger ? ' · Route passes within 250 m of the disaster marker.' : ' · No nearby disaster marker on the drawn route.'}`, danger ? 'warning' : '')
+        const route = data.route
+        const closestHazard = data.evaluation.closestHazardDistanceM === null ? 'no geolocated report' : `${Math.round(data.evaluation.closestHazardDistanceM)} m`
+        setStatus(`${Math.round(route.distanceM)} m · ${Math.round(route.durationSec / 60)} min · score ${Math.round(route.routeScore)} · ${data.evaluation.safetyStatus} · closest hazard ${closestHazard} · destination is unverified`, exposed ? 'warning' : '')
       } catch (error) {
-        setStatus(`${error.message} Is Docker and Valhalla running on port 8002?`, 'error')
+        setStatus(`${error.message} Is EvacuAid and Valhalla running?`, 'error')
       }
     }
 
@@ -158,6 +202,7 @@
 
     document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)))
     document.getElementById('routeButton').addEventListener('click', requestRoute)
+    document.getElementById('liveDataButton').addEventListener('click', loadExternalData)
     document.getElementById('resetButton').addEventListener('click', () => {
       Object.values(markers).forEach((marker) => marker.remove())
       Object.keys(markers).forEach((key) => delete markers[key])
@@ -167,6 +212,7 @@
     })
     map.on('click', (event) => placeMarker(state.mode, event.latlng))
     setMode('origin')
+    loadExternalData()
   </script>
 </body>
 </html>
