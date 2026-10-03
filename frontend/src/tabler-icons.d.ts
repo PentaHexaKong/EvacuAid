@@ -202,3 +202,18 @@ declare module '@tabler/icons-react-native/IconMapPinOff' {
   const Icon: typeof import('@tabler/icons-react-native').IconMapPinOff;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconDots' {
+  const Icon: typeof import('@tabler/icons-react-native').IconDots;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCube' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCube;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconMap' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMap;
+  export default Icon;
+}

@@ -171,7 +171,7 @@ test('Home quick-access tiles open the map, help request, Buddy and alerts', () 
   fireEvent.press(view.getByRole('button', { name: 'Risk map' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
   fireEvent.press(view.getByRole('button', { name: 'Get help' }));
-  expect(mockRouter.push).toHaveBeenLastCalledWith('/request');
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
   fireEvent.press(view.getByRole('button', { name: 'Buddy' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
   fireEvent.press(view.getByRole('button', { name: 'Alerts' }));

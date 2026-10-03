@@ -1,9 +1,18 @@
 const MIN_SPAN = 0.003;
+// The map buttons sit in a box this tall; the screen fades them once the sheet reaches its lower edge.
+export const MAP_CONTROLS_BOX = 96;
 export type Bounds = { ne: [number, number]; sw: [number, number] };
 type Insets = { top: number; right: number; bottom: number; left: number };
 
 const toMercator = (latitude: number) => Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
 const fromMercator = (y: number) => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;
+
+// The same view as center + zoom (512pt tiles). A tilted camera pivots on this center, so framing survives the pitch,
+// whereas fitting bounds while tilted squeezes the whole box, sheet area included, into the trapezoid.
+export function boundsCenter({ ne, sw }: Bounds, width: number) {
+  const centerY = (toMercator(ne[1]) + toMercator(sw[1])) / 2;
+  return { centerCoordinate: [(ne[0] + sw[0]) / 2, fromMercator(centerY)] as [number, number], zoomLevel: Math.log2((width * 360) / (512 * (ne[0] - sw[0]))) };
+}
 
 export function visibleBounds(points: [number, number][], insets: Insets, size: { width: number; height: number }): Bounds {
   const xs = points.map(point => (point[0] * Math.PI) / 180);

@@ -1,4 +1,4 @@
-import { brand, colors, sky } from './tokens.json';
+import { brand, colors, hazard, sky } from './tokens.json';
 function luminance(hex: string) {
   const values = hex.slice(1).match(/../g)!.map((value) => parseInt(value, 16) / 255).map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
   return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
@@ -39,6 +39,8 @@ test('quiet settings labels stay readable on canvas and white', () => {
 test('soft fills from the design system keep their text readable', () => {
   expect(contrast(colors.muted, colors.chip)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.caution, colors.cautionSoft)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.critical, colors.criticalSoft)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.ink, colors.cautionSoft)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.primary, colors.accentSoft)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.ink, colors.selected)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.primary, colors.selected)).toBeGreaterThanOrEqual(4.5);
@@ -63,5 +65,12 @@ test('recent alert card text stays readable on every level tint', () => {
   for (const { stops } of Object.values(sky)) {
     expect(contrast(colors.ink, stops[2])).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colors.muted, stops[2])).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test('hazard zone outlines stand out 3:1 against the light map and the sheet', () => {
+  for (const color of Object.values(hazard)) {
+    expect(contrast(color, colors.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrast(color, colors.canvas)).toBeGreaterThanOrEqual(3);
   }
 });

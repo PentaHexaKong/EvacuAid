@@ -45,7 +45,7 @@ test('several items fit inside the insets', () => {
   render(<DiscoverMap items={two} selected={null} onSelect={jest.fn()} {...insets} />);
   act(() => mockReady());
   settle();
-  expect(mockFit).toHaveBeenLastCalledWith([two[0].coordinate, two[1].coordinate], { edgePadding: { top: 106, right: 56, bottom: 76, left: 56 }, animated: true });
+  expect(mockFit).toHaveBeenLastCalledWith([two[0].coordinate, two[1].coordinate], { edgePadding: { top: 50, right: 56, bottom: 76, left: 56 }, animated: true });
 });
 test('the route polyline renders only when a route is given', () => {
   const route: [number, number][] = [[106.81, -6.26], [106.82, -6.27]];

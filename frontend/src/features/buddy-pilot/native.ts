@@ -145,6 +145,16 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh.current(); });
     return () => { generation.current += 1; cancelled = true; listener.remove(); watch.current?.remove(); watch.current = null; };
   }, [active, sessionId, token]);
+  useEffect(() => {
+    if (!tracking || !active || !sessionId || !token) return;
+    const timer = setInterval(() => {
+      void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).then(value => {
+        const next = position(value); setLocation(next);
+        return buddyRequest(token, path(sessionId), 'PUT', next);
+      }).catch(fail);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [tracking, active, sessionId, token]);
   return { error, tracking, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
 }
 
@@ -174,4 +184,26 @@ export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en';
   };
   useEffect(() => () => { ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
   return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), speak };
+}
+
+// Local notifications stand in for push on builds that can't receive it: they show while the app runs or is backgrounded.
+Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+
+const NOTIFY_KINDS = new Set(['OFFER', 'INVITATION_REDEEMED']);
+type InboxEntry = { id: string; kind: string; read: boolean; requestId: string | null };
+
+// One local notification per new unread incoming request or friend request; items present on first load are history, not news.
+export function useInboxNotifications(inbox: InboxEntry[], title: (kind: string) => string) {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!seen.current) { seen.current = new Set(inbox.map(item => item.id)); return; }
+    const fresh = inbox.filter(item => !seen.current!.has(item.id) && !item.read && NOTIFY_KINDS.has(item.kind));
+    inbox.forEach(item => seen.current!.add(item.id));
+    if (!fresh.length) return;
+    void (async () => {
+      const permission = await Notifications.getPermissionsAsync();
+      if (!permission.granted) return;
+      for (const item of fresh) await Notifications.scheduleNotificationAsync({ content: { title: title(item.kind), body: 'EvacuAid Buddy', data: item.requestId ? { requestId: item.requestId } : { inboxId: item.id } }, trigger: null });
+    })().catch(() => {});
+  }, [inbox, title]);
 }

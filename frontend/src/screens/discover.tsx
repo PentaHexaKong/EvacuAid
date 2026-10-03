@@ -1,24 +1,33 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
+import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
 import { ActionButton, AppText } from '@/components/ui';
-import { ContentRow, ExampleChip } from '@/components/content';
-import { DiscoverMap, type DiscoverMarker } from '@/components/discover-map';
+import { ContentRow } from '@/components/content';
+import { DiscoverMap, type DiscoverMarker, type MapMode } from '@/components/discover-map';
+import { MAP_CONTROLS_BOX } from '@/components/map-framing';
 import { sampleAlerts } from '@/features/content/samples';
-import { DEMO_SOURCE, type Shelter } from '@/features/navigation/api';
+import { useRecentHazards } from '@/features/hazards/use-recent-hazards';
+import { hazardZones, type ZoneSource } from '@/features/hazards/zones';
+import type { Shelter } from '@/features/navigation/api';
 import { useEvacuationRoute, type EvacuationState } from '@/features/navigation/use-evacuation-route';
 import { useGuestSession } from '@/features/profile/session';
 import { useHaptics } from '@/features/feedback/haptics';
-import { colors, corner, radius } from '@/theme';
+import { colors, corner, hazard, radius, SystemReduceMotionContext } from '@/theme';
 import { spring } from '@/theme/motion';
 
 const MIN_PEEK = 176;
+// Flighty-style floating sheet: inset from the screen edges, its corners concentric with the display's (~54pt).
+const SHEET_INSET = 10;
+const SHEET_RADIUS = 54 - SHEET_INSET;
+// Where the map is framed before there is a location: central Jakarta, matching the map's default camera.
+const DEFAULT_CENTER = { latitude: -6.2675, longitude: 106.8095 };
 
 export function DiscoverScreen() {
   const { user } = useGuestSession();
@@ -44,24 +53,32 @@ function Explore() {
     if (phase === 'unavailable') hapticsRef.current.warning();
   }, [phase]);
   const sheetSpring = useBottomSheetSpringConfigs(spring.sheet);
+  // The map buttons sit top-right under the status bar and fade out as the sheet rises over them.
+  const controlsBottom = insets.top + 8 + MAP_CONTROLS_BOX;
   const controlsStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sheetTop.get(), [insets.top + 72, insets.top + 160], [0, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: interpolate(sheetTop.get(), [insets.top + 72, insets.top + 160], [-8, 0], Extrapolation.CLAMP) }],
+    opacity: interpolate(sheetTop.get(), [controlsBottom, controlsBottom + 48], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: insets.top + 8 }],
   }));
+  const reduceMotion = useContext(SystemReduceMotionContext);
+  const [mode, setMode] = useState<MapMode>(() => (reduceMotion ? '2d' : '3d'));
   const [selected, setSelected] = useState<string | null>(null);
   const [primaryHeight, setPrimaryHeight] = useState(MIN_PEEK);
   const peek = Math.max(MIN_PEEK, primaryHeight + 40);
+  // Flighty-style split: the sheet rests at 55% so the map keeps the top of the screen.
   const snapPoints = useMemo(() => {
-    const first = peek + insets.bottom;
-    const middle = Math.max(height * 0.55, first + 72);
+    const middle = height * 0.55;
+    const first = Math.min(peek + insets.bottom, middle - 72);
     return [first, middle, Math.max(height * 0.92, middle + 48)];
   }, [peek, insets.bottom, height]);
+  const hazards = useRecentHazards();
   const locale = i18n.language;
 
   const shelters = useMemo(() => evacuation.shelters ?? [], [evacuation.shelters]);
   const destinationId = evacuation.route?.response.destination?.shelterId ?? null;
   const focus = shelters.find(item => item.id === (destinationId ?? selected)) ?? shelters[0] ?? null;
   const alert = sampleAlerts[0];
+  const near = evacuation.origin ?? DEFAULT_CENTER;
+  const impact = useMemo(() => hazardZones(hazards.items, near), [hazards.items, near]);
   const markers = useMemo<DiscoverMarker[]>(() => [
     ...shelters.map(item => ({ id: item.id, kind: 'destination' as const, title: item.name, coordinate: { latitude: item.latitude, longitude: item.longitude } })),
     ...sampleAlerts.map(item => ({ id: item.id, kind: 'alert' as const, title: `${t(item.severity)}: ${t(item.title)}`, coordinate: item.coordinate })),
@@ -89,21 +106,26 @@ function Explore() {
   };
 
   return <View style={styles.screen}>
-    <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} userLocation={evacuation.origin} onLocate={evacuation.locate} topInset={insets.top} bottomInset={peek + insets.bottom} controlsStyle={controlsStyle} />
-    <Animated.View style={[styles.statusWrap, { top: insets.top + 8 }, controlsStyle]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.severity)}. ${t(alert.title)}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.status, { backgroundColor: pressed ? colors.canvas : colors.surface }]}>
-        <View style={[styles.dot, { backgroundColor: colors.caution }]} />
-        <AppText variant="button" numberOfLines={1} style={{ flexShrink: 1 }}>{t(alert.severity)}</AppText>
-      </Pressable>
-    </Animated.View>
-    <BottomSheet ref={sheet} index={0} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} enableDynamicSizing={false} topInset={insets.top} backgroundStyle={styles.sheet} handleIndicatorStyle={{ backgroundColor: colors.border, width: 40 }} accessible={false}>
+    <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} zones={impact.zones} mode={mode} onToggleMode={() => setMode(current => (current === '3d' ? '2d' : '3d'))} userLocation={evacuation.origin} onLocate={evacuation.locate} topInset={insets.top} bottomInset={snapPoints[1]} controlsStyle={controlsStyle} />
+    {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
+    <View pointerEvents="box-none" style={styles.sheetFrame}>
+    <BottomSheet ref={sheet} index={1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} enableDynamicSizing={false} topInset={insets.top} backgroundStyle={styles.sheet} handleIndicatorStyle={{ backgroundColor: colors.border, width: 40 }} accessible={false}>
       <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 + insets.bottom, gap: 28 }}>
         <View onLayout={event => setPrimaryHeight(Math.round(event.nativeEvent.layout.height))} style={{ gap: 16, paddingTop: 4 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.title)}. ${t(alert.severity)}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.alertChip, pressed && { opacity: 0.85 }]}>
+            <IconAlertTriangle size={22} color={colors.caution} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <AppText variant="button" numberOfLines={2} style={{ color: colors.caution }}>{t(alert.title)}</AppText>
+              <AppText variant="small" style={{ color: colors.caution }}>{t(alert.severity)}</AppText>
+            </View>
+            <IconChevronRight size={20} color={colors.caution} />
+          </Pressable>
           <Primary state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
         </View>
+        {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
         {evacuation.phase !== 'ready' && shelters.length > 1 && <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('otherShelters')}</AppText>
-          {shelters.filter(item => item.id !== focus?.id).map(item => <ContentRow key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}${item.source === DEMO_SOURCE ? ` · ${t('exampleTag')}` : ''}`} onPress={() => selectShelter(item.id)} />)}
+          {shelters.filter(item => item.id !== focus?.id).map(item => <ContentRow key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}`} onPress={() => selectShelter(item.id)} />)}
         </View>}
         <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('nearbyAlerts')}</AppText>
@@ -111,6 +133,7 @@ function Explore() {
         </View>
       </BottomSheetScrollView>
     </BottomSheet>
+    </View>
   </View>;
 }
 
@@ -123,7 +146,6 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
     const { response } = route;
     const destination = response.destination;
     const evaluation = response.evaluation;
-    const demo = destination?.source === DEMO_SOURCE;
     const handoff = destination && (Platform.OS === 'ios'
       ? `http://maps.apple.com/?daddr=${destination.latitude},${destination.longitude}&dirflg=w`
       : `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}&travelmode=walking`);
@@ -131,7 +153,6 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
       <View style={{ gap: 4 }} accessible accessibilityLabel={`${formatDistance(response.route!.distanceM, locale)}, ${t('minutes', { count: Math.max(1, Math.ceil(response.route!.durationSec / 60)) })}. ${t('walkTo', { name: destination?.name ?? '' })}`}>
         <AppText variant="figure">{formatDistance(response.route!.distanceM, locale)} · {t('minutes', { count: Math.max(1, Math.ceil(response.route!.durationSec / 60)) })}</AppText>
         <AppText variant="button">{t('walkTo', { name: destination?.name ?? '' })}</AppText>
-        <View style={styles.metaRow}>{demo && <ExampleChip />}<AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{t('computedAt', { time: formatTime(route.computedAt, locale) })}</AppText></View>
       </View>
       {evaluation && <View style={{ gap: 8 }}>
         <Evidence caution={evaluation.safetyStatus !== 'NO_KNOWN_HAZARD'}>{t(`hazard_${evaluation.safetyStatus}`)}</Evidence>
@@ -172,14 +193,29 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
     <View style={{ gap: 4 }}>
       <AppText variant="small" style={{ color: colors.muted }}>{t(isNearest ? 'nearestShelter' : 'selectedShelter')}</AppText>
       <AppText variant="section" accessibilityRole="header">{focus.name}</AppText>
-      <View style={styles.metaRow}><AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{formatDistance(focus.distanceM, locale)} {t('fromYou')}</AppText>{focus.source === DEMO_SOURCE && <ExampleChip />}</View>
-    </View>
-    <View style={{ gap: 8 }}>
-      <Evidence caution={focus.wheelchairAccessible !== true}>{t(accessKey(focus))}</Evidence>
-      <Evidence caution={focus.status !== 'OPEN'}>{capacityText(focus, t)}</Evidence>
+      {/* One line of facts instead of cards; anything uncertain keeps the caution color next to its words. */}
+      <AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>
+        {formatDistance(focus.distanceM, locale)}
+        {' · '}<AppText variant="small" style={{ color: focus.wheelchairAccessible === true ? colors.muted : colors.caution }}>{t(accessKey(focus))}</AppText>
+        {' · '}<AppText variant="small" style={{ color: focus.status === 'OPEN' ? colors.muted : colors.caution }}>{capacityText(focus, t)}</AppText>
+      </AppText>
     </View>
     <ActionButton variant="gradient" label={busy ? busyLabel : t(isNearest ? 'routeToShelter' : 'routeHere')} loading={busy} onPress={() => onRoute(isNearest ? undefined : focus.id)} />
   </>;
+}
+
+// The text side of the drawn zones: every color on the map is named here, with the estimate stated.
+function ImpactLegend({ items, locale }: { items: ZoneSource[]; locale: string }) {
+  const { t } = useTranslation();
+  const magnitude = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const names = items.map(item => `${t(`hazard_${item.type}`)}${item.type === 'earthquake' && item.magnitude != null ? ` M${magnitude.format(item.magnitude)}` : ''}`);
+  return <View accessible accessibilityLabel={`${t('impactEstimate')}: ${names.join(', ')}. ${t('impactEstimateNote')}`} style={styles.metaRow}>
+    <AppText variant="small" style={{ color: colors.muted }}>{t('impactEstimate')}</AppText>
+    {names.map((name, index) => <View key={items[index].id} style={styles.legendItem}>
+      <View style={[styles.dot, { backgroundColor: hazard[items[index].type] }]} />
+      <AppText variant="small">{name}</AppText>
+    </View>)}
+  </View>;
 }
 
 function Heading({ title, body }: { title: string; body: string }) {
@@ -209,7 +245,6 @@ function capacityText(shelter: Shelter, t: (key: string, options?: Record<string
 }
 
 const kilometerFormats = new Map<string, Intl.NumberFormat>();
-const timeFormats = new Map<string, Intl.DateTimeFormat>();
 
 function formatDistance(meters: number, locale: string) {
   if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
@@ -218,18 +253,14 @@ function formatDistance(meters: number, locale: string) {
   return `${format.format(meters / 1000)} km`;
 }
 
-function formatTime(date: Date, locale: string) {
-  const format = timeFormats.get(locale) ?? new Intl.DateTimeFormat(locale === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
-  timeFormats.set(locale, format);
-  return format.format(date);
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 16, borderRadius: radius.pill, boxShadow: '0 2px 10px rgba(18, 40, 75, 0.14), 0 0 0 1px rgba(18, 40, 75, 0.05)' },
+  alertChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 10, paddingLeft: 14, paddingRight: 10, ...corner(radius.sm), backgroundColor: colors.cautionSoft, borderWidth: 1, borderColor: colors.cautionBorder },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 10, height: 10, borderRadius: radius.pill },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderCurve: 'continuous', boxShadow: '0 -2px 16px rgba(18, 40, 75, 0.10)' },
+  sheet: { backgroundColor: colors.surface, ...corner(SHEET_RADIUS) },
+  sheetFrame: { position: 'absolute', top: 0, left: SHEET_INSET, right: SHEET_INSET, bottom: SHEET_INSET, overflow: 'hidden', borderBottomLeftRadius: SHEET_RADIUS, borderBottomRightRadius: SHEET_RADIUS, borderCurve: 'continuous' },
   evidence: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, ...corner(radius.sm) },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  statusWrap: { position: 'absolute', left: 16, maxWidth: '72%' },
 });

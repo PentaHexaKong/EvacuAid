@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-export const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/light-v11';
+export const DEFAULT_MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/standard';
 
 export function mapboxToken() {
   const token = process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.trim();

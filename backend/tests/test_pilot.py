@@ -239,6 +239,53 @@ async def test_two_leg_navigation_uses_maneuvers_and_requester_mobility(dbSessio
 
 
 @pytest.mark.asyncio
+async def test_requester_sees_helper_approach_route(dbSession, monkeypatch):
+    from fastapi import HTTPException
+    from app.models.user import UserCreate
+    from app.models.pilot import SessionRoute
+    from app.services import pilotNavigation, user_service
+    from app.services.valhallaProvider import RouteData
+
+    owner = await user_service.create_user(dbSession, UserCreate(name='Requester'))
+    helper = await user_service.create_user(dbSession, UserCreate(name='Helper'))
+    request = PilotRequest(requester_id=owner.id, helper_id=helper.id, status='EN_ROUTE', pilot=True, idempotency_key='approach-test', sharing_consent=True)
+    dbSession.add(request)
+    await dbSession.flush()
+    now = datetime.now(timezone.utc)
+    dbSession.add(PilotLocation(request_id=request.id, user_id=owner.id, latitude=-6.2, longitude=106.8, accuracy_m=5, observed_at=now))
+    helper_point = PilotLocation(request_id=request.id, user_id=helper.id, latitude=-6.21, longitude=106.81, accuracy_m=5, observed_at=now)
+    dbSession.add(helper_point)
+    await dbSession.commit()
+    legs = []
+
+    async def route(self, origin, destination, profile):
+        legs.append((origin, destination))
+        return RouteData(1000, 600, {'type': 'LineString', 'coordinates': [[106.81, -6.21], [106.8, -6.2]]}, [{'instruction': 'Continue', 'beginShapeIndex': 0, 'endShapeIndex': 1, 'distanceM': 1000, 'durationSec': 600, 'type': 1}])
+
+    async def hazards(geometry):
+        return 'UNKNOWN', []
+
+    monkeypatch.setattr(pilotNavigation.ValhallaRoutingProvider, 'route', route)
+    monkeypatch.setattr(pilotNavigation, 'routeHazards', hazards)
+    result = await pilotNavigation.session_route(dbSession, request, owner.id, SessionRoute(leg='TO_REQUESTER', profile='WALKING'))
+    assert result['routeStatus'] == 'READY'
+    assert legs == [((-6.21, 106.81), (-6.2, 106.8))]
+
+    helper_point.observed_at = now - timedelta(minutes=2)
+    await dbSession.commit()
+    with pytest.raises(HTTPException) as stale:
+        await pilotNavigation.session_route(dbSession, request, owner.id, SessionRoute(leg='TO_REQUESTER', profile='WALKING'))
+    assert stale.value.status_code == 409
+
+    helper_point.observed_at = now
+    request.status = 'ARRIVED'
+    await dbSession.commit()
+    with pytest.raises(HTTPException) as arrived:
+        await pilotNavigation.session_route(dbSession, request, owner.id, SessionRoute(leg='TO_REQUESTER', profile='WALKING'))
+    assert arrived.value.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_valhalla_rejects_invalid_maneuver_metrics(monkeypatch):
     from app.services import valhallaProvider
 

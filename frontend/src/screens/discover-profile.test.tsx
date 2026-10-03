@@ -10,6 +10,7 @@ import { PreferencesProvider } from '@/features/preferences/context';
 import { PREFERENCES_KEY } from '@/features/preferences/storage';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
+import { SystemReduceMotionContext } from '@/theme';
 import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
@@ -28,19 +29,6 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, pa
 }, i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
-jest.mock('@expo/ui/swift-ui', () => {
-  const { Pressable, Text, View } = jest.requireActual('react-native');
-  const label = (modifiers: { accessibilityLabel?: string }[] = []) => modifiers.find(item => item.accessibilityLabel)?.accessibilityLabel;
-  return {
-    Host: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    HStack: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    Image: () => null,
-    Text: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
-    Menu: ({ modifiers, children }: { modifiers?: { accessibilityLabel?: string }[]; children: React.ReactNode }) => <View accessible accessibilityRole="button" accessibilityLabel={label(modifiers)}>{children}</View>,
-    Picker: ({ children, onSelectionChange }: { children: React.ReactElement<{ modifiers: { tag?: string }[]; children: string }>[]; onSelectionChange: (value: string) => void }) => <View>{children.map(option => <Pressable key={option.props.children} accessibilityRole="menuitem" accessibilityLabel={option.props.children} onPress={() => onSelectionChange(option.props.modifiers.find(item => item.tag)!.tag!)} />)}</View>,
-  };
-});
-jest.mock('@expo/ui/swift-ui/modifiers', () => ({ accessibilityLabel: (accessibilityLabel: string) => ({ accessibilityLabel }), font: () => ({}), foregroundStyle: () => ({}), tag: (tag: string) => ({ tag }) }));
 
 jest.mock('@/components/discover-map', () => ({ DiscoverMap: (props: DiscoverMapProps) => { mockMapProps = props; return null; } }));
 jest.mock('@gorhom/bottom-sheet', () => {
@@ -107,10 +95,33 @@ test('Discover passes safe-area and sheet insets to the fullscreen map and opens
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
 });
 
-test('the status chip opens the current alert', () => {
+test('the alert chip in the sheet header opens the current alert', () => {
   const view = render(<DiscoverScreen />);
-  fireEvent.press(view.getByRole('button', { name: `${en.cautionLabel}. ${en.rainTitle}` }));
+  fireEvent.press(view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` }));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+});
+
+test('nearby reported hazards become estimated map zones, each named in the sheet', async () => {
+  const quake = { id: 'q1', type: 'earthquake', occurredAt: '2026-10-03T01:00:00Z', source: 'BMKG', latitude: -6.5, longitude: 106.9, magnitude: 5.2, depthKm: 10, region: null, felt: null, reportCount: null };
+  const far = { ...quake, id: 'q2', latitude: 2.5, longitude: 128.4 };
+  const fallback = (apiRequest as jest.Mock).getMockImplementation()!;
+  (apiRequest as jest.Mock).mockImplementation(async (path: string, ...rest: unknown[]) => (path === '/v1/hazards/recent' ? { items: [quake, far], sources: { bmkg: { status: 'available', error: null } } } : fallback(path, ...rest)));
+  const view = render(<DiscoverScreen />);
+  expect(await view.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
+  expect(view.getByLabelText(`${en.impactEstimate}: ${en.hazard_earthquake} M5.2. ${en.impactEstimateNote}`)).toBeTruthy();
+  expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1']);
+});
+
+test('the map opens in 3D, flips to flat and back from its control, and starts flat under Reduce Motion', () => {
+  const view = render(<SystemReduceMotionContext.Provider value={false}><DiscoverScreen /></SystemReduceMotionContext.Provider>);
+  expect(mockMapProps.mode).toBe('3d');
+  act(() => mockMapProps.onToggleMode!());
+  expect(mockMapProps.mode).toBe('2d');
+  act(() => mockMapProps.onToggleMode!());
+  expect(mockMapProps.mode).toBe('3d');
+  view.unmount();
+  render(<SystemReduceMotionContext.Provider value><DiscoverScreen /></SystemReduceMotionContext.Provider>);
+  expect(mockMapProps.mode).toBe('2d');
 });
 
 test('without a location Discover offers to find a route and asks the hook to do it', () => {

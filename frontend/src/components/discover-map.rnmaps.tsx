@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import Constants from 'expo-constants';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
 import IconMapPin from '@tabler/icons-react-native/IconMapPin';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './ui';
 import { MapBoundary, MapFallback } from './map-boundary';
-import { colors, corner, radius } from '@/theme';
+import { MAP_CONTROLS_BOX } from './map-framing';
+import { MapControls } from './native-controls';
+import { colors, corner, hazard, radius } from '@/theme';
 import type { DiscoverMapProps } from './discover-map';
 
 export function DiscoverMap(props: DiscoverMapProps) {
@@ -18,7 +20,7 @@ export function DiscoverMap(props: DiscoverMapProps) {
   if (!available) return <MapFallback topInset={props.topInset} />;
   return <MapBoundary key={attempt} fallback={<MapFallback topInset={props.topInset} onRetry={() => setAttempt(count => count + 1)} />}><NativeMap {...props} /></MapBoundary>;
 }
-function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, topInset, bottomInset, controlsStyle }: DiscoverMapProps) {
+function NativeMap({ items, selected, onSelect, route, zones, userLocation, onLocate, topInset, bottomInset, controlsStyle }: DiscoverMapProps) {
   const { t } = useTranslation();
   const map = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
@@ -28,7 +30,7 @@ function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, t
     return () => clearTimeout(timeout);
   }, []);
   const frame = useCallback(() => {
-    const edgePadding = { top: topInset + 96, right: 56, bottom: bottomInset + 56, left: 56 };
+    const edgePadding = { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 };
     const points = route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
     if (points.length === 1) map.current?.animateCamera({ center: points[0], zoom: 14 });
     else if (points.length) map.current?.fitToCoordinates(points, { edgePadding, animated: true });
@@ -40,6 +42,11 @@ function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, t
   }, [ready, frame]);
   return <View style={StyleSheet.absoluteFill}>
     <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={{ latitude: -6.2675, longitude: 106.8095, latitudeDelta: 0.08, longitudeDelta: 0.08 }} onMapReady={() => setReady(true)} showsUserLocation={Boolean(userLocation)} showsMyLocationButton={false} toolbarEnabled={false} mapPadding={{ top: topInset, right: 0, bottom: bottomInset, left: 0 }} accessibilityLabel={t('discoverMapLabel')}>
+      {zones?.features.map(zone => {
+        const tint = hazard[zone.properties.hazard];
+        const core = zone.properties.ring === 'core';
+        return <Polygon key={zone.id} coordinates={zone.geometry.coordinates[0].map(([longitude, latitude]) => ({ latitude, longitude }))} fillColor={`${tint}${core ? '38' : '1A'}`} strokeColor={tint} strokeWidth={core ? 2 : 1.25} />;
+      })}
       {route && <Polyline coordinates={route.map(([longitude, latitude]) => ({ latitude, longitude }))} strokeColor={colors.primary} strokeWidth={6} lineCap="round" lineJoin="round" />}
       {items.map(item => {
         const Icon = item.kind === 'alert' ? IconAlertTriangle : IconMapPin;
@@ -50,17 +57,14 @@ function NativeMap({ items, selected, onSelect, route, userLocation, onLocate, t
         </Marker>;
       })}
     </MapView>
-    <Animated.View style={[styles.locateWrap, { top: topInset + 8 }, controlsStyle]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('centerOnMe')} onPress={() => (userLocation ? frame() : onLocate())} style={({ pressed }) => [styles.locate, { backgroundColor: pressed ? colors.canvas : colors.surface }]}>
-        <IconCurrentLocation size={24} color={colors.primary} />
-      </Pressable>
+    <Animated.View pointerEvents="box-none" style={[styles.controls, controlsStyle]}>
+      <MapControls controls={[{ label: t('centerOnMe'), symbol: 'location', icon: IconCurrentLocation, onPress: () => (userLocation ? frame() : onLocate()) }]} />
     </Animated.View>
     {timedOut && !ready && <View style={[styles.notice, { top: topInset + 68 }]}><AppText accessibilityRole="alert" variant="small">{t('discoverMapUnavailable')}</AppText></View>}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  locateWrap: { position: 'absolute', right: 16 },
-  locate: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(18, 40, 75, 0.14), 0 0 0 1px rgba(18, 40, 75, 0.05)' },
+  controls: { position: 'absolute', top: 0, right: 16, height: MAP_CONTROLS_BOX },
   notice: { position: 'absolute', left: 16, right: 16, padding: 12, ...corner(radius.md), backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
 });

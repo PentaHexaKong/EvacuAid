@@ -13,9 +13,17 @@ async def session_route(db, request, actor, payload):
     requester = await user_service.require_user(db, request.requester_id, include_relations=True)
     if any(item.type == 'MOBILITY_LIMITATION' for item in requester.accessibility):
         payload.profile = 'WHEELCHAIR'
-    if payload.leg == 'TO_REQUESTER' and actor != request.helper_id:
+    approach = payload.leg == 'TO_REQUESTER' and actor == request.requester_id
+    if payload.leg == 'TO_REQUESTER' and actor != request.helper_id and not approach:
         raise HTTPException(403, 'helper only for requester approach')
-    if payload.origin:
+    if approach:
+        if request.status not in ('ACCEPTED', 'EN_ROUTE'):
+            raise HTTPException(409, 'helper is not on the way')
+        point = await db.get(PilotLocation, (request.id, request.helper_id))
+        if not point or point.observed_at < pilotService.now() - timedelta(seconds=30) or point.accuracy_m > 50:
+            raise HTTPException(409, 'helper location unavailable or stale')
+        origin = (point.latitude, point.longitude)
+    elif payload.origin:
         if payload.origin.observedAt < pilotService.now() - timedelta(seconds=30) or payload.origin.accuracyM is None or payload.origin.accuracyM > 50:
             raise HTTPException(409, 'fresh accurate origin required')
         origin = (payload.origin.latitude, payload.origin.longitude)

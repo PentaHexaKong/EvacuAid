@@ -94,7 +94,7 @@ export function OverviewScreen() {
         <ActionButton variant="gradient" label={t('findRouteToShelter')} icon={<IconNavigation size={20} color={colors.surface} />} onPress={() => router.navigate({ pathname: '/discover', params: { route: String(Date.now()) } })} />
         <View style={styles.quickGrid}>
           <View style={styles.quickCell}><QuickTile title={t('quickMap')} detail={t('quickMapDetail')} image={mapArt} onPress={() => router.navigate('/discover')} /></View>
-          <View style={styles.quickCell}><QuickTile title={t('quickHelp')} detail={t('quickHelpDetail')} image={helpArt} onPress={() => router.push('/request')} /></View>
+          <View style={styles.quickCell}><QuickTile title={t('quickHelp')} detail={t('quickHelpDetail')} image={helpArt} onPress={() => router.navigate('/buddy')} /></View>
           <View style={styles.quickCell}><QuickTile title={t('quickBuddy')} detail={t('quickBuddyDetail')} image={buddyArt} onPress={() => router.navigate('/buddy')} /></View>
           <View style={styles.quickCell}><QuickTile title={t('quickAlerts')} detail={t('quickAlertsDetail', { count: activeAlerts })} image={alertsArt} onPress={() => router.navigate('/alerts')} /></View>
         </View>

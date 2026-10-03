@@ -38,7 +38,7 @@ test('the token is trimmed', () => {
   expect(load(null, { token: '  pk.abc \n' }).mapboxToken()).toBe('pk.abc');
 });
 
-test('style URL falls back to Mapbox Light and honours an override', () => {
-  expect(load(null, {}).mapboxStyleUrl()).toBe('mapbox://styles/mapbox/light-v11');
+test('style URL falls back to Mapbox Standard and honours an override', () => {
+  expect(load(null, {}).mapboxStyleUrl()).toBe('mapbox://styles/mapbox/standard');
   expect(load(null, { style: ' mapbox://styles/team/custom ' }).mapboxStyleUrl()).toBe('mapbox://styles/team/custom');
 });

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
@@ -52,6 +53,9 @@ app.include_router(assistance_router)
 app.include_router(navigation_router)
 app.include_router(shelters_router)
 app.include_router(hazards_router)
+if os.getenv('PILOT_DEV_SIMULATION') == '1':
+    from app.routers.pilot_dev import router as pilot_dev_router
+    app.include_router(pilot_dev_router)
 
 
 @app.get("/")

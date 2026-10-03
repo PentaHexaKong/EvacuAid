@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Dimensions } from 'react-native';
 import { DiscoverMap } from './discover-map.mapbox';
-import { visibleBounds } from './map-framing';
+import { boundsCenter, visibleBounds } from './map-framing';
 import type { DiscoverMapProps } from './discover-map';
 import { SystemReduceMotionContext } from '@/theme';
 
@@ -28,6 +28,10 @@ jest.mock('@rnmapbox/maps', () => {
     LocationPuck: () => <View testID="location-puck" />,
     ShapeSource: ({ id, shape, children }: { id: string; shape: object; children: React.ReactNode }) => <View testID={id} shape={shape}>{children}</View>,
     LineLayer: ({ id }: { id: string }) => <View testID={id} />,
+    FillLayer: ({ id }: { id: string }) => <View testID={id} />,
+    StyleImport: ({ config }: { config: object }) => <View testID="style-import" config={config} />,
+    RasterDemSource: ({ children }: { children: React.ReactNode }) => <View testID="dem">{children}</View>,
+    Terrain: () => <View testID="terrain" />,
     MarkerView: ({ coordinate, children }: { coordinate: number[]; children: React.ReactElement }) => { mockMarkerRenders += 1; return React.cloneElement(children, { coordinate }); },
   };
 });
@@ -38,7 +42,7 @@ const telemetryAtImport = [...(jest.requireMock('@rnmapbox/maps').default.setTel
 const rain: DiscoverMapProps['items'][number] = { id: 'rain', title: 'Rain', kind: 'alert', coordinate: { latitude: -6.26, longitude: 106.81 } };
 const hall: DiscoverMapProps['items'][number] = { id: 'hall', title: 'Hall', kind: 'destination', coordinate: { latitude: -6.27, longitude: 106.82 } };
 const insets = { onLocate: jest.fn(), topInset: 10, bottomInset: 20 };
-const frameInsets = { top: 106, right: 56, bottom: 76, left: 56 };
+const frameInsets = { top: 50, right: 56, bottom: 76, left: 56 };
 const expectedBounds = (points: [number, number][]) => visibleBounds(points, frameInsets, Dimensions.get('window'));
 const noPadding = { paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0 };
 const settle = () => act(() => { jest.advanceTimersByTime(150); });
@@ -200,4 +204,44 @@ test('retrying after a render error remounts the map once it can render', () => 
   mockFail = false;
   fireEvent.press(view.getByRole('button', { name: 'Try again' }));
   expect(view.getByTestId('mapbox-map')).toBeTruthy();
+});
+
+test('3D tilts the camera over terrain and raises buildings; 2D lays everything flat', () => {
+  const onToggleMode = jest.fn();
+  const view = render(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} mode="3d" onToggleMode={onToggleMode} />);
+  fireEvent(view.getByTestId('mapbox-map'), 'didFinishLoadingMap');
+  settle();
+  // Tilted, the camera pivots on the flat view's center instead of fitting bounds into the trapezoid.
+  expect(mockCameraProps).toEqual(expect.objectContaining({ pitch: 45, ...boundsCenter(expectedBounds([[106.81, -6.26]]), Dimensions.get('window').width) }));
+  expect(mockCameraProps.bounds).toBeUndefined();
+  expect(view.getByTestId('mapbox-map')).toHaveProp('pitchEnabled', true);
+  expect(view.getByTestId('terrain')).toBeTruthy();
+  expect(view.getByTestId('style-import')).toHaveProp('config', expect.objectContaining({ show3dObjects: true, showPointOfInterestLabels: false }));
+  fireEvent.press(view.getByRole('button', { name: 'Show flat map' }));
+  expect(onToggleMode).toHaveBeenCalledTimes(1);
+  view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} mode="2d" onToggleMode={onToggleMode} />);
+  expect(mockCameraProps).toEqual(expect.objectContaining({ pitch: 0 }));
+  expect(view.getByTestId('mapbox-map')).toHaveProp('pitchEnabled', false);
+  expect(view.queryByTestId('terrain')).toBeNull();
+  expect(view.getByTestId('style-import')).toHaveProp('config', expect.objectContaining({ show3dObjects: false }));
+  expect(view.getByRole('button', { name: 'Show 3D map' })).toBeTruthy();
+});
+
+test('impact zones draw as a fill and an outline only when there are zones', () => {
+  const zone = { type: 'Feature' as const, id: 'q-0', properties: { hazard: 'flood' as const, ring: 'core' as const }, geometry: { type: 'Polygon' as const, coordinates: [[[106.8, -6.2], [106.81, -6.2], [106.8, -6.21], [106.8, -6.2]] as [number, number][]] } };
+  const view = render(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} zones={{ type: 'FeatureCollection', features: [] }} />);
+  expect(view.queryByTestId('hazard-zones')).toBeNull();
+  view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} zones={{ type: 'FeatureCollection', features: [zone] }} />);
+  expect(view.getByTestId('hazard-zones')).toHaveProp('shape', { type: 'FeatureCollection', features: [zone] });
+  expect(view.getByTestId('hazard-zone-fill')).toBeTruthy();
+  expect(view.getByTestId('hazard-zone-line')).toBeTruthy();
+});
+
+test('center and zoom describe the same view as the bounds', () => {
+  const bounds = visibleBounds([[106.8, -6.2], [106.82, -6.25]], { top: 50, right: 56, bottom: 460, left: 56 }, { width: 400, height: 870 });
+  const { centerCoordinate, zoomLevel } = boundsCenter(bounds, 400);
+  expect(512 * 2 ** zoomLevel * (bounds.ne[0] - bounds.sw[0]) / 360).toBeCloseTo(400, 6);
+  expect(centerCoordinate[0]).toBeCloseTo((bounds.ne[0] + bounds.sw[0]) / 2, 9);
+  expect(centerCoordinate[1]).toBeGreaterThan(bounds.sw[1]);
+  expect(centerCoordinate[1]).toBeLessThan(bounds.ne[1]);
 });

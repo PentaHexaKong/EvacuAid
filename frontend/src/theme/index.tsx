@@ -2,7 +2,7 @@ import { createContext } from 'react';
 import { Platform, type TextStyle } from 'react-native';
 import tokens from './tokens.json';
 
-export const { colors, spacing, radius, sky, brand } = tokens;
+export const { colors, spacing, radius, sky, brand, hazard } = tokens;
 export type AlertLevel = keyof typeof sky;
 // Rounding system (2026-10-02): xs 8 · sm 14 · md 20 · lg 24 · xl 32 · pill.
 // Nested corners: inner radius = outer radius - inset, never below 12. Circles use radius.pill without corner().

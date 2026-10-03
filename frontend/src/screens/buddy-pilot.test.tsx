@@ -7,6 +7,7 @@ const mockRefresh = jest.fn();
 const mockSpeak = jest.fn();
 let mockSession: unknown = null;
 let mockContacts: unknown[] = [];
+let mockInvitations: unknown[] = [];
 let mockParams: { code?: string } = {};
 let mockAvailability = { optedIn: false };
 const mockBuddyRequest = jest.fn();
@@ -17,16 +18,17 @@ jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
 jest.mock('@/components/discover-map.native', () => ({ DiscoverMap: () => null }));
 jest.mock('@/features/buddy-pilot/native', () => ({
-  useBuddyNative: () => ({ location: null, tracking: false, error: null, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
+  useInboxNotifications: () => {},
+  useBuddyNative: () => ({ location: null, tracking: false, error: null, enableLocation: async () => {}, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
   useBuddySpeech: ({ onCommand }: { onCommand: (command: string) => void }) => { mockCommand = onCommand; return { speak: mockSpeak, error: null, listening: false }; },
 }));
 jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
 jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyPilot: () => ({
-  contacts: mockContacts, invitations: [], inbox: [], availability: mockAvailability, session: mockSession,
+  contacts: mockContacts, invitations: mockInvitations, incomingContacts: [], inbox: [], availability: mockAvailability, session: mockSession,
   messages: [], locations: [], error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh,
 }) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockSession = null; mockContacts = []; mockParams = {}; mockAvailability = { optedIn: false }; mockRun.mockResolvedValue(undefined); });
+beforeEach(() => { jest.clearAllMocks(); mockSession = null; mockContacts = []; mockInvitations = []; mockParams = {}; mockAvailability = { optedIn: false }; mockRun.mockResolvedValue(undefined); });
 
 test('empty Buddy state offers real invitation and nearby actions without sample people', () => {
   const view = render(<BuddyPilotScreen />);
@@ -100,4 +102,56 @@ test('the requester sees the partner labelled by their role, and no empty name w
   expect(view.getByText('Helper')).toBeTruthy();
   expect(view.getByText('Pilot Helper')).toBeTruthy();
   expect(view.queryByText('Requester')).toBeNull();
+});
+
+test('the segmented control switches between My Buddies and Nearby, and the dev simulator is dev-only', () => {
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByRole('button', { name: 'Create invitation' })).toBeTruthy();
+  fireEvent.press(view.getByRole('menuitem', { name: 'Nearby' }));
+  expect(view.getByRole('switch', { name: 'I am available to help' })).toBeTruthy();
+  expect(view.getByText('No nearby requests yet')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Simulate GPS alert request' })).toBeTruthy();
+  view.unmount();
+  const previous = __DEV__;
+  try {
+    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
+    const release = render(<BuddyPilotScreen />);
+    fireEvent.press(release.getByRole('menuitem', { name: 'Nearby' }));
+    expect(release.queryByRole('button', { name: 'Simulate GPS alert request' })).toBeNull();
+  } finally { (globalThis as unknown as { __DEV__: boolean }).__DEV__ = previous; }
+});
+
+test('a redeemed invitation shows as a friend request that confirms only after the dialog', () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  mockInvitations = [{ id: 'inv-1', status: 'REDEEMED', expiresAt: new Date(Date.now() + 3600000).toISOString(), redeemerUserId: 'user-12345678', redeemerName: 'Baim Pratama' }];
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Wants to be your Buddy')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Confirm' }));
+  expect(mockRun).not.toHaveBeenCalled();
+  alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
+  expect(mockRun).toHaveBeenCalledWith('/invitations/inv-1/confirm', {});
+  alert.mockRestore();
+});
+
+test('a nearby GPS offer surfaces on the Nearby tab with consent-gated Help this person', () => {
+  mockSession = { id: 'gps', requesterUserId: 'nina', helperUserId: null, requesterName: 'Nina Rahma', status: 'WAITING', nearby: true, message: 'Saya perlu bantuan', supportNeeds: ['VISUAL_IMPAIRMENT'], attempts: [{ id: 'offer-gps', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Nearby emergency')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Help this person' })).toBeDisabled();
+  fireEvent.press(view.getByRole('checkbox', { name: 'Share my precise location with my assigned partner during the accepted session.' }));
+  fireEvent.press(view.getByRole('button', { name: 'Help this person' }));
+  expect(mockRun).toHaveBeenCalledWith('/requests/gps/accept', { attemptId: 'offer-gps', sharingConsent: true });
+});
+
+test('the helper session shows one primary action for the current status', () => {
+  const base = { id: 'live', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina Rahma', helperName: 'Me', message: '', supportNeeds: [], attempts: [], meetingConfirmed: false };
+  mockSession = { ...base, status: 'ACCEPTED' };
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Nina Rahma needs help')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'I have arrived' })).toBeNull();
+  mockSession = { ...base, status: 'EN_ROUTE' };
+  view.rerender(<BuddyPilotScreen />);
+  expect(view.getByRole('button', { name: 'I have arrived' })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Start travelling to requester' })).toBeNull();
 });
