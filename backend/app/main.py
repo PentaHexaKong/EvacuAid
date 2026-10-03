@@ -10,9 +10,10 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.config import DEFAULT_ADM4, REDIS_URL
-from app.db.session import engine
+from app.db.session import engine, SessionLocal
 from app.models.risk import RiskRequest, RiskResponse
 from app.routers.context import router as context_router
+from app.routers.externalData import router as external_data_router
 from app.routers.buddies import router as buddies_router
 from app.routers.assistance import router as assistance_router
 from app.routers.navigation import router as navigation_router
@@ -23,6 +24,10 @@ from app.services.valhallaProvider import ValhallaRoutingProvider
 from app.services.bmkg_service import fetch_weather
 from app.services.petabencana_service import fetch_reports
 from app.services.risk_service import aggregate_risk, reports_with_distances
+from app.utils.observability import configureLogging
+
+
+configureLogging()
 
 
 @asynccontextmanager
@@ -36,6 +41,7 @@ async def lifespan(application: FastAPI):
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
 app.include_router(users_router)
 app.include_router(context_router)
+app.include_router(external_data_router)
 app.include_router(buddies_router)
 app.include_router(assistance_router)
 app.include_router(navigation_router)
@@ -59,6 +65,14 @@ async def health() -> dict[str, object]:
     redis_status = "healthy" if await CacheService(getattr(app.state, "redisClient", None)).healthy() else "unavailable"
     valhalla_status = "healthy" if await ValhallaRoutingProvider().health() else "unavailable"
     status = "healthy" if database_status == "healthy" and redis_status == "healthy" and valhalla_status == "healthy" else "degraded"
+    from app.services.hazardIngestionService import providerHealth
+    try:
+        async with SessionLocal() as session:
+            hazardSources = await providerHealth(session)
+    except Exception:
+        hazardSources = {name: {'status': 'unknown', 'optional': True} for name in ('INARISK', 'BMKG_EARTHQUAKE', 'BMKG_CAP', 'FIRMS', 'DEM')}
+    if any(value['status'] != 'available' for value in hazardSources.values()):
+        status = 'degraded'
     return {
         "service": "EvacuAid Backend",
         "status": status,
@@ -66,6 +80,7 @@ async def health() -> dict[str, object]:
         "redis": redis_status,
         "valhalla": valhalla_status,
         "sources": {
+            **hazardSources,
             "BMKG": {"status": "available" if bmkg.available else "unavailable", "error": bmkg.error},
             "PetaBencana": {
                 "status": "available" if reports.available else "unavailable",

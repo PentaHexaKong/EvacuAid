@@ -1,0 +1,6 @@
+# Local datasets and generated data
+data/
+
+# Local Markdown documentation
+*.md
+*.markdown

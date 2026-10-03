@@ -14,6 +14,7 @@ from app.services.cacheService import CacheService, getCache
 from app.services.petabencana_service import PetaBencanaFetchResult, fetch_reports
 from app.services.risk_service import aggregate_risk
 from app.services import assistanceService, navigationService
+from app.services.hazardContextService import officialWarningForLocation
 from app.repositories import buddyRepository
 
 
@@ -60,6 +61,7 @@ async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheServi
         ),
         weatherFetcher,
         reportsFetcher,
+        officialWarning=await officialWarningForLocation(session, user.latitude, user.longitude),
     )
     return ContextResponse(
         event=risk.event,

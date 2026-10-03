@@ -1,6 +1,6 @@
 import pytest
 
-from app.models.navigation import NavigationCreate, NavigationStatus
+from app.models.navigation import NavigationCreate, NavigationPreviewCreate, NavigationStatus
 from app.models.shelter import ShelterCreate
 from app.models.user import LocationUpdate, UserCreate
 from app.services import navigationService, shelterService, user_service
@@ -60,10 +60,9 @@ async def testNavigationSelectsSuitableShelterAndRoutes(dbSession, monkeypatch):
     await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8))
     await shelter(dbSession, 'Full', status='FULL', latitude=-6.2001, longitude=106.8001)
     selected = await shelter(dbSession, 'Open', latitude=-6.201, longitude=106.801)
-    async def emptyReports():
-        from app.services.petabencana_service import PetaBencanaFetchResult
-        return PetaBencanaFetchResult([])
-    monkeypatch.setattr(navigationService, 'fetch_reports', emptyReports)
+    async def emptyReports(session):
+        return []
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
     response = await navigationService.navigationForUser(dbSession, NavigationCreate(userId=user.id), WorkingProvider())
     assert response.routeStatus == NavigationStatus.READY
     assert response.destination.shelterId == selected.id
@@ -88,3 +87,32 @@ async def testValhallaProviderDecodesEncodedRouteGeometry(monkeypatch):
     assert route.geometry == {'type': 'LineString', 'coordinates': [[0.0, 0.0], [0.1, 0.1]]}
     assert route.distanceM == 100
     assert route.durationSec == 60
+
+
+@pytest.mark.asyncio
+async def testNavigationKeepsCrowdsourcedHazardsAsPotentialExposure(dbSession, monkeypatch):
+    user = await user_service.create_user(dbSession, UserCreate(name='Safety Route User'))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8))
+    exposed = await shelter(dbSession, 'Exposed', latitude=-6.201, longitude=106.801)
+    safer = await shelter(dbSession, 'Safer', latitude=-6.21, longitude=106.81)
+
+    async def reports(session):
+        return [{'latitude': exposed.latitude, 'longitude': exposed.longitude, 'source': 'PetaBencana'}]
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', reports)
+    response = await navigationService.navigationForUser(dbSession, NavigationCreate(userId=user.id), WorkingProvider())
+    assert response.routeStatus == NavigationStatus.READY
+    assert response.evaluation.safetyStatus.value == 'POTENTIALLY_EXPOSED'
+    assert all(item.riskClass == 'POTENTIALLY_EXPOSED' for item in response.evaluatedCandidates)
+
+
+@pytest.mark.asyncio
+async def testPreviewMarksScenarioHazardAndDestinationUnverified(dbSession, monkeypatch):
+    async def noReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
+    response = await navigationService.previewNavigation(dbSession, NavigationPreviewCreate(originLatitude=-6.2, originLongitude=106.8, destinationLatitude=-6.201, destinationLongitude=106.801, scenarioHazards=[{'latitude': -6.201, 'longitude': 106.801}]), WorkingProvider())
+    assert response.evaluation.safetyStatus.value == 'POTENTIALLY_EXPOSED'
+    assert response.route.routeScore == 0
+    assert response.destinationVerificationStatus == 'UNVERIFIED'
