@@ -27,14 +27,14 @@ def requestResponse(request: AssistanceRequest) -> AssistanceResponse:
     return AssistanceResponse(id=request.id, userId=request.userId, buddyUserId=request.buddyUserId, eventId=request.eventId, status=request.status, requestedAt=request.requestedAt, notifiedAt=request.notifiedAt, acceptedAt=request.acceptedAt, enRouteAt=request.enRouteAt, arrivedAt=request.arrivedAt, evacuatingAt=request.evacuatingAt, safeAt=request.safeAt, cancelledAt=request.cancelledAt, expiredAt=request.expiredAt, updatedAt=request.updatedAt)
 
 
-async def createRequest(session: AsyncSession, payload: AssistanceCreate) -> AssistanceRequest:
-    await user_service.require_user(session, payload.userId)
+async def createRequest(session: AsyncSession, userId: uuid.UUID, payload: AssistanceCreate) -> AssistanceRequest:
+    await user_service.require_user(session, userId)
     if payload.buddyUserId is not None:
         await user_service.require_user(session, payload.buddyUserId)
-        relationship = await buddyRepository.getRelationshipForPair(session, payload.userId, payload.buddyUserId)
+        relationship = await buddyRepository.getRelationshipForPair(session, userId, payload.buddyUserId)
         if relationship is None or relationship.status != 'ACTIVE':
             raise HTTPException(status_code=409, detail='a specific buddy must have an active relationship')
-    request = AssistanceRequest(userId=payload.userId, buddyUserId=payload.buddyUserId, eventId=payload.eventId, status='REQUESTED')
+    request = AssistanceRequest(userId=userId, buddyUserId=payload.buddyUserId, eventId=payload.eventId, status='REQUESTED')
     session.add(request)
     try:
         await session.commit()

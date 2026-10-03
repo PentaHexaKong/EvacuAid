@@ -1,16 +1,17 @@
 import pytest
+from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from app.models.assistance import AssistanceCreate
 from app.models.buddy import BuddyInvitationCreate
 from app.services import assistanceService, buddyService, user_service
-from app.models.user import LocationUpdate, UserCreate
+from app.models.user import LocationUpdate, UserCreate, UserUpdate
 
 
 async def createUser(dbSession, name, latitude=None, longitude=None):
     user = await user_service.create_user(dbSession, UserCreate(name=name))
     if latitude is not None:
-        await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=latitude, longitude=longitude))
+        await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=latitude, longitude=longitude, observed_at=datetime.now(timezone.utc)))
     return user
 
 
@@ -67,6 +68,9 @@ async def testCandidatesUsePostgisDistanceAndLevelRanking(dbSession):
     await activeRelationship(dbSession, user, primary, 'PRIMARY')
     await activeRelationship(dbSession, user, secondary, 'SECONDARY')
     await activeRelationship(dbSession, user, missingLocation, 'COMMUNITY')
+    await user_service.update_user(dbSession, user.id, UserUpdate(share_location_with_buddies=True))
+    await user_service.update_user(dbSession, primary.id, UserUpdate(share_location_with_buddies=True))
+    await user_service.update_user(dbSession, secondary.id, UserUpdate(share_location_with_buddies=True))
     candidates = await buddyService.candidateBuddies(dbSession, user.id)
     assert [candidate.buddyUserId for candidate in candidates] == [primary.id, secondary.id, missingLocation.id]
     assert candidates[0].distanceM is not None
@@ -79,7 +83,7 @@ async def testAssistanceStateMachineAndTerminalProtection(dbSession):
     user = await createUser(dbSession, 'Kiki')
     buddy = await createUser(dbSession, 'Lina')
     await activeRelationship(dbSession, user, buddy)
-    request = await assistanceService.createRequest(dbSession, AssistanceCreate(userId=user.id, buddyUserId=buddy.id))
+    request = await assistanceService.createRequest(dbSession, user.id, AssistanceCreate(buddyUserId=buddy.id))
     assert request.status == 'REQUESTED'
     notified = await assistanceService.transitionRequest(dbSession, request.id, 'notify', user.id)
     accepted = await assistanceService.transitionRequest(dbSession, request.id, 'accept', buddy.id)
@@ -101,7 +105,7 @@ async def testUnassignedRequestCanBeNotifiedWithActiveCandidate(dbSession):
     user = await createUser(dbSession, 'Maya')
     buddy = await createUser(dbSession, 'Nina')
     await activeRelationship(dbSession, user, buddy, 'SECONDARY')
-    request = await assistanceService.createRequest(dbSession, AssistanceCreate(userId=user.id))
+    request = await assistanceService.createRequest(dbSession, user.id, AssistanceCreate())
     notified = await assistanceService.transitionRequest(dbSession, request.id, 'notify', user.id, buddy.id)
     assert notified.buddyUserId == buddy.id
     assert notified.status == 'NOTIFIED'
