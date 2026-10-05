@@ -1,11 +1,12 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ROUTE_ACCESSIBILITY_TOLERANCE, ROUTE_CROWDSOURCED_CONFIDENCE, ROUTE_CROWDSOURCED_PROBABILITY, ROUTE_CROWDSOURCED_SEVERITY, ROUTE_RISK_TOLERANCE
-from app.models.navigation import NavigationCreate, NavigationDestination, NavigationEvaluation, NavigationPreviewCreate, NavigationPreviewResponse, NavigationResponse, NavigationRoute, NavigationStatus, RejectedShelter, RouteEvidence, RouteEvidenceKind
+from app.models.navigation import HazardStatus, NavigationCreate, NavigationDestination, NavigationEvaluation, NavigationPreviewCreate, NavigationPreviewResponse, NavigationResponse, NavigationRoute, NavigationStatus, RejectedShelter, RouteEvidence, RouteEvidenceKind
 from app.repositories import shelterRepository
 from app.services import externalDataService, shelterService, user_service
 from app.services.routeEvaluationService import EvaluatedRoute, applyRanking, candidateResponse, evaluateRoute, rankingKey
@@ -14,7 +15,9 @@ from app.services.hazardEvaluator import destinationExcluded
 from app.models.hazard import HazardEvidence
 from app.repositories import hazardRepository
 from app.config import HAZARD_SEARCH_METERS, HAZARD_TTLS, HAZARD_UNCERTAINTY_TOLERANCE
-from app.services.valhallaProvider import NoRoute, RoutingUnavailable, ValhallaRoutingProvider
+from app.services.petabencana_service import fetch_reports
+from app.services.valhallaProvider import NoRoute, RoutingUnavailable, ValhallaRoutingProvider, isValidLineString
+from app.utils.geo import calculate_distance_meters
 
 
 logger = logging.getLogger(__name__)
@@ -82,8 +85,14 @@ def logEvaluation(result: str, startedAt: float, candidates: list[EvaluatedRoute
 async def navigationForUser(session: AsyncSession, payload: NavigationCreate, provider: ValhallaRoutingProvider | None = None) -> NavigationResponse:
     startedAt = perf_counter()
     user = await user_service.require_user(session, payload.userId, include_relations=True)
-    if user.latitude is None or user.longitude is None:
+    if payload.origin is not None:
+        originLatitude, originLongitude = payload.origin.latitude, payload.origin.longitude
+    elif user.latitude is None or user.longitude is None or user.locationObservedAt is None:
         raise HTTPException(status_code=409, detail='user location is required for navigation')
+    elif user.locationObservedAt < datetime.now(timezone.utc) - timedelta(minutes=15):
+        raise HTTPException(status_code=409, detail='user location is stale; update location')
+    else:
+        originLatitude, originLongitude = user.latitude, user.longitude
     mobilityRequired = any(item.type == 'MOBILITY_LIMITATION' for item in user.accessibility)
     rejected: list[RejectedShelter] = []
     if payload.destinationShelterId:
@@ -92,9 +101,9 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
             raise HTTPException(status_code=404, detail='shelter not found')
         candidates = [(shelter, 0.0)]
     else:
-        candidates = await shelterRepository.nearbyShelters(session, user.latitude, user.longitude, 10000, 10)
+        candidates = await shelterRepository.nearbyShelters(session, originLatitude, originLongitude, 10000, 10)
     try:
-        evidence = await routeEvidence(session, center=(user.latitude, user.longitude))
+        evidence = await routeEvidence(session, center=(originLatitude, originLongitude))
     except hazardRepository.HazardStateUnavailable as error:
         return NavigationResponse(routeStatus=NavigationStatus.UNAVAILABLE, selectionReasonCodes=['NO_FEASIBLE_ROUTE', str(error)])
     viable = []
@@ -114,7 +123,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     providerFailed = False
     for shelter, _, shelterReasons in viable:
         try:
-            routes = await evaluatedCandidates(routing, (user.latitude, user.longitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session)
+            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session)
         except RoutingUnavailable:
             providerFailed = True
             rejected.append(RejectedShelter(shelterId=shelter.id, reasonCodes=['ROUTING_PROVIDER_UNAVAILABLE']))
@@ -169,3 +178,19 @@ async def previewNavigation(session: AsyncSession, payload: NavigationPreviewCre
     navigationRoute, navigationEvaluation = routeResponse(selected)
     logEvaluation('previewReady', startedAt, candidates, selected)
     return NavigationPreviewResponse(routeStatus=NavigationStatus.READY, route=navigationRoute, evaluation=navigationEvaluation, evaluatedCandidates=responses, selectionReasonCodes=navigationEvaluation.reasonCodes + selectionReasons(selected, feasible) + ['DESTINATION_UNVERIFIED', 'PREVIEW_ONLY'])
+
+
+async def routeHazards(geometry: dict) -> tuple[HazardStatus, list[str]]:
+    if not isValidLineString(geometry):
+        return HazardStatus.UNKNOWN, ['ROUTE_GEOMETRY_INVALID']
+    coordinates = geometry['coordinates']
+    reportsResult = await fetch_reports()
+    if not reportsResult.available:
+        return HazardStatus.UNKNOWN, ['HAZARD_DATA_UNAVAILABLE']
+    for report in reportsResult.reports or []:
+        if report.get('latitude') is None or report.get('longitude') is None:
+            continue
+        for longitude, latitude, *_ in coordinates:
+            if calculate_distance_meters(latitude, longitude, report['latitude'], report['longitude']) <= 100:
+                return HazardStatus.POTENTIALLY_EXPOSED, ['POTENTIAL_HAZARD_EXPOSURE', 'CITIZEN_REPORT_SUPPORTING_EVIDENCE']
+    return HazardStatus.NO_KNOWN_HAZARD, ['NO_KNOWN_HAZARD_INTERSECTION']

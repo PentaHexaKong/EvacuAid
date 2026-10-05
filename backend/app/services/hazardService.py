@@ -3,7 +3,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from app.models.hazard import HazardItem, HazardType, HazardsResponse, SourceStatus
+from app.models.hazardFeed import HazardItem, HazardType, HazardsResponse, SourceStatus
 from app.services.bmkg_service import BmkgQuakeResult
 from app.services.petabencana_service import PetaBencanaFetchResult
 

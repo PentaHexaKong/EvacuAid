@@ -149,18 +149,15 @@ test('a located user sees the nearest shelter, other shelters and can route to a
   expect(mockEvac.findRoute).toHaveBeenLastCalledWith('s2');
 });
 
-test('a ready route shows the figures, unknown evidence, and hands off to Apple Maps', () => {
+test('a ready route shows the figures and unknown evidence, with no external map handoff', () => {
   evac({ phase: 'ready', origin, shelters: [hall], route: readyRoute });
-  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   const view = render(<DiscoverScreen />);
   expect(mockMapProps.route).toEqual(readyRoute.coordinates);
   expect(view.getByText(/^900 m · /)).toBeTruthy();
   expect(view.getByText('Walk to Community hall')).toBeTruthy();
   expect(view.getByText(en.hazard_UNKNOWN)).toBeTruthy();
   expect(view.getByText(en.routeAccess_UNKNOWN)).toBeTruthy();
-  expect(view.getByText(en.externalNavigation)).toBeTruthy();
-  fireEvent.press(view.getByRole('button', { name: en.openAppleMaps }));
-  expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?daddr=-6.27,106.82&dirflg=w');
+  expect(view.queryByRole('button', { name: /Apple Maps|Google Maps/ })).toBeNull();
   fireEvent.press(view.getByRole('button', { name: en.chooseAnotherShelter }));
   expect(mockEvac.clearRoute).toHaveBeenCalledTimes(1);
 });
@@ -189,6 +186,13 @@ test('an unavailable route explains the reason and offers a retry', () => {
   expect(view.getByText(en.routeReason_ROUTING_PROVIDER_UNAVAILABLE)).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: en.tryAgain }));
   expect(mockEvac.findRoute).toHaveBeenCalledTimes(1);
+});
+
+test('hazard-aware routing statuses have their own copy', () => {
+  evac({ phase: 'ready', origin, shelters: [hall], route: { ...readyRoute, response: { ...readyRoute.response, evaluation: { safetyStatus: 'EXPOSED', accessibilityStatus: 'UNKNOWN', reasonCodes: [] } } } });
+  expect(render(<DiscoverScreen />).getByText(en.hazard_EXPOSED)).toBeTruthy();
+  evac({ phase: 'unavailable', origin, shelters: [hall], reason: 'NO_FEASIBLE_ROUTE' });
+  expect(render(<DiscoverScreen />).getByText(en.routeReason_NO_FEASIBLE_ROUTE)).toBeTruthy();
 });
 
 test('a denied permission points to Settings', () => {

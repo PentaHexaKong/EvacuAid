@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -146,9 +146,6 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
     const { response } = route;
     const destination = response.destination;
     const evaluation = response.evaluation;
-    const handoff = destination && (Platform.OS === 'ios'
-      ? `http://maps.apple.com/?daddr=${destination.latitude},${destination.longitude}&dirflg=w`
-      : `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}&travelmode=walking`);
     return <>
       <View style={{ gap: 4 }} accessible accessibilityLabel={`${formatDistance(response.route!.distanceM, locale)}, ${t('minutes', { count: Math.max(1, Math.ceil(response.route!.durationSec / 60)) })}. ${t('walkTo', { name: destination?.name ?? '' })}`}>
         <AppText variant="figure">{formatDistance(response.route!.distanceM, locale)} · {t('minutes', { count: Math.max(1, Math.ceil(response.route!.durationSec / 60)) })}</AppText>
@@ -157,10 +154,6 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
       {evaluation && <View style={{ gap: 8 }}>
         <Evidence caution={evaluation.safetyStatus !== 'NO_KNOWN_HAZARD'}>{t(`hazard_${evaluation.safetyStatus}`)}</Evidence>
         <Evidence caution>{t(`routeAccess_${evaluation.accessibilityStatus}`)}</Evidence>
-      </View>}
-      {handoff && <View style={{ gap: 6 }}>
-        <ActionButton variant="gradient" label={t(Platform.OS === 'ios' ? 'openAppleMaps' : 'openGoogleMaps')} onPress={() => { void Linking.openURL(handoff); }} />
-        <AppText variant="small" style={{ color: colors.muted, textAlign: 'center' }}>{t('externalNavigation')}</AppText>
       </View>}
       <ActionButton variant="secondary" label={t('chooseAnotherShelter')} onPress={onChooseAnother} />
     </>;

@@ -3,7 +3,7 @@ import { apiRequest } from '@/features/profile/api';
 export type Coordinate = [number, number];
 export type Origin = { latitude: number; longitude: number; accuracyM: number | null; observedAt: string };
 export type Shelter = { id: string; name: string; latitude: number; longitude: number; status: string; wheelchairAccessible: boolean | null; capacity: number | null; currentOccupancy: number | null; source: string | null; distanceM: number };
-export type HazardStatus = 'NO_KNOWN_HAZARD' | 'POTENTIALLY_EXPOSED' | 'UNKNOWN';
+export type HazardStatus = 'NO_KNOWN_HAZARD' | 'POTENTIALLY_EXPOSED' | 'EXPOSED' | 'UNKNOWN';
 export type AccessibilityStatus = 'COMPATIBLE' | 'POTENTIALLY_INCOMPATIBLE' | 'UNKNOWN';
 export type NavigationResponse = {
   routeStatus: 'NOT_REQUIRED' | 'PENDING' | 'READY' | 'UNAVAILABLE';

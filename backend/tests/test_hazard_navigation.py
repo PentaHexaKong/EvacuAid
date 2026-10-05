@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 
 from app.models.navigation import NavigationCreate, NavigationPreviewCreate, NavigationStatus
@@ -42,7 +44,7 @@ async def testPreviewNoDetourReturnsNoFeasibleRouteAndNoHazardousRecommendation(
 @pytest.mark.asyncio
 async def testShelterInsideCriticalZoneRejectedAndFartherFeasibleShelterSelected(dbSession, monkeypatch):
     user = await user_service.create_user(dbSession, UserCreate(name='SYNTHETIC_TEST_USER'))
-    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0, observed_at=datetime.now(timezone.utc)))
     unsafe = await shelterService.createShelter(dbSession, ShelterCreate(name='SYNTHETIC_TEST_UNSAFE', latitude=0, longitude=0.005, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
     safe = await shelterService.createShelter(dbSession, ShelterCreate(name='SYNTHETIC_TEST_SAFE', latitude=0.01, longitude=0, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
     await hazardRepository.saveEvidence(dbSession, [syntheticEvidence()])
@@ -117,7 +119,7 @@ async def testOfficialEvacuationContextDelegatesToHazardAwareNavigation(dbSessio
     await hazardRepository.saveEvidence(dbSession, [item])
     await dbSession.commit()
     user = await user_service.create_user(dbSession, UserCreate(name='SYNTHETIC_TEST_CONTEXT'))
-    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0.005))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0.005, observed_at=datetime.now(timezone.utc)))
     calls = []
     async def weather(adm4):
         return BmkgFetchResult(None, 'SYNTHETIC_TEST_UNAVAILABLE')
@@ -155,7 +157,7 @@ async def testHazardQueryLimitFailsClosedWithoutTruncatingEvidence(dbSession, mo
 async def testOneDestinationProviderFailureDoesNotDiscardFeasibleShelter(dbSession, monkeypatch):
     from app.services.valhallaProvider import RoutingUnavailable
     user = await user_service.create_user(dbSession, UserCreate(name='SYNTHETIC_TEST_PARTIAL_FAILURE'))
-    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0))
+    await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=0, longitude=0, observed_at=datetime.now(timezone.utc)))
     for index in (1, 2):
         await shelterService.createShelter(dbSession, ShelterCreate(name=f'SYNTHETIC_TEST_{index}', latitude=0, longitude=0.001 * index, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)

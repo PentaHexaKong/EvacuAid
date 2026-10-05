@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import current_user
 from app.db.models import User
-from app.models.hazard import HazardsResponse
+from app.models.hazardFeed import HazardsResponse
 from app.services import hazardService
 from app.services.bmkg_service import fetch_felt_earthquakes
 from app.services.cacheService import CacheService, getCache
