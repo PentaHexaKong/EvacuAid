@@ -51,7 +51,7 @@ async def testShelterInsideCriticalZoneRejectedAndFartherFeasibleShelterSelected
     await dbSession.commit()
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
     class Provider:
-        async def route(self, origin, destination):
+        async def route(self, origin, destination, profile='WALKING'):
             return syntheticRoute([[origin[1], origin[0]], [destination[1], destination[0]]])
     response = await navigationService.navigationForUser(dbSession, NavigationCreate(userId=user.id), Provider())
     assert response.destination.shelterId == safe.id
@@ -162,7 +162,7 @@ async def testOneDestinationProviderFailureDoesNotDiscardFeasibleShelter(dbSessi
         await shelterService.createShelter(dbSession, ShelterCreate(name=f'SYNTHETIC_TEST_{index}', latitude=0, longitude=0.001 * index, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
     class Provider:
-        async def route(self, origin, destination):
+        async def route(self, origin, destination, profile='WALKING'):
             if destination[1] > 0.0015:
                 raise RoutingUnavailable('SYNTHETIC_TEST_UNAVAILABLE')
             return syntheticRoute([[origin[1], origin[0]], [destination[1], destination[0]]])

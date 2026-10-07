@@ -123,7 +123,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     providerFailed = False
     for shelter, _, shelterReasons in viable:
         try:
-            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session)
+            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session, profile=payload.profile)
         except RoutingUnavailable:
             providerFailed = True
             rejected.append(RejectedShelter(shelterId=shelter.id, reasonCodes=['ROUTING_PROVIDER_UNAVAILABLE']))
@@ -151,6 +151,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     selected = ranked[0]
     selectedShelter, shelterReasons, _ = next(item for item in feasible if item[2] is selected)
     route, evaluation = routeResponse(selected)
+    route.profile = 'WHEELCHAIR' if payload.profile == 'WHEELCHAIR' else 'PEDESTRIAN'
     reasons = shelterReasons + evaluation.reasonCodes + selectionReasons(selected, ranked)
     logEvaluation('ready', startedAt, evaluations, selected)
     return NavigationResponse(routeStatus=NavigationStatus.READY, destination=NavigationDestination(shelterId=selectedShelter.id, name=selectedShelter.name, latitude=selectedShelter.latitude, longitude=selectedShelter.longitude), route=route, evaluation=evaluation, selectionReasonCodes=reasons, rejectedCandidates=rejected, evaluatedCandidates=candidateEvaluations)
