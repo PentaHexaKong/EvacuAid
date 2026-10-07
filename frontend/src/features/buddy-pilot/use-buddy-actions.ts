@@ -7,7 +7,7 @@ import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type 
 import type { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
 import type { ApiError } from '@/features/profile/api';
 import { useBuddyNative, useBuddySpeech } from '@/features/buddy-pilot/native';
-import { useBuddyCopy } from '@/features/buddy-pilot/copy';
+import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
 import type { Shelter } from '@/features/navigation/api';
 import { distanceM } from '@/features/buddy-pilot/navigation';
 
@@ -150,7 +150,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (await state.run(`/requests/${session.id}/messages`, { text: text.trim(), idempotencyKey: chatKey.current.key })) { setChat(''); chatKey.current = null; }
   };
   const attempt = session?.attempts.find(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > now && session?.status === 'WAITING');
-  const issue = state.error ?? localError ?? native.error ?? voice.error;
+  const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
   const setCurrentInstruction = (instruction: string) => { currentInstruction.current = instruction; };
   const resetIdempotency = () => { idempotency.current = null; };
 
