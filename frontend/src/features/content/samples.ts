@@ -3,9 +3,6 @@ export const sampleAlerts = [
   { id: 'water', level: 'normal', steps: [], coordinate: { latitude: -6.271, longitude: 106.812 }, title: 'waterTitle', summary: 'waterSummary', body: 'waterBody', severity: 'infoLabel', window: null, issued: '17 Sep 2026 · 07:00 WIB', validity: 'waterValidity', area: 'exampleArea' },
 ] as const;
 
-export const sampleContacts = [
-  { id: 'raka', name: 'Raka Pratama', initials: 'RP', relationship: 'friendLabel' },
-  { id: 'sinta', name: 'Sinta Nuraini', initials: 'SN', relationship: 'familyLabel' },
-] as const;
-
 export const levelLabels = { normal: 'levelNormal', waspada: 'levelWaspada', siaga: 'levelSiaga', awas: 'levelAwas' } as const;
+
+export const topAlert = sampleAlerts.reduce((top, alert) => Object.keys(levelLabels).indexOf(alert.level) > Object.keys(levelLabels).indexOf(top.level) ? alert : top);

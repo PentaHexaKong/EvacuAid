@@ -1,17 +1,17 @@
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Group } from '@/components/grouped-list';
 import IconNavigation from '@tabler/icons-react-native/IconNavigation';
 import { ActionButton, AppText, Page, Panel, StepList } from '@/components/ui';
-import { ContentRow, EmptyContent, LevelChip, SectionTitle } from '@/components/content';
-import { levelLabels, sampleAlerts } from '@/features/content/samples';
+import { AlertRow, EmptyContent, LevelChip, SectionTitle } from '@/components/content';
+import { sampleAlerts } from '@/features/content/samples';
 import { colors } from '@/theme';
 
 export function AlertsScreen({ sheet = false }: { sheet?: boolean }) {
-  const { t } = useTranslation();
   const router = useRouter();
-  return <Page><SectionTitle>{t('alertsIntro')}</SectionTitle><View style={{ gap: 12 }}>
-    {sampleAlerts.length ? sampleAlerts.map(alert => <ContentRow key={alert.id} title={t(alert.title)} detail={`${t(levelLabels[alert.level])} · ${t(alert.area)}\n${alert.issued}`} onPress={() => router.push({ pathname: sheet ? '/alerts/[id]' : '/alert/[id]', params: { id: alert.id } })} />) : <EmptyContent message="noAlerts" />}
+  return <Page><View style={{ gap: 12 }}>
+    {sampleAlerts.length ? <Group>{sampleAlerts.map(alert => <AlertRow key={alert.id} alert={alert} onPress={() => router.push({ pathname: sheet ? '/alerts/[id]' : '/alert/[id]', params: { id: alert.id } })} />)}</Group> : <EmptyContent message="noAlerts" />}
   </View></Page>;
 }
 
