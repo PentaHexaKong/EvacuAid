@@ -227,3 +227,8 @@ declare module '@tabler/icons-react-native/IconPlayerStop' {
   const Icon: typeof import('@tabler/icons-react-native').IconPlayerStop;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconChevronUp' {
+  const Icon: typeof import('@tabler/icons-react-native').IconChevronUp;
+  export default Icon;
+}

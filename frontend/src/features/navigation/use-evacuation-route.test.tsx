@@ -158,3 +158,32 @@ test('a route request routes on arrival and again only when the request changes'
   view.rerender({ request: 'second' });
   await waitFor(() => expect(requestRoute).toHaveBeenCalledTimes(2));
 });
+
+
+let mockStepFree = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ stepFree: mockStepFree }) }));
+beforeEach(() => { mockStepFree = false; });
+
+test.each([false, true])('route profile follows stepFree (%s)', async stepFree => {
+  mockStepFree = stepFree;
+  grant(true);
+  jest.mocked(requestRoute).mockResolvedValue(ready as never);
+  const { result } = await settled();
+  await act(() => result.current.findRoute());
+  const body = jest.mocked(requestRoute).mock.calls[0][0];
+  if (stepFree) expect(body.profile).toBe('WHEELCHAIR');
+  else expect(body).not.toHaveProperty('profile');
+  expect(body).not.toHaveProperty('destinationShelterId');
+});
+
+test('a changed capability uses the latest flag without recreating findRoute', async () => {
+  grant(true);
+  jest.mocked(requestRoute).mockResolvedValue(ready as never);
+  const view = await settled();
+  const findRoute = view.result.current.findRoute;
+  mockStepFree = true;
+  view.rerender({});
+  expect(view.result.current.findRoute).toBe(findRoute);
+  await act(() => findRoute());
+  expect(jest.mocked(requestRoute).mock.calls[0][0].profile).toBe('WHEELCHAIR');
+});

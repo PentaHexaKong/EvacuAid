@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+import { useHaptics } from '@/features/feedback/haptics';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +25,13 @@ export function AlertScreen({ sheet = false }: { sheet?: boolean }) {
   const { t } = useTranslation();
   const router = useRouter();
   const access = useAccess();
+  const haptics = useHaptics();
+  const alerted = useRef(false);
+  useEffect(() => {
+    if (!alert || alerted.current) return;
+    alerted.current = true;
+    haptics.alert(alert.level);
+  }, [alert, haptics.alert]);
   if (!alert) return <Page><EmptyContent /></Page>;
   const go = (pathname: '/buddy' | '/discover', params?: Record<string, string>) => sheet ? router.dismissTo({ pathname, params }) : router.navigate({ pathname, params });
   return <Page>

@@ -65,14 +65,14 @@ test('an id that is not in the loaded feed shows the empty state', () => {
   expect(view.queryByText('What to do')).toBeNull();
 });
 
-let mockAccess = { listen: false, autoRead: false };
+let mockAccess = { listen: false, autoRead: false, stepFree: false };
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
 jest.mock('expo-speech', () => ({ stop: jest.fn(() => Promise.resolve()), speak: jest.fn() }));
-beforeEach(() => { mockAccess = { listen: false, autoRead: false }; jest.clearAllMocks(); jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false); });
+beforeEach(() => { mockAccess = { listen: false, autoRead: false, stepFree: false }; jest.clearAllMocks(); jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false); });
 
 test.each([false, true])('detail offers Listen only with the capability (%s)', listen => {
   find.mockReturnValue(quake);
-  mockAccess = { listen, autoRead: false };
+  mockAccess = { listen, autoRead: false, stepFree: false };
   const view = render(<HazardScreen />);
   expect(Boolean(view.queryByRole('button', { name: 'Listen' }))).toBe(listen);
   expect(Speech.speak).not.toHaveBeenCalled();
@@ -80,11 +80,25 @@ test.each([false, true])('detail offers Listen only with the capability (%s)', l
 
 test('detail auto reads the title and numbered first step on open', async () => {
   find.mockReturnValue(quake);
-  mockAccess = { listen: true, autoRead: true };
+  mockAccess = { listen: true, autoRead: true, stepFree: false };
   const view = render(<HazardScreen />);
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
   const text = jest.mocked(Speech.speak).mock.calls[0][0];
   expect(text).toContain('82 km northeast of Ruteng');
   expect(text).toContain(`1. ${'During shaking, drop, take cover under a sturdy table, and hold on.'}`);
   expect(view.getByRole('button', { name: 'Stop' })).toBeTruthy();
+});
+
+
+test.each(['earthquake', 'haze'])('stepFree adapts only known mobility steps for %s', type => {
+  mockAccess.stepFree = true;
+  find.mockReturnValue({ ...quake, type });
+  const view = render(<HazardScreen />);
+  const en = jest.requireActual('../localization/en.json') as Record<string, string>;
+  for (const step of [1, 2, 3, 4]) {
+    const key = `hazardStep_${type}_${step}`;
+    const mobility = type === 'earthquake' && (step === 1 || step === 3);
+    expect(view.getByText(en[mobility ? `${key}_mobility` : key])).toBeTruthy();
+    if (mobility) expect(view.queryByText(en[key])).toBeNull();
+  }
 });

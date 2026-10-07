@@ -1,3 +1,4 @@
+import { useAccess } from '@/features/access/use-access';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,6 +55,7 @@ export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; toke
 }
 
 export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatFocus }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode; onPrimaryLayout?: (height: number) => void; onChatFocus?: () => void }) {
+  const { soundFree } = useAccess();
   const { state, c, status, support, language, preferences, session, active, requester, partner, native, route, helperRoute, requesterPoint, routeBusy, wheelchair, setWheelchair, shelters, setShelters, selectedShelter, setSelectedShelter, chat, setChat, consent, setConsent, voice, statusText, confirm, catchNative, transition, startNearby, requestRoute, sendMessage, setCurrentInstruction } = a;
   const { t } = useTranslation();
   const [messagesOpen, setMessagesOpen] = useState(false);
@@ -158,7 +160,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       <CheckOption label={c('phoneShare')} checked={session.phoneShared ?? false} onToggle={enabled => { void state.run(`/requests/${session.id}/phone-sharing`, { enabled }, 'PUT'); }} />
     </Card>}
 
-    <ActionButton compact variant="secondary" label={c('readStatus')} onPress={() => { void voice.speak(statusText); }} />
+    {!soundFree && <ActionButton compact variant="secondary" label={c('readStatus')} onPress={() => { void voice.speak(statusText); }} />}
     {!terminal && (requester || session.helperUserId === userId) && <ActionButton variant="secondary" label={c('interrupt')} loading={state.busy} onPress={() => confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'))} />}
     {terminal && <ActionButton label={c('close')} onPress={state.dismissSession} />}
   </View>;

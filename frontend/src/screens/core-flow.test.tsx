@@ -16,7 +16,7 @@ jest.mock('@/features/content/samples', () => {
   // __esModule keeps Babel's interop from copying topAlert once at import, so the getter is read on every render.
   return Object.defineProperties({ ...actual }, {
     __esModule: { value: true },
-    topAlert: { enumerable: true, get: () => (mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert) },
+    topAlert: { enumerable: true, get: () => ({ ...(mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert), ...(mockAlertId ? { id: mockAlertId } : {}) }) },
   });
 });
 let mockShelters: { name: string; distanceM: number }[] | null = null;
@@ -182,7 +182,7 @@ test.each(['id', 'en'])('Home has two quick rows, help and the map, and no alert
 
 
 let mockAutoRead = false;
-jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead }) }));
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead, simpleHome: mockSimpleHome }) }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn(() => Promise.resolve()) }));
 beforeEach(() => { mockAutoRead = false; });
 
@@ -212,4 +212,46 @@ test('Home stays silent at Normal even with autoRead', () => {
   mockTopLevel = 'normal';
   try { render(<OverviewScreen />); expect(speak).not.toHaveBeenCalled(); }
   finally { mockTopLevel = null; }
+});
+
+
+let mockSimpleHome = false;
+let mockAlertId: string | null = null;
+const mockAlertHaptic = jest.fn();
+jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: mockAlertHaptic, tap: jest.fn(), selection: jest.fn() }) }));
+beforeEach(() => { mockSimpleHome = false; mockAlertId = null; });
+
+test('Home vibrates once per alert id across rerenders and tab remounts', () => {
+  mockAlertId = 'haptic-first';
+  const view = render(<OverviewScreen />);
+  view.rerender(<OverviewScreen />);
+  view.unmount();
+  const second = render(<OverviewScreen />);
+  expect(mockAlertHaptic).toHaveBeenCalledTimes(1);
+  mockAlertId = 'haptic-second';
+  second.rerender(<OverviewScreen />);
+  expect(mockAlertHaptic).toHaveBeenCalledTimes(2);
+});
+
+test('Home never vibrates for Normal', () => {
+  mockAlertId = 'haptic-normal';
+  mockTopLevel = 'normal';
+  try { render(<OverviewScreen />); expect(mockAlertHaptic).not.toHaveBeenCalled(); }
+  finally { mockTopLevel = null; }
+});
+
+test('simple Home reveals other alerts and disasters from its expanded disclosure', async () => {
+  mockSimpleHome = true;
+  const view = render(<OverviewScreen />);
+  const row = view.getByRole('button', { name: /More information/ });
+  expect(row).toHaveProp('accessibilityState', { expanded: false });
+  expect(view.queryByText('Other alerts')).toBeNull();
+  expect(view.queryByText('Discover disaster')).toBeNull();
+  await act(async () => fireEvent.press(row));
+  expect(view.getByRole('button', { name: /More information/ })).toHaveProp('accessibilityState', { expanded: true });
+  expect(view.getByText('Other alerts')).toBeTruthy();
+  expect(view.getByText('Discover disaster')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: /More information/ }));
+  expect(view.queryByText('Other alerts')).toBeNull();
+  expect(view.queryByText('Discover disaster')).toBeNull();
 });

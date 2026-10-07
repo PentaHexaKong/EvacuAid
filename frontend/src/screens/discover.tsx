@@ -82,6 +82,11 @@ function Explore() {
   const shelters = useMemo(() => evacuation.shelters ?? [], [evacuation.shelters]);
   const destinationId = evacuation.route?.response.destination?.shelterId ?? null;
   const focus = shelters.find(item => item.id === (destinationId ?? selected)) ?? shelters[0] ?? null;
+  const otherShelters = shelters.filter(item => item.id !== focus?.id);
+  if (access.stepFree) {
+    const rank = (item: Shelter) => item.wheelchairAccessible === true ? 0 : item.wheelchairAccessible === null ? 1 : 2;
+    otherShelters.sort((a, b) => rank(a) - rank(b));
+  }
   const alert = topAlert;
   // "Show on the map" from a disaster's detail page passes its coordinates. The param can also arrive through a deep link, so it is
   // only honoured when it names a hazard already in the feed, and it never replaces what the map says about the user's own surroundings.
@@ -146,7 +151,7 @@ function Explore() {
         {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
         {evacuation.phase !== 'ready' && shelters.length > 1 && <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('otherShelters')}</AppText>
-          <Group>{shelters.filter(item => item.id !== focus?.id).map(item => <Row key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => selectShelter(item.id)} />)}</Group>
+          <Group>{otherShelters.map(item => <Row key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => selectShelter(item.id)} />)}</Group>
         </View>}
         <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('nearbyAlerts')}</AppText>

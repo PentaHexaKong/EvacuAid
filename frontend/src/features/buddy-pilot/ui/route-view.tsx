@@ -1,3 +1,4 @@
+import { useAccess } from '@/features/access/use-access';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, View } from 'react-native';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
@@ -11,6 +12,7 @@ import { buddyStyles, Card, StatusChip } from './parts';
 // Navigation logic is the pilot's NavigationPanel, unchanged; only the presentation is new.
 export function RouteView({ route, position, target, onInstruction, speak, reroute, voiceEnabled }: { route: BuddyRoute; position: Position | null; target: Position | null; onInstruction: (instruction: string) => void; speak: (text: string) => Promise<void>; reroute: () => void; voiceEnabled: boolean }) {
   const { c } = useBuddyCopy();
+  const { soundFree } = useAccess();
   const [progress, setProgress] = useState<ReturnType<typeof routeProgress>>(null);
   const [steps, setSteps] = useState(false);
   const offRoute = useRef({ count: 0, lastFix: '', lastReroute: 0 });
@@ -59,7 +61,7 @@ export function RouteView({ route, position, target, onInstruction, speak, rerou
       : <AppText accessibilityRole="alert" style={{ color: colors.caution }}>{c('stale')}</AppText>}
     {progress?.nearDestination && <AppText style={{ color: colors.primary }}>{c('nearDestination')}</AppText>}
     <View style={buddyStyles.actions}>
-      <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={c('repeat')} onPress={() => { void speak(maneuver?.instruction ?? c('stale')); }} /></View>
+      {!soundFree && <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={c('repeat')} onPress={() => { void speak(maneuver?.instruction ?? c('stale')); }} /></View>}
       <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={c('reroute')} onPress={reroute} /></View>
     </View>
     {handoff && <ActionButton variant="gradient" label={c('openMaps')} onPress={() => { void Linking.openURL(handoff); }} />}

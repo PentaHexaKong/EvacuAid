@@ -20,7 +20,7 @@ export function nearbyShelters({ latitude, longitude }: { latitude: number; long
   return apiRequest<Shelter[]>(`/v1/shelters/nearby?${query}`, undefined, { signal });
 }
 
-export function requestRoute(body: { userId: string; origin: Origin; destinationShelterId?: string }, token: string, signal?: AbortSignal) {
+export function requestRoute(body: { userId: string; origin: Origin; destinationShelterId?: string; profile?: 'WALKING' | 'WHEELCHAIR' }, token: string, signal?: AbortSignal) {
   return apiRequest<NavigationResponse>('/v1/navigation/routes', token, { method: 'POST', body: JSON.stringify(body), signal });
 }
 

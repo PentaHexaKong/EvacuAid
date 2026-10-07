@@ -44,3 +44,13 @@ test('detail auto reads the title and numbered first step on open', async () => 
   expect(text).toContain(`1. ${id[sampleAlerts[0].steps[0]]}`);
   expect(view.getByRole('button', { name: 'Berhenti' })).toBeTruthy();
 });
+
+
+const mockAlertHaptic = jest.fn();
+jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: mockAlertHaptic }) }));
+test('detail fires its alert pattern once on mount across rerenders', () => {
+  const view = render(<AlertScreen />);
+  view.rerender(<AlertScreen />);
+  expect(mockAlertHaptic).toHaveBeenCalledTimes(1);
+  expect(mockAlertHaptic).toHaveBeenCalledWith(sampleAlerts[0].level);
+});

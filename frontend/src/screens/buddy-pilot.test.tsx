@@ -1,5 +1,8 @@
-import { Alert, AppState } from 'react-native';
+import { Children } from 'react';
+import { buddyStyles } from '@/features/buddy-pilot/ui/parts';
+import { Alert, AppState, View } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
+import { RouteView } from '@/features/buddy-pilot/ui/route-view';
 import { BuddyPilotScreen } from './buddy-pilot';
 
 const mockRun = jest.fn();
@@ -216,4 +219,28 @@ test('an active session with a known position becomes a full-screen map with the
   const map = render(<BuddyPilotScreen />);
   expect(map.getByTestId('session-map')).toBeTruthy();
   expect(within(map.getByTestId('session-sheet')).getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+});
+
+
+let mockSoundFree = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ soundFree: mockSoundFree }) }));
+beforeEach(() => { mockSoundFree = false; });
+test.each([false, true])('voice controls and status speech follow soundFree (%s)', soundFree => {
+  mockSoundFree = soundFree;
+  mockSession = { id: 'voice', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina', status: 'ACCEPTED', supportNeeds: [], attempts: [] };
+  const view = render(<BuddyPilotScreen />);
+  expect(Boolean(view.queryByRole('menuitem', { name: 'Speak a command' }))).toBe(!soundFree);
+  expect(Boolean(view.queryByRole('button', { name: 'Read status aloud' }))).toBe(!soundFree);
+  if (soundFree) expect(mockSpeak).not.toHaveBeenCalled();
+  else expect(mockSpeak).toHaveBeenCalled();
+});
+
+test.each([false, true])('repeat guidance is hidden without a gap for soundFree (%s)', soundFree => {
+  mockSoundFree = soundFree;
+  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} position={null} target={null} onInstruction={jest.fn()} speak={mockSpeak} reroute={jest.fn()} voiceEnabled={false} />);
+  expect(view.getByText('Last location is stale. Do not treat it as the current position.')).toBeTruthy();
+  expect(Boolean(view.queryByRole('button', { name: 'Repeat instruction' }))).toBe(!soundFree);
+  expect(view.getByRole('button', { name: 'Recalculate route' })).toBeTruthy();
+  const actions = view.UNSAFE_getAllByType(View).find(node => node.props.style === buddyStyles.actions);
+  expect(Children.toArray(actions?.props.children)).toHaveLength(soundFree ? 1 : 2);
 });

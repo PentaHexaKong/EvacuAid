@@ -1,3 +1,4 @@
+import { useAccess } from '@/features/access/use-access';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, AppState } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -15,6 +16,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const { c, status, language, support, event } = useBuddyCopy();
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
+  const { soundFree } = useAccess();
   const params = useLocalSearchParams<{ code?: string; requestId?: string }>();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (state.session?.status !== 'WAITING') return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [state.session?.status]);
@@ -87,9 +89,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   useEffect(() => {
     if (!session || lastStatus.current === `${session.id}:${session.status}`) return;
     lastStatus.current = `${session.id}:${session.status}`;
-    if (preferences.voiceEnabled) void voice.speak(status(session.status));
+    if (preferences.voiceEnabled && !soundFree) void voice.speak(status(session.status));
     else AccessibilityInfo.announceForAccessibility(status(session.status));
-  }, [session, preferences.voiceEnabled, status, voice]);
+  }, [session, preferences.voiceEnabled, soundFree, status, voice]);
   const refreshState = state.refresh;
   useEffect(() => { if (params.requestId) void refreshState(params.requestId); }, [params.requestId, refreshState]);
   const availabilityPosition = useEffectEvent(() => native.obtainLocation());

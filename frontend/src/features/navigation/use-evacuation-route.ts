@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAccess } from '@/features/access/use-access';
 import * as Location from 'expo-location';
 import { useGuestSession } from '@/features/profile/session';
 import type { ApiError } from '@/features/profile/api';
@@ -22,6 +23,9 @@ async function fix(origin: Origin | null, askPermission: boolean): Promise<Origi
 export function useEvacuationRoute(routeRequest?: string) {
   const session = useGuestSession();
   const sessionRef = useRef(session);
+  const { stepFree } = useAccess();
+  const stepFreeRef = useRef(stepFree);
+  useEffect(() => { stepFreeRef.current = stepFree; });
   useEffect(() => { sessionRef.current = session; });
   const [state, setState] = useState(initial);
   const generation = useRef(0);
@@ -54,7 +58,7 @@ export function useEvacuationRoute(routeRequest?: string) {
       setState(value => ({ ...value, origin, phase: 'routing' }));
       const [shelters, response] = await Promise.all([
         nearbyShelters(origin, signal),
-        requestRoute({ userId: user.id, origin, ...(destinationShelterId ? { destinationShelterId } : {}) }, token, signal),
+        requestRoute({ userId: user.id, origin, ...(stepFreeRef.current ? { profile: 'WHEELCHAIR' as const } : {}), ...(destinationShelterId ? { destinationShelterId } : {}) }, token, signal),
       ]);
       if (!live()) return;
       if (response.routeStatus !== 'READY' || !response.route) {
