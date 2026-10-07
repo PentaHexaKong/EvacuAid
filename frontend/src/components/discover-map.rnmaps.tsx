@@ -9,7 +9,7 @@ import IconMapPin from '@tabler/icons-react-native/IconMapPin';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './ui';
 import { MapBoundary, MapFallback } from './map-boundary';
-import { MAP_CONTROLS_BOX } from './map-framing';
+import { MAP_CONTROLS_BOX, focusCorners } from './map-framing';
 import { MapControls } from './native-controls';
 import { colors, corner, hazard, radius } from '@/theme';
 import type { DiscoverMapProps } from './discover-map';
@@ -20,7 +20,7 @@ export function DiscoverMap(props: DiscoverMapProps) {
   if (!available) return <MapFallback topInset={props.topInset} />;
   return <MapBoundary key={attempt} fallback={<MapFallback topInset={props.topInset} onRetry={() => setAttempt(count => count + 1)} />}><NativeMap {...props} /></MapBoundary>;
 }
-function NativeMap({ items, selected, onSelect, route, zones, userLocation, onLocate, topInset, bottomInset, controlsStyle }: DiscoverMapProps) {
+function NativeMap({ items, selected, onSelect, route, zones, userLocation, focus, onLocate, topInset, bottomInset, controlsStyle }: DiscoverMapProps) {
   const { t } = useTranslation();
   const map = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
@@ -31,10 +31,10 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, onLo
   }, []);
   const frame = useCallback(() => {
     const edgePadding = { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 };
-    const points = route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
+    const points = focus ? focusCorners(focus).map(([longitude, latitude]) => ({ latitude, longitude })) : route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
     if (points.length === 1) map.current?.animateCamera({ center: points[0], zoom: 14 });
     else if (points.length) map.current?.fitToCoordinates(points, { edgePadding, animated: true });
-  }, [route, userLocation, items, topInset, bottomInset]);
+  }, [focus, route, userLocation, items, topInset, bottomInset]);
   useEffect(() => {
     if (!ready) return;
     const settle = setTimeout(frame, 150);
@@ -58,7 +58,7 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, onLo
       })}
     </MapView>
     <Animated.View pointerEvents="box-none" style={[styles.controls, controlsStyle]}>
-      <MapControls controls={[{ label: t('centerOnMe'), symbol: 'location', icon: IconCurrentLocation, onPress: () => (userLocation ? frame() : onLocate()) }]} />
+      <MapControls controls={[{ label: t('centerOnMe'), symbol: 'location', icon: IconCurrentLocation, onPress: () => (userLocation && !focus ? frame() : onLocate()) }]} />
     </Animated.View>
     {timedOut && !ready && <View style={[styles.notice, { top: topInset + 68 }]}><AppText accessibilityRole="alert" variant="small">{t('discoverMapUnavailable')}</AppText></View>}
   </View>;

@@ -30,3 +30,10 @@ export function visibleBounds(points: [number, number][], insets: Insets, size: 
   const toLongitude = (x: number) => (x * 180) / Math.PI;
   return { ne: [toLongitude(middleX + halfWidth), fromMercator(middleY + halfHeight)], sw: [toLongitude(middleX - halfWidth), fromMercator(middleY - halfHeight)] };
 }
+
+// The corners of a box reaching spanKm from a point in every direction, as [longitude, latitude].
+export function focusCorners({ latitude, longitude, spanKm }: { latitude: number; longitude: number; spanKm: number }): [number, number][] {
+  const dLat = spanKm / 111.32;
+  const dLng = spanKm / (111.32 * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
+  return [[longitude - dLng, latitude - dLat], [longitude + dLng, latitude + dLat]];
+}

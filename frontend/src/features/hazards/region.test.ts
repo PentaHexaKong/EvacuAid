@@ -18,10 +18,11 @@ test('unrecognised region text returns null so the card can show it raw', () => 
 });
 
 test('felt intensity keeps the full MMI range, with or without spaces', () => {
-  expect(parseFeltIntensity('II-III Kab. Manggarai')).toEqual({ text: 'II-III', from: 2, to: 3 });
-  expect(parseFeltIntensity('II - III Kab. Gorontalo Utara')).toEqual({ text: 'II-III', from: 2, to: 3 });
-  expect(parseFeltIntensity('IV Kab. Kupang, IV Kota Kupang')).toEqual({ text: 'IV', from: 4, to: null });
-  expect(parseFeltIntensity('III-IV Calang, III Aceh Besar')).toEqual({ text: 'III-IV', from: 3, to: 4 });
+  expect(parseFeltIntensity('II-III Kab. Manggarai')).toEqual({ text: 'II-III', from: 2, to: 3, place: 'Kab. Manggarai' });
+  expect(parseFeltIntensity('II - III Kab. Gorontalo Utara')).toEqual({ text: 'II-III', from: 2, to: 3, place: 'Kab. Gorontalo Utara' });
+  expect(parseFeltIntensity('IV Kab. Kupang, IV Kota Kupang')).toEqual({ text: 'IV', from: 4, to: null, place: 'Kab. Kupang' });
+  expect(parseFeltIntensity('III-IV Calang, III Aceh Besar')).toEqual({ text: 'III-IV', from: 3, to: 4, place: 'Calang' });
+  expect(parseFeltIntensity('III')).toEqual({ text: 'III', from: 3, to: null, place: null });
   expect(parseFeltIntensity('Dirasakan')).toBeNull();
   expect(parseFeltIntensity(null)).toBeNull();
 });

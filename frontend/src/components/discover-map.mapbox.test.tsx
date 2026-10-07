@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Dimensions } from 'react-native';
 import { DiscoverMap } from './discover-map.mapbox';
-import { boundsCenter, visibleBounds } from './map-framing';
+import { boundsCenter, focusCorners, visibleBounds } from './map-framing';
 import type { DiscoverMapProps } from './discover-map';
 import { SystemReduceMotionContext } from '@/theme';
 
@@ -29,6 +29,7 @@ jest.mock('@rnmapbox/maps', () => {
     ShapeSource: ({ id, shape, children }: { id: string; shape: object; children: React.ReactNode }) => <View testID={id} shape={shape}>{children}</View>,
     LineLayer: ({ id }: { id: string }) => <View testID={id} />,
     FillLayer: ({ id }: { id: string }) => <View testID={id} />,
+    CircleLayer: ({ id, ...props }: { id: string; style: object }) => <View testID={id} {...props} />,
     StyleImport: ({ config }: { config: object }) => <View testID="style-import" config={config} />,
     RasterDemSource: ({ children }: { children: React.ReactNode }) => <View testID="dem">{children}</View>,
     Terrain: () => <View testID="terrain" />,
@@ -36,7 +37,7 @@ jest.mock('@rnmapbox/maps', () => {
   };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/en.json')[key] ?? key }) }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 10, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 10, bottom: 34, left: 0, right: 0 }) }));
 
 const telemetryAtImport = [...(jest.requireMock('@rnmapbox/maps').default.setTelemetryEnabled as jest.Mock).mock.calls];
 const rain: DiscoverMapProps['items'][number] = { id: 'rain', title: 'Rain', kind: 'alert', coordinate: { latitude: -6.26, longitude: 106.81 } };
@@ -55,6 +56,37 @@ test('markers use [longitude, latitude] and tapping one selects it', () => {
   expect(view.getByRole('button', { name: 'Rain' })).toHaveProp('coordinate', [106.81, -6.26]);
   fireEvent.press(view.getByRole('button', { name: 'Rain' }));
   expect(onSelect).toHaveBeenCalledWith('rain');
+});
+
+test('credits follow their inset without changing camera framing and default to the framing inset', () => {
+  const props = { ...insets, bottomInset: 400, items: [rain, hall], selected: null, onSelect: jest.fn() };
+  const view = render(<DiscoverMap {...props} creditsInset={200} />);
+  settle();
+  const bounds = mockCameraProps.bounds;
+  expect(view.getByTestId('mapbox-map')).toHaveProp('logoPosition', { left: 12, bottom: 208 - 34 });
+  expect(view.getByTestId('mapbox-map')).toHaveProp('attributionPosition', { left: 100, bottom: 208 - 34 });
+  view.rerender(<DiscoverMap {...props} creditsInset={100} />);
+  settle();
+  expect(mockCameraProps.bounds).toBe(bounds);
+  expect(view.getByTestId('mapbox-map')).toHaveProp('logoPosition', { left: 12, bottom: 108 - 34 });
+  view.rerender(<DiscoverMap {...props} />);
+  expect(view.getByTestId('mapbox-map')).toHaveProp('logoPosition', { left: 12, bottom: 408 - 34 });
+});
+
+test('3D shelter pins float over a ground shadow; alerts and the flat map have none', () => {
+  const school = { ...hall, id: 'school', title: 'School', coordinate: { latitude: -6.28, longitude: 106.83 } };
+  const props = { ...insets, items: [rain, hall, school], onSelect: jest.fn(), selected: 'school' };
+  const view = render(<DiscoverMap {...props} mode="3d" />);
+  const shape = view.getByTestId('shelter-shadows').props.shape;
+  expect(shape.features.map((feature: { id: string; geometry: object }) => [feature.id, feature.geometry])).toEqual([['hall', { type: 'Point', coordinates: [106.82, -6.27] }], ['school', { type: 'Point', coordinates: [106.83, -6.28] }]]);
+  expect(view.getByTestId('shelter-shadow')).toHaveProp('style', expect.objectContaining({ circlePitchAlignment: 'map' }));
+  fireEvent.press(view.getByRole('button', { name: 'Hall' }));
+  expect(props.onSelect).toHaveBeenCalledWith('hall');
+  expect(view.getByRole('button', { name: 'School' })).toHaveProp('accessibilityState', { selected: true });
+  expect(view.getByRole('button', { name: 'Rain' })).toBeTruthy();
+  view.rerender(<DiscoverMap {...props} mode="2d" />);
+  expect(view.queryByTestId('shelter-shadows')).toBeNull();
+  expect(view.getByRole('button', { name: 'School' })).toBeTruthy();
 });
 
 test('items fit their bounds inside the sheet and header insets; no items leaves the camera alone', () => {
@@ -244,4 +276,24 @@ test('center and zoom describe the same view as the bounds', () => {
   expect(centerCoordinate[0]).toBeCloseTo((bounds.ne[0] + bounds.sw[0]) / 2, 9);
   expect(centerCoordinate[1]).toBeGreaterThan(bounds.sw[1]);
   expect(centerCoordinate[1]).toBeLessThan(bounds.ne[1]);
+});
+
+test('a focus frames that place instead of the user, and the center button hands control back', () => {
+  const onLocate = jest.fn();
+  const focus = { latitude: -0.88, longitude: 134.16, spanKm: 15 };
+  const view = render(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} onLocate={onLocate} userLocation={{ latitude: -6.3, longitude: 106.9 }} focus={focus} />);
+  fireEvent(view.getByTestId('mapbox-map'), 'didFinishLoadingMap');
+  settle();
+  const corners = focusCorners(focus);
+  // 15 km is about 0.135 degrees at the equator: the box really surrounds the epicentre.
+  expect(corners[0][1]).toBeCloseTo(-0.88 - 0.1347, 3);
+  expect(corners[1][0]).toBeCloseTo(134.16 + 0.1348, 3);
+  expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds(corners) }));
+  mockSetCamera.mockClear();
+  fireEvent.press(view.getByRole('button', { name: 'Center map on my location' }));
+  expect(onLocate).toHaveBeenCalledTimes(1);
+  expect(mockSetCamera).not.toHaveBeenCalled();
+  view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} onLocate={onLocate} userLocation={{ latitude: -6.3, longitude: 106.9 }} focus={null} />);
+  settle();
+  expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds([[106.9, -6.3]]) }));
 });

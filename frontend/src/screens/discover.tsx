@@ -3,23 +3,25 @@ import { Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs, type BottomSheetBackgroundProps } from '@gorhom/bottom-sheet';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
 import { ActionButton, AppText } from '@/components/ui';
-import { ContentRow } from '@/components/content';
+import { Group, Row } from '@/components/grouped-list';
 import { DiscoverMap, type DiscoverMarker, type MapMode } from '@/components/discover-map';
 import { MAP_CONTROLS_BOX } from '@/components/map-framing';
-import { sampleAlerts } from '@/features/content/samples';
+import { sampleAlerts, topAlert } from '@/features/content/samples';
 import { useRecentHazards } from '@/features/hazards/use-recent-hazards';
-import { hazardZones, type ZoneSource } from '@/features/hazards/zones';
+import { hazardZones, zoneRadii, type ZoneSource } from '@/features/hazards/zones';
 import type { Shelter } from '@/features/navigation/api';
 import { useEvacuationRoute, type EvacuationState } from '@/features/navigation/use-evacuation-route';
+import { formatDistance } from '@/features/navigation/distance';
 import { useGuestSession } from '@/features/profile/session';
 import { useHaptics } from '@/features/feedback/haptics';
-import { colors, corner, hazard, radius, SystemReduceMotionContext } from '@/theme';
+import { colors, corner, hazard, radius, sky, SystemReduceMotionContext } from '@/theme';
 import { spring } from '@/theme/motion';
 
 const MIN_PEEK = 176;
@@ -38,7 +40,7 @@ function Explore() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { route: routeRequest } = useLocalSearchParams<{ route?: string }>();
+  const { route: routeRequest, focus: focusRequest } = useLocalSearchParams<{ route?: string; focus?: string }>();
   const evacuation = useEvacuationRoute(routeRequest);
   const { ensureGuest } = useGuestSession();
   const sheet = useRef<BottomSheet>(null);
@@ -70,15 +72,26 @@ function Explore() {
     const first = Math.min(peek + insets.bottom, middle - 72);
     return [first, middle, Math.max(height * 0.92, middle + 48)];
   }, [peek, insets.bottom, height]);
+  const [sheetIndex, setSheetIndex] = useState(1);
+  const creditsInset = snapPoints[Math.min(sheetIndex, 1)];
   const hazards = useRecentHazards();
   const locale = i18n.language;
 
   const shelters = useMemo(() => evacuation.shelters ?? [], [evacuation.shelters]);
   const destinationId = evacuation.route?.response.destination?.shelterId ?? null;
   const focus = shelters.find(item => item.id === (destinationId ?? selected)) ?? shelters[0] ?? null;
-  const alert = sampleAlerts[0];
-  const near = evacuation.origin ?? DEFAULT_CENTER;
+  const alert = topAlert;
+  // "Show on the map" from a disaster's detail page passes its coordinates; the map and the impact legend then describe that place.
+  const mapFocus = useMemo(() => {
+    const [latitude, longitude] = (focusRequest ?? '').split(',').map(Number);
+    if (!focusRequest || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+    const source = hazards.items.find(item => item.latitude === latitude && item.longitude === longitude);
+    // Wide enough to show the whole estimated impact ring, never tighter than a district.
+    return { latitude, longitude, spanKm: Math.max(15, (source ? zoneRadii(source).at(-1) ?? 0 : 0) * 1.6) };
+  }, [focusRequest, hazards.items]);
+  const near = mapFocus ?? evacuation.origin ?? DEFAULT_CENTER;
   const impact = useMemo(() => hazardZones(hazards.items, near), [hazards.items, near]);
+  const locate = () => { if (mapFocus) router.setParams({ focus: '' }); evacuation.locate(); };
   const markers = useMemo<DiscoverMarker[]>(() => [
     ...shelters.map(item => ({ id: item.id, kind: 'destination' as const, title: item.name, coordinate: { latitude: item.latitude, longitude: item.longitude } })),
     ...sampleAlerts.map(item => ({ id: item.id, kind: 'alert' as const, title: `${t(item.severity)}: ${t(item.title)}`, coordinate: item.coordinate })),
@@ -106,34 +119,41 @@ function Explore() {
   };
 
   return <View style={styles.screen}>
-    <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} zones={impact.zones} mode={mode} onToggleMode={() => setMode(current => (current === '3d' ? '2d' : '3d'))} userLocation={evacuation.origin} onLocate={evacuation.locate} topInset={insets.top} bottomInset={snapPoints[1]} controlsStyle={controlsStyle} />
+    <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} zones={impact.zones} mode={mode} onToggleMode={() => setMode(current => (current === '3d' ? '2d' : '3d'))} userLocation={evacuation.origin} focus={mapFocus} onLocate={locate} topInset={insets.top} bottomInset={snapPoints[1]} creditsInset={creditsInset} controlsStyle={controlsStyle} />
     {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
     <View pointerEvents="box-none" style={styles.sheetFrame}>
-    <BottomSheet ref={sheet} index={1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} enableDynamicSizing={false} topInset={insets.top} backgroundStyle={styles.sheet} handleIndicatorStyle={{ backgroundColor: colors.border, width: 40 }} accessible={false}>
+    <BottomSheet ref={sheet} index={1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={insets.top} backgroundComponent={SheetBackground} handleIndicatorStyle={{ backgroundColor: sky[alert.level].ink, opacity: 0.25, width: 40 }} accessible={false}>
       <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 + insets.bottom, gap: 28 }}>
         <View onLayout={event => setPrimaryHeight(Math.round(event.nativeEvent.layout.height))} style={{ gap: 16, paddingTop: 4 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.title)}. ${t(alert.severity)}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.alertChip, pressed && { opacity: 0.85 }]}>
-            <IconAlertTriangle size={22} color={colors.caution} />
+            <IconAlertTriangle size={22} color={sky[alert.level].ink} />
             <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="button" numberOfLines={2} style={{ color: colors.caution }}>{t(alert.title)}</AppText>
-              <AppText variant="small" style={{ color: colors.caution }}>{t(alert.severity)}</AppText>
+              <AppText variant="button" numberOfLines={2} style={{ color: sky[alert.level].ink }}>{t(alert.title)}</AppText>
+              <AppText variant="small" style={{ color: sky[alert.level].ink }}>{t(alert.severity)}</AppText>
             </View>
-            <IconChevronRight size={20} color={colors.caution} />
+            <IconChevronRight size={20} color={sky[alert.level].ink} />
           </Pressable>
           <Primary state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
         </View>
         {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
         {evacuation.phase !== 'ready' && shelters.length > 1 && <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('otherShelters')}</AppText>
-          {shelters.filter(item => item.id !== focus?.id).map(item => <ContentRow key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}`} onPress={() => selectShelter(item.id)} />)}
+          <Group>{shelters.filter(item => item.id !== focus?.id).map(item => <Row key={item.id} title={item.name} detail={`${formatDistance(item.distanceM, locale)} · ${t(accessKey(item))}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => selectShelter(item.id)} />)}</Group>
         </View>}
         <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('nearbyAlerts')}</AppText>
-          {sampleAlerts.map(item => <ContentRow key={item.id} title={t(item.title)} detail={`${t(item.severity)} · ${item.issued}`} onPress={() => openAlert(item.id)} />)}
+          <Group>{sampleAlerts.map(item => <Row key={item.id} title={t(item.title)} detail={`${t(item.severity)} · ${item.issued}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => openAlert(item.id)} />)}</Group>
         </View>
       </BottomSheetScrollView>
     </BottomSheet>
     </View>
+  </View>;
+}
+
+function SheetBackground({ style }: BottomSheetBackgroundProps) {
+  const { stops } = sky[topAlert.level];
+  return <View pointerEvents="none" style={[style, styles.sheet]}>
+    <LinearGradient colors={[stops[1], stops[2], colors.surface]} locations={[0, 0.5, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 168 }} />
   </View>;
 }
 
@@ -237,22 +257,14 @@ function capacityText(shelter: Shelter, t: (key: string, options?: Record<string
   return t('capacityFilled', { used: shelter.currentOccupancy, total: shelter.capacity });
 }
 
-const kilometerFormats = new Map<string, Intl.NumberFormat>();
-
-function formatDistance(meters: number, locale: string) {
-  if (meters < 1000) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
-  const format = kilometerFormats.get(locale) ?? new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
-  kilometerFormats.set(locale, format);
-  return `${format.format(meters / 1000)} km`;
-}
 
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
-  alertChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 10, paddingLeft: 14, paddingRight: 10, ...corner(radius.sm), backgroundColor: colors.cautionSoft, borderWidth: 1, borderColor: colors.cautionBorder },
+  alertChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 10, paddingLeft: 14, paddingRight: 10, ...corner(radius.sm) },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 10, height: 10, borderRadius: radius.pill },
-  sheet: { backgroundColor: colors.surface, ...corner(SHEET_RADIUS) },
+  sheet: { backgroundColor: colors.surface, ...corner(SHEET_RADIUS), overflow: 'hidden' },
   sheetFrame: { position: 'absolute', top: 0, left: SHEET_INSET, right: SHEET_INSET, bottom: SHEET_INSET, overflow: 'hidden', borderBottomLeftRadius: SHEET_RADIUS, borderBottomRightRadius: SHEET_RADIUS, borderCurve: 'continuous' },
   evidence: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, ...corner(radius.sm) },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
