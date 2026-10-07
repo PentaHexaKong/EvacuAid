@@ -49,7 +49,7 @@ const TOGGLES: { key: Toggle; Icon: Icon }[] = [
   { key: 'textEnabled', Icon: IconTextCaption },
 ];
 
-// Ducat-style settings sheet: muted labels on the left, the value in ink on the right, rows grouped by short dividers.
+// Ducat-style settings sheet: ink labels on the left, the muted value on the right, rows grouped by short dividers.
 export function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { profile, name, accessibility, ready, error, retry, saveLocation, deleteLocation, saveProfile } = useProfile();
@@ -125,7 +125,7 @@ export function ProfileScreen() {
     <View style={{ gap: 4 }}>
       <View style={styles.eyebrow}><IconUser size={16} color={colors.muted} /><AppText variant="small" style={{ color: colors.muted }}>{t('accountInfo')}</AppText></View>
       <AppText variant="title" accessibilityRole="header">{name || t('profileFallback')}</AppText>
-      <AppText style={{ color: colors.muted }}>{profile?.phone || t('guestDevice')}</AppText>
+      {profile?.phone ? <AppText style={{ color: colors.muted }}>{profile.phone}</AppText> : null}
     </View>
     <View style={[styles.status, { marginTop: 20 }]}>
       <View style={{ flex: 1, gap: 2 }}>
@@ -170,8 +170,7 @@ type RowMenu = { selection: string; options: { value: string; label: string }[];
 function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, menu, destructive = false, first = false, onPress }: { Icon: Icon; label: string; value?: string; hint?: string; accessory?: 'chevron' | 'picker' | 'external'; toggle?: { value: boolean; disabled?: boolean; onChange: (value: boolean) => void }; menu?: RowMenu; destructive?: boolean; first?: boolean; onPress?: () => void }) {
   const { preferences } = usePreferences();
   const nativeMenu = menu && Platform.OS === 'ios';
-  // Ducat's labels sit near 2:1 contrast; ours stay at 4.65:1 (colors.quiet) and turn ink with Stronger contrast.
-  const labelColor = destructive ? colors.critical : preferences.strongerContrast ? colors.ink : colors.quiet;
+  const labelColor = destructive ? colors.critical : colors.ink;
   const Accessory = accessory === 'picker' ? IconSelector : accessory === 'external' ? IconArrowUpRight : IconChevronRight;
   const content = <>
     <View style={[styles.tile, { backgroundColor: destructive ? colors.critical : colors.borderStrong }]}><Icon size={12} strokeWidth={2.6} color={colors.surface} /></View>
@@ -179,7 +178,7 @@ function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, 
     {toggle
       ? <Switch style={SWITCH_CENTER} accessibilityLabel={label} accessibilityHint={hint} value={toggle.value} disabled={toggle.disabled} trackColor={{ true: colors.primary }} onValueChange={toggle.onChange} />
       : nativeMenu
-        ? <ValueMenu label={label} value={value ?? ''} menu={menu} size={preferences.largerText ? 26 : 22} />
+        ? <ValueMenu label={label} value={value ?? ''} menu={menu} size={preferences.largerText ? 26 : 22} destructive={destructive} />
         : <View style={styles.value}>
           {value ? <AppText style={[styles.valueText, destructive && { color: colors.critical }]}>{value}</AppText> : null}
           <Accessory size={20} strokeWidth={2.5} color={destructive ? colors.critical : colors.ink} />
@@ -191,11 +190,13 @@ function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, 
 }
 
 // iOS pull-down menu (SwiftUI Menu + Picker): the value and ⌃⌄ are the trigger, options get the system checkmark.
-function ValueMenu({ label, value, menu, size }: { label: string; value: string; menu: RowMenu; size: number }) {
+function ValueMenu({ label, value, menu, size, destructive }: { label: string; value: string; menu: RowMenu; size: number; destructive: boolean }) {
+  const { preferences } = usePreferences();
+  const valueColor = destructive ? colors.critical : preferences.strongerContrast ? colors.ink : colors.muted;
   return <Host matchContents>
     <Menu modifiers={[accessibilityLabel(`${label}, ${value}`)]} label={<HStack spacing={6}>
-      <SwiftText modifiers={[font({ size, weight: 'semibold' }), foregroundStyle(colors.ink)]}>{value}</SwiftText>
-      <SwiftImage systemName="chevron.up.chevron.down" modifiers={[font({ size: Math.round(size * 0.7), weight: 'semibold' }), foregroundStyle(colors.ink)]} />
+      <SwiftText modifiers={[font({ size, weight: 'regular' }), foregroundStyle(valueColor)]}>{value}</SwiftText>
+      <SwiftImage systemName="chevron.up.chevron.down" modifiers={[font({ size: Math.round(size * 0.7), weight: 'semibold' }), foregroundStyle(valueColor)]} />
     </HStack>}>
       <Picker selection={menu.selection} onSelectionChange={selection => menu.onSelect(String(selection))}>
         {menu.options.map(option => <SwiftText key={option.value} modifiers={[tag(option.value)]}>{option.label}</SwiftText>)}
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 61, paddingVertical: 12 },
   tile: { width: 16, height: 16, borderRadius: 4.5, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1, fontSize: 22, lineHeight: 28, fontWeight: '600' },
-  valueText: { fontSize: 22, lineHeight: 28, fontWeight: '600', color: colors.ink },
+  valueText: { fontSize: 22, lineHeight: 28, fontWeight: '400', color: colors.muted },
   rowRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   value: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

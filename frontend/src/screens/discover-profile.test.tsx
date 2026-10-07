@@ -1,6 +1,8 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type BottomSheet from '@gorhom/bottom-sheet';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppText } from '@/components/ui';
 import { DiscoverScreen } from './discover';
 import { EditNameScreen, ProfileScreen } from './profile';
@@ -10,11 +12,13 @@ import { PreferencesProvider } from '@/features/preferences/context';
 import { PREFERENCES_KEY } from '@/features/preferences/storage';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
-import { SystemReduceMotionContext } from '@/theme';
+import { colors, sky, SystemReduceMotionContext } from '@/theme';
+import { topAlert } from '@/features/content/samples';
 import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
 let mockMapProps: DiscoverMapProps;
+let mockSheetProps: React.ComponentProps<typeof BottomSheet>;
 let mockEvac: EvacuationState & { findRoute: jest.Mock; locate: jest.Mock; clearRoute: jest.Mock };
 const mockSnapToIndex = jest.fn();
 const mockEnsureGuest = jest.fn();
@@ -36,9 +40,11 @@ jest.mock('@gorhom/bottom-sheet', () => {
   const { View, ScrollView } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: React.forwardRef(function MockSheet({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) {
+    default: React.forwardRef(function MockSheet(props: React.ComponentProps<typeof BottomSheet>, ref: React.Ref<unknown>) {
+      React.useEffect(() => { mockSheetProps = props; });
       React.useImperativeHandle(ref, () => ({ snapToIndex: mockSnapToIndex }));
-      return <View>{children}</View>;
+      const Background = props.backgroundComponent;
+      return <View testID="discover-sheet">{Background && <Background style={{}} animatedIndex={props.animatedPosition!} animatedPosition={props.animatedPosition!} />}{props.children}</View>;
     }),
     BottomSheetScrollView: ScrollView,
     useBottomSheetSpringConfigs: (config: object) => config,
@@ -99,6 +105,53 @@ test('the alert chip in the sheet header opens the current alert', () => {
   const view = render(<DiscoverScreen />);
   fireEvent.press(view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` }));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+});
+
+test('the highest sample alert drives the unboxed sheet banner and wash', () => {
+  expect(topAlert).toMatchObject({ level: 'waspada', title: 'rainTitle' });
+  const view = render(<DiscoverScreen />);
+  const banner = view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` });
+  expect(banner).toHaveStyle({ minHeight: 52, paddingVertical: 10 });
+  expect(banner).not.toHaveStyle({ backgroundColor: colors.cautionSoft });
+  expect(banner).not.toHaveStyle({ borderWidth: 1 });
+  expect(view.getAllByText(en.rainTitle)[0]).toHaveStyle({ color: sky.waspada.ink });
+  expect(mockSheetProps.handleIndicatorStyle).toEqual({ backgroundColor: sky.waspada.ink, opacity: 0.25, width: 40 });
+  const gradient = view.UNSAFE_getAllByType(LinearGradient).find(item => item.props.locations?.join(',') === '0,0.5,1')!;
+  expect(gradient.props.colors).toEqual([sky.waspada.stops[1], sky.waspada.stops[2], colors.surface]);
+  expect(gradient.props.style).toEqual(expect.objectContaining({ top: 0, height: 168 }));
+  expect(gradient.parent).toHaveStyle({ backgroundColor: colors.surface, overflow: 'hidden' });
+});
+
+test('topAlert is independent of the sample order', () => {
+  const spy = jest.spyOn(Array.prototype, 'reduce');
+  try {
+    jest.isolateModules(() => {
+      spy.mockImplementationOnce(function (this: unknown[], callback) { return [...this].reverse().reduce(callback); });
+      expect(jest.requireActual('@/features/content/samples').topAlert).toEqual(topAlert);
+    });
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test('sheet credits ride peek and middle, stay at middle when expanded and resync after layout', () => {
+  const view = render(<DiscoverScreen />);
+  const middle = mockMapProps.bottomInset;
+  expect(mockMapProps.creditsInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(1, 0, 0, 0));
+  expect(mockMapProps.creditsInset).toBe((mockSheetProps.snapPoints as number[])[0]);
+  const beforeLayout = mockMapProps.creditsInset;
+  const primary = view.UNSAFE_getAllByType(View).find(item => item.props.onLayout)!;
+  fireEvent(primary, 'layout', { nativeEvent: { layout: { height: 260 } } });
+  expect(mockMapProps.creditsInset).toBe((mockSheetProps.snapPoints as number[])[0]);
+  expect(mockMapProps.creditsInset).not.toBe(beforeLayout);
+  expect(mockMapProps.bottomInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(0, 1, 0, 0));
+  expect(mockMapProps.creditsInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(1, 2, 0, 0));
+  expect(mockMapProps.creditsInset).toBe(middle);
+  fireEvent(primary, 'layout', { nativeEvent: { layout: { height: 280 } } });
+  expect(mockMapProps.creditsInset).toBe(middle);
 });
 
 test('nearby reported hazards become estimated map zones, each named in the sheet', async () => {
@@ -264,18 +317,26 @@ test('resetting first-time guide keeps server profile and support preferences', 
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ completed: false });
 });
 
+test('Larger Text grows the settings row labels', async () => {
+  await AsyncStorage.setItem(PROFILE_KEY, '{"name":"Billy"}');
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true,"largerText":true}');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByText('Billy')).toBeTruthy());
+  expect(view.getByText('Replay guide')).toHaveStyle({ fontSize: 26.4 });
+});
+
 test('new copy has Indonesian parity and Profile uses the localized fallback', async () => {
   expect(Object.keys(en).sort()).toEqual(Object.keys(id).sort());
   mockLanguage = 'id';
   const view = render(<ProfileProvider><ProfileScreen /></ProfileProvider>);
-  await waitFor(() => expect(view.getByText('Profil Anda')).toBeTruthy());
-  expect(view.getByText('Profil tamu · perangkat ini')).toBeTruthy();
+  await waitFor(() => expect(view.getByText('Profil tamu')).toBeTruthy());
+  expect(view.queryByText('Profil tamu · perangkat ini')).toBeNull();
 });
 
 test('settings toggles save immediately, without a Save button', async () => {
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByText('Your profile')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Guest profile')).toBeTruthy());
   expect(view.queryByRole('button', { name: 'Save changes' })).toBeNull();
   fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
   await waitFor(() => expect(mockPreferences.larger_text).toBe(true));

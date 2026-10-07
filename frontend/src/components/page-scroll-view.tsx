@@ -3,6 +3,7 @@ import { Animated, Easing, Platform, ScrollView, StyleSheet, View, useAnimatedVa
 import { HeaderTitle, useHeaderHeight } from 'expo-router/react-navigation';
 import type { NativeStackNavigationOptions } from 'expo-router/native-stack';
 import { SystemReduceMotionContext } from '@/theme';
+import { SheetHeaderContext } from './sheet-scroll-view';
 
 type Header = { title: string; setOptions: (options: NativeStackNavigationOptions) => void };
 export const PageHeaderContext = createContext<Header | null>(null);
@@ -21,6 +22,8 @@ export function PageScrollView({ children, contentContainerStyle, ...props }: Sc
   const [visible, setVisible] = useState(false);
   const opacity = useAnimatedValue(0);
   const reduceMotion = useContext(SystemReduceMotionContext);
+  // Pages pushed inside a sheet keep the sheet's native bar: a native title and scroll edge instead of the faded title and tinted blur.
+  const inSheet = useContext(SheetHeaderContext);
   const update = useCallback(() => setVisible(offset.current + headerHeight > (title.current?.bottom ?? (Platform.OS === 'ios' ? 0 : headerHeight))), [headerHeight]);
   const measureTitle = useCallback((node: Text | null) => {
     if (!node || !content.current) return;
@@ -32,8 +35,8 @@ export function PageScrollView({ children, contentContainerStyle, ...props }: Sc
     });
   }, [update]);
   useLayoutEffect(() => {
-    setOptions({ headerTitle: props => <HeaderTitle {...props} style={{ opacity }} accessible={visible} accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}>{headerTitle}</HeaderTitle>, headerTransparent: true, headerShadowVisible: false, scrollEdgeEffects: { top: 'hidden' }, headerBlurEffect: visible ? 'systemUltraThinMaterialLight' : undefined, headerStyle: { backgroundColor: visible ? 'rgba(235, 245, 255, 0.08)' : 'transparent' } });
-  }, [setOptions, headerTitle, visible, opacity]);
+    setOptions({ headerTransparent: true, headerShadowVisible: false, ...(inSheet ? { headerTitle: visible ? headerTitle : '', scrollEdgeEffects: { top: visible ? 'hard' : 'soft' } } : { headerTitle: props => <HeaderTitle {...props} style={{ opacity }} accessible={visible} accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}>{headerTitle}</HeaderTitle>, scrollEdgeEffects: { top: 'hidden' }, headerBlurEffect: visible ? 'systemUltraThinMaterialLight' : undefined, headerStyle: { backgroundColor: visible ? 'rgba(235, 245, 255, 0.08)' : 'transparent' } }) });
+  }, [setOptions, headerTitle, visible, opacity, inSheet]);
   useEffect(() => {
     const animation = Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: reduceMotion ? 0 : 180, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     animation.start();
