@@ -1,4 +1,6 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
+import * as Speech from 'expo-speech';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HazardScreen } from './hazard';
 import { findHazard } from '@/features/hazards/use-recent-hazards';
 
@@ -61,4 +63,28 @@ test('an id that is not in the loaded feed shows the empty state', () => {
   const view = render(<HazardScreen />);
   expect(view.getByText('This information is unavailable. Go back to choose another item.')).toBeTruthy();
   expect(view.queryByText('What to do')).toBeNull();
+});
+
+let mockAccess = { listen: false, autoRead: false };
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
+jest.mock('expo-speech', () => ({ stop: jest.fn(() => Promise.resolve()), speak: jest.fn() }));
+beforeEach(() => { mockAccess = { listen: false, autoRead: false }; jest.clearAllMocks(); jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false); });
+
+test.each([false, true])('detail offers Listen only with the capability (%s)', listen => {
+  find.mockReturnValue(quake);
+  mockAccess = { listen, autoRead: false };
+  const view = render(<HazardScreen />);
+  expect(Boolean(view.queryByRole('button', { name: 'Listen' }))).toBe(listen);
+  expect(Speech.speak).not.toHaveBeenCalled();
+});
+
+test('detail auto reads the title and numbered first step on open', async () => {
+  find.mockReturnValue(quake);
+  mockAccess = { listen: true, autoRead: true };
+  const view = render(<HazardScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  const text = jest.mocked(Speech.speak).mock.calls[0][0];
+  expect(text).toContain('82 km northeast of Ruteng');
+  expect(text).toContain(`1. ${'During shaking, drop, take cover under a sturdy table, and hold on.'}`);
+  expect(view.getByRole('button', { name: 'Stop' })).toBeTruthy();
 });

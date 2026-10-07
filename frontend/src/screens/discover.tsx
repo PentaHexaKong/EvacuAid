@@ -20,6 +20,7 @@ import type { Shelter } from '@/features/navigation/api';
 import { useEvacuationRoute, type EvacuationState } from '@/features/navigation/use-evacuation-route';
 import { formatDistance } from '@/features/navigation/distance';
 import { useGuestSession } from '@/features/profile/session';
+import { useAccess } from '@/features/access/use-access';
 import { useHaptics } from '@/features/feedback/haptics';
 import { colors, corner, hazard, radius, sky, SystemReduceMotionContext } from '@/theme';
 import { spring } from '@/theme/motion';
@@ -37,6 +38,7 @@ export function DiscoverScreen() {
 }
 
 function Explore() {
+  const access = useAccess();
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -128,7 +130,7 @@ function Explore() {
     <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} zones={impact.zones} mode={mode} onToggleMode={() => setMode(current => (current === '3d' ? '2d' : '3d'))} userLocation={evacuation.origin} focus={mapFocus} onLocate={locate} topInset={insets.top} bottomInset={snapPoints[1]} creditsInset={creditsInset} controlsStyle={controlsStyle} />
     {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
     <View pointerEvents="box-none" style={styles.sheetFrame}>
-    <BottomSheet ref={sheet} index={1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={insets.top} backgroundComponent={SheetBackground} handleIndicatorStyle={{ backgroundColor: sky[alert.level].ink, opacity: 0.25, width: 40 }} accessible={false}>
+    <BottomSheet ref={sheet} index={access.listFirst ? 2 : 1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={insets.top} backgroundComponent={SheetBackground} handleIndicatorStyle={{ backgroundColor: sky[alert.level].ink, opacity: 0.25, width: 40 }} accessible={false}>
       <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 + insets.bottom, gap: 28 }}>
         <View onLayout={event => setPrimaryHeight(Math.round(event.nativeEvent.layout.height))} style={{ gap: 16, paddingTop: 4 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.title)}. ${t(alert.severity)}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.alertChip, pressed && { opacity: 0.85 }]}>

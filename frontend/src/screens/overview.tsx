@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -16,10 +17,13 @@ import { AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { formatDistance } from '@/features/navigation/distance';
 import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
+import { useAccess } from '@/features/access/use-access';
+import { speak } from '@/features/feedback/speech';
 import { useHaptics } from '@/features/feedback/haptics';
 import { levelLabels, sampleAlerts, topAlert } from '@/features/content/samples';
 import { colors, corner, gutter, radius, sky, type AlertLevel } from '@/theme';
 
+const spokenAlerts = new Set<string>();
 const SKY_OVERSCROLL = 600;
 // One plain next step per warning level; Normal has nothing to act on.
 const GUIDANCE = { waspada: 'guidanceWaspada', siaga: 'guidanceSiaga', awas: 'guidanceAwas' } as const;
@@ -59,11 +63,18 @@ function RouteAction({ level, ink, tint, onRoute }: { level: AlertLevel; ink: st
 }
 
 export function OverviewScreen() {
-  const { t } = useTranslation();
+  const access = useAccess();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   // The hero follows the most severe alert, so a newer Normal notice never hides an active warning.
   const alert = topAlert;
   const level = alert.level;
+  const summary = level === 'normal' ? '' : [t(levelLabels[level]), t(alert.title), alert.window ? t(alert.window) : '', t(GUIDANCE[level])].filter(Boolean).join(', ');
+  useEffect(() => {
+    if (!access.autoRead || level === 'normal' || spokenAlerts.has(alert.id)) return;
+    spokenAlerts.add(alert.id);
+    void speak(summary, i18n.language).catch(() => {});
+  }, [access.autoRead, alert.id, level, summary, i18n.language]);
   const { stops, ink } = sky[level];
   // The header already shows the top alert, so the list below only repeats it at Normal, where the header shows none.
   const listed = level === 'normal' ? sampleAlerts : sampleAlerts.filter(item => item.id !== alert.id);

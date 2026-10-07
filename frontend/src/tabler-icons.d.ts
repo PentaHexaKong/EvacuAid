@@ -222,3 +222,8 @@ declare module '@tabler/icons-react-native/IconUsersGroup' {
   const Icon: typeof import('@tabler/icons-react-native').IconUsersGroup;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconPlayerStop' {
+  const Icon: typeof import('@tabler/icons-react-native').IconPlayerStop;
+  export default Icon;
+}

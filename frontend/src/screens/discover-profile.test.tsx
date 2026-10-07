@@ -387,3 +387,15 @@ test('the language row opens a native menu whose choice saves the language', asy
   fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
   await waitFor(() => expect(mockPreferences.language).toBe('id'));
 });
+
+let mockListFirst = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: false, autoRead: false, listFirst: mockListFirst }) }));
+beforeEach(() => { mockListFirst = false; });
+
+test.each([false, true])('Discover starts on the tall list only with listFirst (%s)', async listFirst => {
+  mockListFirst = listFirst;
+  render(<DiscoverScreen />);
+  await act(async () => {});
+  expect(mockSheetProps.index).toBe(listFirst ? 2 : 1);
+  expect(mockMapProps).toBeDefined();
+});

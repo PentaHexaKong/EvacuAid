@@ -9,6 +9,8 @@ import { ActionButton, AppText, Page, StepList } from '@/components/ui';
 import { HazardBanner, hazardPhotoCredit } from '@/features/hazards/hazard-banner';
 import { hazardFacts } from '@/features/hazards/hazard-facts';
 import { findHazard } from '@/features/hazards/use-recent-hazards';
+import { ListenButton } from '@/components/listen-button';
+import { useAccess } from '@/features/access/use-access';
 import { colors, corner, gutter, radius } from '@/theme';
 
 const BANNER = 300;
@@ -20,6 +22,7 @@ export function HazardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const item = findHazard(id);
+  const access = useAccess();
   if (!item) return <Page><EmptyContent /></Page>;
   const facts = hazardFacts(item, t, i18n.language);
   const located = item.latitude != null && item.longitude != null;
@@ -32,6 +35,7 @@ export function HazardScreen() {
         <AppText variant="title" accessibilityRole="header">{facts.title}</AppText>
         <AppText style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{facts.footer}</AppText>
       </View>
+      {access.listen && <ListenButton text={[facts.typeName, facts.title, ...facts.facts.map(fact => `${fact.label}: ${fact.value}`), ...STEPS.map(step => `${step}. ${t(`hazardStep_${item.type}_${step}`)}`), t(item.source === 'BMKG' ? 'hazardSourceBmkg' : 'hazardSourceReports')].join('. ')} auto={access.autoRead} />}
       <View style={{ gap: 12 }}>
         <SectionTitle>{t('hazardKeyFacts')}</SectionTitle>
         <View style={styles.facts}>

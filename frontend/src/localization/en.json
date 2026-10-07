@@ -1,4 +1,6 @@
 {
+  "listen": "Listen",
+  "stopListening": "Stop",
   "overview": "Home",
   "components": "Components",
   "map": "Buddy map",
