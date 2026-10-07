@@ -55,6 +55,13 @@ async def testGuestProfileRequiresPrivateTokenAndSupportsProfileLocationAndDelet
         assert updated.json()['needs_assistance'] is True
         accessibility = await client.get(f'/v1/users/{user_id}/accessibility', headers=headers)
         assert accessibility.json() == [{'type': 'MOBILITY_LIMITATION', 'severity': None}]
+        # Saving again with a need that is already stored replaces the list instead of colliding with it.
+        resaved = await client.patch(f'/v1/users/{user_id}', headers=headers, json={
+            'accessibility': [{'type': 'MOBILITY_LIMITATION'}, {'type': 'ELDERLY'}],
+        })
+        assert resaved.status_code == 200
+        accessibility = await client.get(f'/v1/users/{user_id}/accessibility', headers=headers)
+        assert sorted(item['type'] for item in accessibility.json()) == ['ELDERLY', 'MOBILITY_LIMITATION']
 
         location = await client.put(f'/v1/users/{user_id}/location', headers=headers, json={
             'latitude': -6.2, 'longitude': 106.8, 'accuracy_m': 18.5,
