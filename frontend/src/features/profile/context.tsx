@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest, type UserProfile } from './api';
 import { useGuestSession } from './session';
@@ -8,6 +8,7 @@ export type AccessibilityType = 'VISUAL_IMPAIRMENT' | 'HEARING_IMPAIRMENT' | 'MO
 export type AccessibilityItem = { type: AccessibilityType; severity: string | null };
 
 export const ONBOARDING_NEEDS_KEY = 'evacuaid.onboarding-needs.v1';
+export const NEEDS_KEY = 'evacuaid.needs.v1';
 const NEED_TYPES: AccessibilityType[] = ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT', 'MOBILITY_LIMITATION', 'ELDERLY'];
 export function parseNeeds(value: string | null): AccessibilityItem[] {
   try {
@@ -46,14 +47,49 @@ const Context = createContext(empty);
 export const useProfile = () => useContext(Context);
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const { token } = useGuestSession();
+  const { token, user } = useGuestSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [accessibility, setAccessibility] = useState<AccessibilityItem[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previousUser = useRef(user);
+  const sessionVersion = useRef(0);
+  const needsVersion = useRef(0);
+  const cacheWrite = useRef(Promise.resolve());
+  const cacheNeeds = useCallback((items: AccessibilityItem[] | null) => {
+    cacheWrite.current = cacheWrite.current.then(() => items === null
+      ? AsyncStorage.removeItem(NEEDS_KEY)
+      : AsyncStorage.setItem(NEEDS_KEY, JSON.stringify(items.map(item => item.type)))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (previousUser.current && !user) {
+      sessionVersion.current += 1;
+      needsVersion.current += 1;
+      setAccessibility([]);
+      cacheNeeds(null);
+    }
+    previousUser.current = user;
+  }, [user, cacheNeeds]);
+
+  useEffect(() => {
+    let active = true;
+    const version = needsVersion.current;
+    AsyncStorage.getItem(NEEDS_KEY).then(value => {
+      let items: AccessibilityItem[] = [];
+      try {
+        const data: unknown = JSON.parse(value ?? 'null');
+        const types: AccessibilityType[] = [...NEED_TYPES, 'OTHER'];
+        if (Array.isArray(data)) items = data.filter((type: unknown): type is AccessibilityType => types.includes(type as AccessibilityType)).map(type => ({ type, severity: null }));
+      } catch {}
+      if (active && version === needsVersion.current) setAccessibility(current => current.length ? current : items);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const retry = useCallback(async () => {
     if (!token) return;
+    const version = sessionVersion.current;
     setReady(false);
     setError(null);
     try {
@@ -74,13 +110,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.removeItem(PROFILE_KEY);
         setProfile(saved);
       } else setProfile(current);
+      if (version !== sessionVersion.current) return;
+      needsVersion.current += 1;
       setAccessibility(items);
+      cacheNeeds(items);
       setReady(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load profile.');
       throw cause;
     }
-  }, [token]);
+  }, [token, cacheNeeds]);
 
   useEffect(() => {
     if (!token) return;
@@ -89,9 +128,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const saveProfile = async (patch: Partial<Pick<UserProfile, 'name' | 'phone' | 'needs_assistance' | 'share_location_with_buddies'>> & { accessibility?: AccessibilityItem[] }) => {
     if (!token || !profile) throw new Error('Profile is not ready');
+    const version = sessionVersion.current;
     const updated = await apiRequest<UserProfile>(`/v1/users/${profile.id}`, token, { method: 'PATCH', body: JSON.stringify(patch) });
     setProfile(updated);
-    if (patch.accessibility) setAccessibility(patch.accessibility);
+    if (patch.accessibility && version === sessionVersion.current) {
+      needsVersion.current += 1;
+      setAccessibility(patch.accessibility);
+      cacheNeeds(patch.accessibility);
+    }
   };
   const saveName = async (draft: string) => saveProfile({ name: draft.replace(/[\r\n]+/g, ' ').trim().slice(0, 60) || null });
   const saveAccessibility = async (items: AccessibilityItem[]) => {
