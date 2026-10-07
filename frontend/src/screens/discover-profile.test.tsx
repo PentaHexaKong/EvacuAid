@@ -26,7 +26,8 @@ let mockId = 'rain';
 let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
 let mockPreferences: Record<string, unknown>;
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId }) }));
+let mockFocus: string | undefined;
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { name: string }) => {
   const text = (mockLanguage === 'en' ? jest.requireActual('../localization/en.json') : jest.requireActual('../localization/id.json'))[key] ?? key;
   return params?.name ? text.replace('{{name}}', params.name) : text;
@@ -163,6 +164,29 @@ test('nearby reported hazards become estimated map zones, each named in the shee
   expect(await view.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
   expect(view.getByLabelText(`${en.impactEstimate}: ${en.hazard_earthquake} M5.2. ${en.impactEstimateNote}`)).toBeTruthy();
   expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1']);
+});
+
+test('a map focus is honoured only for a hazard in the feed and never hides the hazards near the user', async () => {
+  const quake = { id: 'q1', type: 'earthquake', occurredAt: '2026-10-03T01:00:00Z', source: 'BMKG', latitude: -6.5, longitude: 106.9, magnitude: 5.2, depthKm: 10, region: null, felt: null, reportCount: null };
+  const far = { ...quake, id: 'q2', latitude: 2.5, longitude: 128.4, magnitude: 6.1 };
+  const fallback = (apiRequest as jest.Mock).getMockImplementation()!;
+  (apiRequest as jest.Mock).mockImplementation(async (path: string, ...rest: unknown[]) => (path === '/v1/hazards/recent' ? { items: [quake, far], sources: { bmkg: { status: 'available', error: null } } } : fallback(path, ...rest)));
+  try {
+    // Coordinates that match no hazard, as a crafted deep link could carry: ignored.
+    mockFocus = '10,20';
+    const stray = render(<DiscoverScreen />);
+    expect(await stray.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
+    expect(mockMapProps.focus).toBeNull();
+    expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1']);
+    stray.unmount();
+    // A hazard from the feed: the map frames it and adds its rings, while the nearby hazard stays on the map and in the legend.
+    mockFocus = '2.5,128.4';
+    const view = render(<DiscoverScreen />);
+    expect(await view.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
+    expect(mockMapProps.focus).toEqual(expect.objectContaining({ latitude: 2.5, longitude: 128.4 }));
+    expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1', 'q2-0', 'q2-1']);
+    expect(view.getByText(`${en.hazard_earthquake} M6.1`)).toBeTruthy();
+  } finally { mockFocus = undefined; }
 });
 
 test('the map opens in 3D, flips to flat and back from its control, and starts flat under Reduce Motion', () => {

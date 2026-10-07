@@ -81,16 +81,22 @@ function Explore() {
   const destinationId = evacuation.route?.response.destination?.shelterId ?? null;
   const focus = shelters.find(item => item.id === (destinationId ?? selected)) ?? shelters[0] ?? null;
   const alert = topAlert;
-  // "Show on the map" from a disaster's detail page passes its coordinates; the map and the impact legend then describe that place.
-  const mapFocus = useMemo(() => {
+  // "Show on the map" from a disaster's detail page passes its coordinates. The param can also arrive through a deep link, so it is
+  // only honoured when it names a hazard already in the feed, and it never replaces what the map says about the user's own surroundings.
+  const focused = useMemo(() => {
     const [latitude, longitude] = (focusRequest ?? '').split(',').map(Number);
-    if (!focusRequest || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
-    const source = hazards.items.find(item => item.latitude === latitude && item.longitude === longitude);
-    // Wide enough to show the whole estimated impact ring, never tighter than a district.
-    return { latitude, longitude, spanKm: Math.max(15, (source ? zoneRadii(source).at(-1) ?? 0 : 0) * 1.6) };
+    if (!focusRequest || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return hazards.items.find(item => item.latitude === latitude && item.longitude === longitude) ?? null;
   }, [focusRequest, hazards.items]);
-  const near = mapFocus ?? evacuation.origin ?? DEFAULT_CENTER;
-  const impact = useMemo(() => hazardZones(hazards.items, near), [hazards.items, near]);
+  // Wide enough to show the whole estimated impact ring, never tighter than a district.
+  const mapFocus = useMemo(() => focused ? { latitude: focused.latitude!, longitude: focused.longitude!, spanKm: Math.max(15, (zoneRadii(focused).at(-1) ?? 0) * 1.6) } : null, [focused]);
+  const near = evacuation.origin ?? DEFAULT_CENTER;
+  const impact = useMemo(() => {
+    const nearby = hazardZones(hazards.items, near);
+    if (!focused || nearby.items.some(item => item.id === focused.id)) return nearby;
+    const extra = hazardZones([focused], null);
+    return { zones: { ...nearby.zones, features: [...nearby.zones.features, ...extra.zones.features] }, items: [...nearby.items, ...extra.items] };
+  }, [hazards.items, near, focused]);
   const locate = () => { if (mapFocus) router.setParams({ focus: '' }); evacuation.locate(); };
   const markers = useMemo<DiscoverMarker[]>(() => [
     ...shelters.map(item => ({ id: item.id, kind: 'destination' as const, title: item.name, coordinate: { latitude: item.latitude, longitude: item.longitude } })),

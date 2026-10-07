@@ -109,8 +109,8 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
   }, []);
   const target = useCallback((): Bounds | null => {
     const nearby = items.filter(item => item.kind === 'destination').slice(0, 3).map(markerPosition);
-    // A focus (an epicentre opened from its detail page) wins over the user's surroundings until they ask for their own location again.
-    const points: [number, number][] = focus ? focusCorners(focus) : route?.length ? route : userLocation ? [position(userLocation), ...nearby] : items.map(markerPosition);
+    // An evacuation route always wins. Otherwise a focus (an epicentre opened from its detail page) is shown until the user asks for their own location again.
+    const points: [number, number][] = route?.length ? route : focus ? focusCorners(focus) : userLocation ? [position(userLocation), ...nearby] : items.map(markerPosition);
     if (!points.length) return null;
     return visibleBounds(points, { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 }, size);
   }, [focus, route, userLocation, items, topInset, bottomInset, size]);

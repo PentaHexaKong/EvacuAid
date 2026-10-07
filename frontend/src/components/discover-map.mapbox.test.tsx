@@ -293,6 +293,11 @@ test('a focus frames that place instead of the user, and the center button hands
   fireEvent.press(view.getByRole('button', { name: 'Center map on my location' }));
   expect(onLocate).toHaveBeenCalledTimes(1);
   expect(mockSetCamera).not.toHaveBeenCalled();
+  // An evacuation route is never displaced by a focus.
+  const route: [number, number][] = [[106.9, -6.3], [106.95, -6.32]];
+  view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} onLocate={onLocate} userLocation={{ latitude: -6.3, longitude: 106.9 }} focus={focus} route={route} />);
+  settle();
+  expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds(route) }));
   view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} onLocate={onLocate} userLocation={{ latitude: -6.3, longitude: 106.9 }} focus={null} />);
   settle();
   expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds([[106.9, -6.3]]) }));

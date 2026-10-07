@@ -31,7 +31,7 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, focu
   }, []);
   const frame = useCallback(() => {
     const edgePadding = { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 };
-    const points = focus ? focusCorners(focus).map(([longitude, latitude]) => ({ latitude, longitude })) : route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
+    const points = route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : focus ? focusCorners(focus).map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
     if (points.length === 1) map.current?.animateCamera({ center: points[0], zoom: 14 });
     else if (points.length) map.current?.fitToCoordinates(points, { edgePadding, animated: true });
   }, [focus, route, userLocation, items, topInset, bottomInset]);
