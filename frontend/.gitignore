@@ -7,3 +7,4 @@ ios/
 .env*
 !.env.example
 *.tsbuildinfo
+.e2e/
