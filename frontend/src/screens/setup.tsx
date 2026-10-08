@@ -17,11 +17,12 @@ import IconWheelchair from '@tabler/icons-react-native/IconWheelchair';
 import { ActionButton, AppText, CheckOption, Enter, Page, Panel, StepList, SupportTile, Tap } from '@/components/ui';
 import { LevelChip } from '@/components/content';
 import { Bloom, type BloomStage } from '@/components/bloom';
-import { Logo } from '@/components/logo';
+import { LanguageMenu } from '@/components/native-controls';
 import { Mascot } from '@/components/mascot';
 import { brand, colors, corner, radius, SystemReduceMotionContext } from '@/theme';
 import { duration, easeCss } from '@/theme/motion';
 import { selectLanguage } from '@/localization';
+import type { Language } from '@/localization/language';
 import { sampleAlerts } from '@/features/content/samples';
 import { PreferencesPreview, usePreferences } from '@/features/preferences/context';
 import { defaults, type Preferences } from '@/features/preferences/storage';
@@ -66,8 +67,8 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
     const enabled = new Set(NEEDS.filter(need => next.includes(need.type)).flatMap(need => need.preset));
     setDraft(current => ({ ...current, ...Object.fromEntries(OPTIONS.map(key => [key, enabled.has(key) || defaults[key]])) }));
   };
-  const changeLanguage = () => guarded(setBusy, setError, async () => {
-    const language = i18n.language === 'id' ? 'en' : 'id';
+  const changeLanguage = (language: Language) => guarded(setBusy, setError, async () => {
+    if (language === i18n.language) return;
     await save({ ...preferences, language });
     setDraft(current => ({ ...current, language }));
     await selectLanguage(language);
@@ -97,7 +98,7 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
     {step === 'welcome' && <BrandBackdrop />}
     <Bloom stage={BLOOM[step]} />
     <Page transparent fill edgeInsets={insets}>
-      {step === 'welcome' && <WelcomeStep busy={busy} onLanguage={() => void changeLanguage()} onStart={() => go('help')} onSkip={() => void finish(true)} />}
+      {step === 'welcome' && <WelcomeStep busy={busy} onLanguage={language => void changeLanguage(language)} onStart={() => go('help')} onSkip={() => void finish(true)} />}
       {step === 'help' && <HelpStep draft={draft} needs={needs} busy={busy} onNeeds={chooseNeeds} onChange={change} onNext={() => go('warning')} onLater={() => void finish(true)} onBack={() => go('welcome')} />}
       {step === 'warning' && <WarningStep busy={busy} onFinish={() => void finish()} onHelp={() => void finish(false, '/buddy')} onBack={() => go('help')} />}
       {errorText}
@@ -142,15 +143,11 @@ function BrandBackdrop() {
   </Animated.View>;
 }
 
-function WelcomeStep({ busy, onLanguage, onStart, onSkip }: { busy: boolean; onLanguage: () => void; onStart: () => void; onSkip: () => void }) {
+function WelcomeStep({ busy, onLanguage, onStart, onSkip }: { busy: boolean; onLanguage: (language: Language) => void; onStart: () => void; onSkip: () => void }) {
   const { t, i18n } = useTranslation();
-  const indonesian = i18n.language === 'id';
   return <>
-    <View style={styles.brandRow}>
-      <Logo tone="white" height={24} />
-      <Tap accessibilityLabel={indonesian ? 'Language: English' : 'Bahasa: Indonesia'} accessibilityState={{ disabled: busy }} disabled={busy} onPress={onLanguage} style={styles.language}>
-        <AppText variant="small" style={{ color: colors.surface, fontWeight: '600' }}>{indonesian ? 'English' : 'Indonesia'}</AppText>
-      </Tap>
+    <View style={[styles.brandRow, { justifyContent: 'flex-end' }]}>
+      <LanguageMenu label={t('language')} value={i18n.language} disabled={busy} onChange={onLanguage} />
     </View>
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.mascotStage}>
       <Mascot />
@@ -173,8 +170,6 @@ function StepHeader({ current, busy, onBack }: { current: number; busy: boolean;
   return <View style={{ gap: 14 }}>
     <View style={styles.brandRow}>
       <Tap accessibilityLabel={t('back')} disabled={busy} onPress={onBack} style={styles.back}><IconArrowLeft size={24} color={colors.ink} /></Tap>
-      <Logo height={20} />
-      <View style={styles.back} />
     </View>
     <View accessible accessibilityRole="progressbar" accessibilityLabel={t('setupStep', { current, total })} accessibilityValue={{ min: 0, max: total, now: current }} style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -260,7 +255,6 @@ function PreferenceSwitches({ draft, busy, onChange }: { draft: Preferences; bus
 
 const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 },
-  language: { minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.18)' },
   mascotStage: { flex: 1, minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   back: { width: 44, height: 44, marginLeft: -10 },
   dash: { flex: 1, height: 4, borderRadius: radius.pill, backgroundColor: colors.border, overflow: 'hidden' },

@@ -384,7 +384,7 @@ test('the status card asks to save a location, then offers an update once one is
 test('the language row opens a native menu whose choice saves the language', async () => {
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
   await waitFor(() => expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy());
-  fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
+  fireEvent.press(view.getByRole('menuitem', { name: 'Bahasa Indonesia' }));
   await waitFor(() => expect(mockPreferences.language).toBe('id'));
 });
 

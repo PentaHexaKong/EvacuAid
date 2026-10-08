@@ -232,3 +232,8 @@ declare module '@tabler/icons-react-native/IconChevronUp' {
   const Icon: typeof import('@tabler/icons-react-native').IconChevronUp;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconWorld' {
+  const Icon: typeof import('@tabler/icons-react-native').IconWorld;
+  export default Icon;
+}
