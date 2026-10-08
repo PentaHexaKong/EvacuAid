@@ -71,3 +71,22 @@ test('asking for help from Home with no Buddy explains and offers 112 once, and 
   await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
   alert.mockRestore(); open.mockRestore();
 });
+
+
+test('Home help waits through loading and errors, then asks the loaded primary Buddy once', () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const idle = { session: null, locations: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() };
+  mockParams = { help: 'retry' };
+  try {
+    const view = renderHook(({ loading, error }: { loading: boolean; error: string | null }) => useBuddyActions({ token: 'token', userId: 'me', state: { ...idle, loading, error, contacts: !loading && !error ? [{ level: 'PRIMARY', buddyUserId: 'buddy' }] : [] } as never }), { initialProps: { loading: true, error: null } });
+    expect(alert).not.toHaveBeenCalled();
+    view.rerender({ loading: false, error: 'Connection unavailable' });
+    expect(alert).not.toHaveBeenCalled();
+    view.rerender({ loading: false, error: null });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('send', 'consent', expect.any(Array));
+    expect(idle.run).not.toHaveBeenCalled();
+    view.rerender({ loading: false, error: null });
+    expect(alert).toHaveBeenCalledTimes(1);
+  } finally { alert.mockRestore(); }
+});
