@@ -99,11 +99,15 @@ export function ProfileScreen() {
       if (pending.current) return;
       pending.current = true;
       setBusy(true);
+      let restore: (() => Promise<void>) | undefined;
       try {
         // Onboarding first, so the gate shows setup rather than a missing session while the delete runs.
-        await resetOnboarding();
+        restore = await resetOnboarding();
         await session.deleteGuest();
-      } catch { Alert.alert(t('deleteProfileError')); }
+      } catch {
+        if (restore) await restore().catch(() => {});
+        Alert.alert(t('deleteProfileError'));
+      }
       finally { pending.current = false; setBusy(false); }
     })() },
   ]);
