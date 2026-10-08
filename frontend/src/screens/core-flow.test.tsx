@@ -1,5 +1,6 @@
 import { speak } from '@/features/feedback/speech';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
@@ -23,7 +24,7 @@ let mockShelters: { name: string; distanceM: number }[] | null = null;
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: mockShelters }) }));
 jest.mock('expo-router', () => {
   const Toolbar = Object.assign(({ children }: { children: React.ReactNode }) => children, { View: ({ children }: { children: React.ReactNode }) => children });
-  return { useRouter: () => mockRouter, Stack: { Toolbar } };
+  return { useRouter: () => mockRouter, useIsFocused: () => mockFocused, Stack: { Toolbar } };
 });
 jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 100 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
@@ -186,7 +187,7 @@ test.each(['id', 'en'])('Home has two quick rows, help and the map, and no alert
 
 
 let mockAutoRead = false;
-jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead, simpleHome: mockSimpleHome }) }));
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead, simpleHome: mockSimpleHome, voiceHome: mockVoiceHome, listen: mockListen, soundFree: mockSoundFree }) }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn(() => Promise.resolve()) }));
 beforeEach(() => { mockAutoRead = false; });
 
@@ -258,4 +259,148 @@ test('simple Home reveals other alerts and disasters from its expanded disclosur
   fireEvent.press(view.getByRole('button', { name: /More information/ }));
   expect(view.queryByText('Other alerts')).toBeNull();
   expect(view.queryByText('Discover disaster')).toBeNull();
+});
+
+
+let mockVoiceHome = false;
+let mockListen = true;
+let mockSoundFree = false;
+let mockListening = false;
+let mockFocused = true;
+let mockOnCommand: (transcript: string) => void = () => {};
+const mockStartListening = jest.fn(() => Promise.resolve());
+const mockStopListening = jest.fn();
+const mockCancelListening = jest.fn();
+jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (transcript: string) => void }) => { mockOnCommand = onCommand; return { listening: mockListening, error: mockVoiceError, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockCancelListening }; } }));
+let mockVoiceError: string | null = null;
+beforeEach(() => { mockVoiceHome = false; mockListen = true; mockSoundFree = false; mockListening = false; mockFocused = true; mockVoiceError = null; });
+
+test('the voice Home leads with Speak and three spoken-word actions, and leaves the map wording to everyone else', () => {
+  const standard = render(<OverviewScreen />);
+  expect(standard.queryByRole('button', { name: 'Speak' })).toBeNull();
+  expect(standard.getByText('Risk map')).toBeTruthy();
+  standard.unmount();
+  mockVoiceHome = true;
+  mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
+  try {
+    const view = render(<OverviewScreen />);
+    expect(view.getByRole('button', { name: 'Speak' })).toHaveProp('accessibilityHint', 'Then say what you need. A two-finger double-tap anywhere on this screen does the same. Say “read the alert”, “nearest gathering point” or “help me”.');
+    expect(view.getByText('Read the alert aloud')).toBeTruthy();
+    expect(view.getByText('Aula Kelurahan · 250 m')).toBeTruthy();
+    expect(view.getByText('Ask for help')).toBeTruthy();
+    expect(view.queryByText('Risk map')).toBeNull();
+    // Other alerts and the disaster strip wait behind More, so VoiceOver reaches the actions in a few swipes.
+    expect(view.queryByText('Other alerts')).toBeNull();
+    expect(view.getByRole('button', { name: /More information/ })).toBeTruthy();
+    fireEvent.press(view.getByRole('button', { name: 'Speak' }));
+    expect(mockStartListening).toHaveBeenCalledTimes(1);
+  } finally { mockShelters = null; }
+});
+
+test.each(['id', 'en'])('the Speak hint includes command examples without reading the visible line twice (%s)', language => {
+  mockLanguage = language;
+  mockVoiceHome = true;
+  const copy = jest.requireActual(`../localization/${language}.json`);
+  const view = render(<OverviewScreen />);
+  expect(view.getByRole('button', { name: copy.voiceSpeak })).toHaveProp('accessibilityHint', `${copy.voiceHint} ${copy.voiceExamples}`);
+  expect(view.queryByText(copy.voiceExamples)).toBeNull();
+  expect(view.getByText(copy.voiceExamples, { includeHiddenElements: true })).toHaveProp('accessibilityElementsHidden', true);
+  expect(view.getByText(copy.voiceExamples, { includeHiddenElements: true })).toHaveProp('importantForAccessibility', 'no-hide-descendants');
+});
+
+test('the voice Home stops listening from the same button and starts from a Magic Tap anywhere', () => {
+  mockVoiceHome = true;
+  mockListening = true;
+  const view = render(<OverviewScreen />);
+  const button = view.getByRole('button', { name: 'Listening…' });
+  expect(button).toHaveProp('accessibilityState', { busy: true });
+  fireEvent.press(button);
+  expect(mockStopListening).toHaveBeenCalledTimes(1);
+  mockListening = false;
+  view.rerender(<OverviewScreen />);
+  fireEvent(view.getByText('Ask for help'), 'magicTap');
+  expect(mockStartListening).toHaveBeenCalledTimes(1);
+});
+
+test('spoken commands on the voice Home read the alert, open the gathering points, ask for help, or say they were not understood', () => {
+  mockVoiceHome = true;
+  mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
+  try {
+    render(<OverviewScreen />);
+    jest.mocked(speak).mockClear();
+    act(() => mockOnCommand('read the alert'));
+    expect(jest.mocked(speak).mock.calls.at(-1)![0]).toContain('Heavy rain and strong winds');
+    act(() => mockOnCommand('titik kumpul terdekat'));
+    expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Nearest gathering point: Aula Kelurahan, 250 m');
+    expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+    // Help wins even when the sentence also names a gathering point, and it goes to Buddy, which confirms before sending.
+    act(() => mockOnCommand('tolong, di mana titik kumpul'));
+    expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+    act(() => mockOnCommand('what time is it'));
+    expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Sorry, I didn’t catch that. Say read the alert, nearest gathering point or help me.');
+  } finally { mockShelters = null; }
+});
+
+test('when voice fails the voice Home says so on screen as well as aloud, and the buttons stay', () => {
+  mockVoiceHome = true;
+  const view = render(<OverviewScreen />);
+  expect(view.getByText('Say “read the alert”, “nearest gathering point” or “help me”.', { includeHiddenElements: true })).toBeTruthy();
+  jest.mocked(speak).mockClear();
+  mockVoiceError = 'Speech recognition stopped.';
+  view.rerender(<OverviewScreen />);
+  expect(view.getByRole('alert')).toHaveTextContent('Voice isn’t available right now. The buttons below still work.');
+  expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Voice isn’t available right now. The buttons below still work.');
+  expect(view.getByText('Ask for help')).toBeTruthy();
+});
+
+
+test.each([false, true])('the voice Home stays silent without listening, including sound-free mode (%s)', soundFree => {
+  mockVoiceHome = true;
+  mockListen = false;
+  mockSoundFree = soundFree;
+  mockVoiceError = 'Speech recognition stopped.';
+  const view = render(<OverviewScreen />);
+  expect(view.queryByRole('button', { name: 'Speak' })).toBeNull();
+  expect(view.queryByText('Read the alert aloud')).toBeNull();
+  expect(view.queryByText('Say “read the alert”, “nearest gathering point” or “help me”.', { includeHiddenElements: true })).toBeNull();
+  expect(view.queryByRole('alert')).toBeNull();
+  expect(view.getByRole('button', { name: /More information/ })).toHaveProp('accessibilityState', { expanded: false });
+  expect(view.queryByText('Other alerts')).toBeNull();
+  expect(view.UNSAFE_getAllByType(View).some(node => node.props.onMagicTap)).toBe(false);
+  fireEvent.press(view.getByRole('button', { name: 'Nearest gathering point' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+  fireEvent.press(view.getByRole('button', { name: 'Ask for help' }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+  fireEvent(view.getByText('Ask for help'), 'magicTap');
+  act(() => { mockOnCommand('read the alert'); mockOnCommand('what time is it'); });
+  expect(mockStartListening).not.toHaveBeenCalled();
+  expect(speak).not.toHaveBeenCalled();
+});
+
+
+test('the voice Home ignores speech commands while unfocused and resumes on return', () => {
+  mockVoiceHome = true;
+  const view = render(<OverviewScreen />);
+  mockFocused = false;
+  view.rerender(<OverviewScreen />);
+  act(() => { mockOnCommand('read the alert'); mockOnCommand('nearest gathering point'); mockOnCommand('help me'); mockOnCommand('what time is it'); });
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  expect(speak).not.toHaveBeenCalled();
+  mockFocused = true;
+  view.rerender(<OverviewScreen />);
+  act(() => mockOnCommand('help me'));
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+});
+
+test('leaving the voice Home while listening cancels recognition without stopping it', () => {
+  mockVoiceHome = true;
+  mockListening = true;
+  const view = render(<OverviewScreen />);
+  expect(mockCancelListening).not.toHaveBeenCalled();
+  mockFocused = false;
+  view.rerender(<OverviewScreen />);
+  expect(mockCancelListening).toHaveBeenCalledTimes(1);
+  expect(mockStopListening).not.toHaveBeenCalled();
+  act(() => mockOnCommand('help me'));
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
 });

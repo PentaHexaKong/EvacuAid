@@ -402,5 +402,19 @@
   "hazardStep_earthquake_1_mobility": "Saat guncangan, kunci roda atau duduk, membungkuk ke depan, dan lindungi kepala serta leher dengan lengan.",
   "hazardStep_earthquake_3_mobility": "Setelah guncangan berhenti, menuju area terbuka lewat jalur tanpa tangga. Jangan gunakan lift; minta bantuan jika ada tangga.",
   "hazardStep_flood_1_mobility": "Berangkat lebih awal ke tempat yang lebih tinggi selagi jalur masih bisa dilalui, dan beri tahu Buddy bahwa Anda bergerak.",
-  "hazardStep_fire_1_mobility": "Segera keluar lewat pintu tanpa tangga terdekat dan tetap serendah mungkin di bawah asap."
+  "hazardStep_fire_1_mobility": "Segera keluar lewat pintu tanpa tangga terdekat dan tetap serendah mungkin di bawah asap.",
+  "voiceSpeak": "Bicara",
+  "voiceSpeakDetail": "Ucapkan kebutuhanmu",
+  "voiceListening": "Mendengarkan…",
+  "voiceListeningDetail": "Ketuk untuk berhenti",
+  "voiceExamples": "Ucapkan “baca peringatan”, “titik kumpul terdekat”, atau “tolong”.",
+  "voiceHint": "Lalu ucapkan kebutuhanmu. Ketuk dua kali dengan dua jari di mana saja di layar ini juga bisa.",
+  "voiceUnknown": "Maaf, belum terdengar jelas. Ucapkan baca peringatan, titik kumpul terdekat, atau tolong.",
+  "voiceUnavailable": "Suara sedang tidak tersedia. Tombol di bawah tetap bisa dipakai.",
+  "homeReadAloud": "Bacakan peringatan",
+  "homeNoWarning": "Belum ada peringatan untuk wilayahmu saat ini.",
+  "homeNearest": "Titik kumpul terdekat",
+  "homeNearestDetail": "Membuka daftar titik kumpul",
+  "homeAskHelp": "Minta bantuan",
+  "homeAskHelpDetail": "Buddy-mu dihubungi setelah kamu konfirmasi"
 }

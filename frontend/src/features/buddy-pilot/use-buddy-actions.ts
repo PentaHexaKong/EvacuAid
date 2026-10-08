@@ -1,6 +1,6 @@
 import { useAccess } from '@/features/access/use-access';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { AccessibilityInfo, Alert, AppState } from 'react-native';
+import { AccessibilityInfo, Alert, AppState, Linking } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
@@ -17,7 +17,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
   const { soundFree } = useAccess();
-  const params = useLocalSearchParams<{ code?: string; requestId?: string }>();
+  const params = useLocalSearchParams<{ code?: string; requestId?: string; help?: string }>();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (state.session?.status !== 'WAITING') return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [state.session?.status]);
   const [codeInput, setCodeInput] = useState({ source: params.code, value: params.code ?? '' });
@@ -75,6 +75,13 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     const result = await state.run<Session>(`/requests/${session.id}/${action}`, body);
     if (result) { if (action === 'decline') state.dismissSession(); else await state.refresh(result.id); }
   };
+  // One path for "help me" from voice and from Home: confirm out loud, then ask the chosen or primary Buddy.
+  // Without a Buddy it says so and offers 112; it never dials on its own.
+  const askForHelp = () => {
+    const target = helper ?? state.contacts.find(item => item.level === 'PRIMARY')?.buddyUserId;
+    if (target) confirm(c('send'), () => { void sendRequest(target, true); }, c('consent'));
+    else Alert.alert(c('emptyTitle'), c('noBuddyHelp'), [{ text: c('cancel'), style: 'cancel' }, { text: c('call112'), onPress: () => { void Linking.openURL('tel:112'); } }]);
+  };
   const voice = useBuddySpeech({ language: language.startsWith('id') ? 'id' : 'en', onCommand: transcript => {
     const command = transcript.toLocaleLowerCase();
     if (/status|posisi/.test(command)) void voice.speak(statusText);
@@ -82,7 +89,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     else if (/batal|akhiri|cancel|end/.test(command) && session) confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
     else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
     else if (/terdekat|nearby/.test(command)) confirm(c('nearby'), () => { void startNearby(true); }, `${c('nearbyExplanation')} ${c('consent')}`);
-    else if (/bantuan|help/.test(command) && !session) { const target = helper ?? state.contacts.find(item => item.level === 'PRIMARY')?.buddyUserId; if (target) confirm(c('send'), () => { void sendRequest(target, true); }, c('consent')); else void voice.speak(c('empty')); }
+    else if (/bantuan|help/.test(command) && !session) askForHelp();
     else void voice.speak(c('unknownCommand'));
   } });
   const lastStatus = useRef<string | null>(null);
@@ -94,6 +101,15 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   }, [session, preferences.voiceEnabled, soundFree, status, voice]);
   const refreshState = state.refresh;
   useEffect(() => { if (params.requestId) void refreshState(params.requestId); }, [params.requestId, refreshState]);
+  // Home's "Ask for help" arrives as ?help=<timestamp>; each new value asks once, after the Buddy list has loaded.
+  const askedFor = useRef<string | null>(null);
+  const askFromHome = useEffectEvent(() => askForHelp());
+  useEffect(() => {
+    if (!params.help || askedFor.current === params.help || state.loading || state.error || (session && !terminalStatuses.has(session.status))) return;
+    askedFor.current = params.help;
+    if (session) state.dismissSession();
+    askFromHome();
+  }, [params.help, state.loading, state.error, session, state.dismissSession]);
   const availabilityPosition = useEffectEvent(() => native.obtainLocation());
   const availabilityFailure = useEffectEvent((cause: unknown) => {
     if ((cause as ApiError)?.status === 409) { void refreshState(); return; }

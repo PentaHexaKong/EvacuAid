@@ -402,5 +402,19 @@
   "hazardStep_earthquake_1_mobility": "During shaking, lock your wheels or sit down, bend forward, and cover your head and neck with your arms.",
   "hazardStep_earthquake_3_mobility": "When the shaking stops, move to an open area by a step-free route. Do not use the lift; ask for help with stairs.",
   "hazardStep_flood_1_mobility": "Leave early for higher ground while routes are still passable, and tell your Buddy you are moving.",
-  "hazardStep_fire_1_mobility": "Leave straight away by the nearest step-free exit and keep as low as you can under the smoke."
+  "hazardStep_fire_1_mobility": "Leave straight away by the nearest step-free exit and keep as low as you can under the smoke.",
+  "voiceSpeak": "Speak",
+  "voiceSpeakDetail": "Say what you need",
+  "voiceListening": "Listening…",
+  "voiceListeningDetail": "Tap to stop",
+  "voiceExamples": "Say “read the alert”, “nearest gathering point” or “help me”.",
+  "voiceHint": "Then say what you need. A two-finger double-tap anywhere on this screen does the same.",
+  "voiceUnknown": "Sorry, I didn’t catch that. Say read the alert, nearest gathering point or help me.",
+  "voiceUnavailable": "Voice isn’t available right now. The buttons below still work.",
+  "homeReadAloud": "Read the alert aloud",
+  "homeNoWarning": "No warning for your area right now.",
+  "homeNearest": "Nearest gathering point",
+  "homeNearestDetail": "Opens the list of gathering points",
+  "homeAskHelp": "Ask for help",
+  "homeAskHelpDetail": "Your Buddy is asked only after you confirm"
 }
