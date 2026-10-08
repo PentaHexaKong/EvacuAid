@@ -71,22 +71,23 @@ function RouteAction({ level, ink, tint, onRoute }: { level: AlertLevel; ink: st
 }
 
 // Voice-first Home (visual need): spoken commands and the three rows below Speak run the same actions.
-function useVoiceHome(readText: string, nearest: RefObject<string | null>) {
+function useVoiceHome(readText: string, nearest: RefObject<string | null>, listen: boolean) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const haptics = useHaptics();
-  const say = (text: string) => { void speak(text, i18n.language).catch(() => {}); };
+  const say = (text: string) => { if (!listen) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
     else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/discover'); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
   const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
+    if (!listen) return;
     const command = homeCommand(transcript);
     if (command) run(command); else say(t('voiceUnknown'));
   } });
   useEffect(() => { if (voice.error) say(t('voiceUnavailable')); }, [voice.error]); // eslint-disable-line react-hooks/exhaustive-deps
-  const toggle = () => { haptics.tap(); if (voice.listening) voice.stopListening(); else void voice.startListening(); };
+  const toggle = () => { if (!listen) return; haptics.tap(); if (voice.listening) voice.stopListening(); else void voice.startListening(); };
   return { listening: voice.listening, failed: Boolean(voice.error), toggle, run };
 }
 
@@ -119,7 +120,7 @@ export function OverviewScreen() {
   const haptics = useHaptics();
   const [expanded, setExpanded] = useState(false);
   const nearest = useRef<string | null>(null);
-  const voice = useVoiceHome(level === 'normal' ? t('homeNoWarning') : summary, nearest);
+  const voice = useVoiceHome(level === 'normal' ? t('homeNoWarning') : summary, nearest, access.listen);
   const voiceHome = access.voiceHome;
   const collapsible = access.simpleHome || voiceHome;
   useEffect(() => {
@@ -131,7 +132,7 @@ export function OverviewScreen() {
   const chevron = <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />;
   return <TabScrollView contentContainerStyle={{ paddingBottom: 32 }}>
     {/* Magic Tap (two-finger double-tap) reaches the element VoiceOver is on and then its ancestors, so it wraps the whole page. */}
-    <View onMagicTap={voiceHome ? voice.toggle : undefined}>
+    <View onMagicTap={voiceHome && access.listen ? voice.toggle : undefined}>
       <TabHeader><Logo height={32} color={ink} /></TabHeader>
       <SettingsMenu notifications />
       <View style={styles.header}>
@@ -150,7 +151,7 @@ export function OverviewScreen() {
             </>}
         </View>
         {voiceHome
-          ? <View style={{ gap: 12 }}>
+          ? access.listen && <View style={{ gap: 12 }}>
             <SpeakButton listening={voice.listening} label={t(voice.listening ? 'voiceListening' : 'voiceSpeak')} detail={t(voice.listening ? 'voiceListeningDetail' : 'voiceSpeakDetail')} hint={t('voiceHint')} onPress={voice.toggle} />
             {/* Visible examples for low vision; VoiceOver already hears them through the button's hint. A failure is shown here as well as spoken, for people who see the screen but did not hear it. */}
             {voice.failed
@@ -161,7 +162,7 @@ export function OverviewScreen() {
       </View>
       <View style={styles.content}>
         {voiceHome ? <Group inset={0}>
-          <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconVolume size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeReadAloud')} detail={level === 'normal' ? t('homeNoWarning') : t(alert.title)} trailing={chevron} onPress={() => voice.run('readAlert')} />
+          {access.listen && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconVolume size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeReadAloud')} detail={level === 'normal' ? t('homeNoWarning') : t(alert.title)} trailing={chevron} onPress={() => voice.run('readAlert')} />}
           <NearestRow nearest={nearest} onPress={() => voice.run('nearest')} />
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconLifebuoy size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeAskHelp')} detail={t('homeAskHelpDetail')} trailing={chevron} onPress={() => voice.run('help')} />
         </Group> : <Group inset={0}>
