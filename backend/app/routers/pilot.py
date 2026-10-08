@@ -1,29 +1,110 @@
 import hashlib
-import os
 import secrets
 import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import current_user
 from app.db.session import get_session
-from app.db.models import BuddyRelationship, User
+from app.db.models import BuddyRelationship, User, UserAccessibility
 from app.db.models.pilot import PilotAttempt, PilotAvailability, PilotInbox, PilotInvitation, PilotLocation, PilotMessage, PilotPushToken, PilotRequest
-from app.models.pilot import AttemptAction, AvailabilityUpdate, Enrollment, InviteRedeem, MessageCreate, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
+from app.models.pilot import AttemptAction, AvailabilityUpdate, InviteDirect, InviteRedeem, MessageCreate, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
 from app.services import pilotService as service
 from app.services.buddyService import relationshipResponse
 from app.utils.geo import calculate_distance_meters
 
 
 router = APIRouter(prefix='/v1/buddy-pilot', tags=['Buddy pilot'])
+BUDDY_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+DIRECT_INVITATIONS_PER_DAY = 20
 
 
-async def invitation_response(db, invite, code=None):
-    redeemer = await db.get(User, invite.redeemer_id) if invite.redeemer_id else None
-    return {'id': invite.id, **({'code': code} if code else {}), 'expiresAt': invite.expires_at, 'status': 'EXPIRED' if invite.expires_at <= service.now() and invite.status in ('PENDING', 'REDEEMED') else invite.status, 'redeemerUserId': invite.redeemer_id, 'redeemerName': redeemer.name if redeemer else None}
+async def user_needs(db, ids):
+    if not ids:
+        return {}
+    needs = {user_id: [] for user_id in ids}
+    for user_id, kind in (await db.execute(select(UserAccessibility.user_id, UserAccessibility.type).where(UserAccessibility.user_id.in_(ids)).order_by(UserAccessibility.type))).all():
+        needs[user_id].append(kind)
+    return needs
+
+
+def discloses_needs(invite, actor_id):
+    return invite.code_hash is None and invite.direction == 'SEEK_HELP' and invite.status == 'SENT' and actor_id == invite.redeemer_id
+
+
+async def invitation_responses(db, rows, actor_id=None, code=None):
+    ids = {user_id for row in rows for user_id in (row.owner_id, row.redeemer_id) if user_id}
+    names = dict((await db.execute(select(User.id, User.name).where(User.id.in_(ids)))).all()) if ids else {}
+    needs = await user_needs(db, {row.owner_id for row in rows if discloses_needs(row, actor_id)})
+    now = service.now()
+    return [{'id': row.id, **({'code': code} if code else {}), 'expiresAt': row.expires_at, 'status': 'EXPIRED' if row.expires_at <= now and row.status in ('PENDING', 'REDEEMED', 'SENT') else row.status, 'redeemerUserId': row.redeemer_id, 'redeemerName': names.get(row.redeemer_id), 'direction': row.direction, 'relation': row.relation, 'ownerName': names.get(row.owner_id), 'ownerUserId': row.owner_id, 'ownerNeeds': needs[row.owner_id] if discloses_needs(row, actor_id) else []} for row in rows]
+
+
+async def invitation_response(db, invite, code=None, actor_id=None):
+    return (await invitation_responses(db, [invite], actor_id, code))[0]
+
+
+async def activate_relationship(db, user_id, buddy_id, relation=None):
+    relationship = (await db.execute(select(BuddyRelationship).where(BuddyRelationship.userId == user_id, BuddyRelationship.buddyUserId == buddy_id, BuddyRelationship.status.in_(('ACTIVE', 'PENDING'))).with_for_update())).scalar_one_or_none()
+    if not relationship:
+        has_primary = (await db.execute(select(BuddyRelationship.id).where(BuddyRelationship.userId == user_id, BuddyRelationship.level == 'PRIMARY', BuddyRelationship.status == 'ACTIVE'))).first()
+        relationship = BuddyRelationship(userId=user_id, buddyUserId=buddy_id, level='SECONDARY' if has_primary else 'PRIMARY')
+        db.add(relationship)
+    relationship.status, relationship.acceptedAt = 'ACTIVE', service.now()
+    if relation:
+        relationship.relation = relation
+
+
+@router.get('/me/code')
+async def personal_code(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    code = (await db.execute(select(User.buddy_code).where(User.id == actor.id).with_for_update())).scalar_one()
+    while not code:
+        value = ''.join(secrets.choice(BUDDY_CODE_ALPHABET) for _ in range(8))
+        candidate = f'{value[:4]}-{value[4:]}'
+        try:
+            async with db.begin_nested():
+                await db.execute(update(User).where(User.id == actor.id).values(buddy_code=candidate))
+            code = candidate
+        except IntegrityError:
+            pass
+    await db.commit()
+    return {'code': code}
+
+
+@router.post('/invitations/direct', status_code=201)
+async def direct_invitation(payload: InviteDirect, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    value = ''.join(payload.code.upper().split()).replace('-', '')
+    if len(value) != 8 or any(char not in BUDDY_CODE_ALPHABET for char in value):
+        raise HTTPException(422, 'invalid buddy code')
+    target = (await db.execute(select(User.id).where(User.buddy_code == f'{value[:4]}-{value[4:]}'))).scalar_one_or_none()
+    if not target:
+        raise HTTPException(404, 'buddy code not found')
+    if target == actor.id:
+        raise HTTPException(409, 'self invitation')
+    await service.lock_users(db, [actor.id, target])
+    user_id, buddy_id = (actor.id, target) if payload.direction == 'SEEK_HELP' else (target, actor.id)
+    relationship = (await db.execute(select(BuddyRelationship.id).where(BuddyRelationship.userId == user_id, BuddyRelationship.buddyUserId == buddy_id, BuddyRelationship.status == 'ACTIVE'))).first()
+    pending = (await db.execute(select(PilotInvitation.id).where(PilotInvitation.owner_id == actor.id, PilotInvitation.redeemer_id == target, PilotInvitation.direction == payload.direction, PilotInvitation.status == 'SENT', PilotInvitation.expires_at > service.now()))).first()
+    if relationship or pending:
+        raise HTTPException(409, 'relationship or invitation already exists')
+    if await db.scalar(select(func.count()).select_from(PilotInvitation).where(PilotInvitation.owner_id == actor.id, PilotInvitation.code_hash.is_(None), PilotInvitation.created_at > service.now() - timedelta(days=1))) >= DIRECT_INVITATIONS_PER_DAY:
+        raise HTTPException(429, 'too many invitations today')
+    row = PilotInvitation(owner_id=actor.id, redeemer_id=target, status='SENT', direction=payload.direction, relation=payload.relation, code_hash=None, expires_at=service.now() + timedelta(days=7))
+    db.add(row)
+    await db.flush()
+    await service.event(db, target, None, 'INVITATION_RECEIVED', {'invitationId': str(row.id)})
+    await db.commit()
+    return await invitation_response(db, row, actor_id=actor.id)
+
+
+@router.get('/invitations/received')
+async def received_invitations(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    rows = (await db.execute(select(PilotInvitation).where(PilotInvitation.redeemer_id == actor.id, PilotInvitation.status == 'SENT', PilotInvitation.expires_at > service.now()).order_by(PilotInvitation.created_at.desc()))).scalars().all()
+    return await invitation_responses(db, rows, actor.id)
 
 
 @router.post('/invitations', status_code=201)
@@ -38,8 +119,8 @@ async def invite(db: AsyncSession = Depends(get_session), actor=Depends(current_
 
 @router.get('/invitations')
 async def invitations(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
-    rows = (await db.execute(select(PilotInvitation).where(PilotInvitation.owner_id == actor.id).order_by(PilotInvitation.created_at.desc()))).scalars()
-    return [await invitation_response(db, row) for row in rows]
+    rows = (await db.execute(select(PilotInvitation).where(PilotInvitation.owner_id == actor.id).order_by(PilotInvitation.created_at.desc()))).scalars().all()
+    return await invitation_responses(db, rows, actor.id)
 
 
 @router.post('/invitations/redeem')
@@ -67,13 +148,7 @@ async def confirm_invitation(invitation_id: uuid.UUID, db: AsyncSession = Depend
     if row.status != 'REDEEMED' or row.expires_at <= service.now():
         raise HTTPException(409, 'redeemed unexpired invitation required')
     await service.lock_users(db, [actor.id, row.redeemer_id])
-    relationship = (await db.execute(select(BuddyRelationship).where(BuddyRelationship.userId == actor.id, BuddyRelationship.buddyUserId == row.redeemer_id, BuddyRelationship.status.in_(('ACTIVE', 'PENDING'))).with_for_update())).scalar_one_or_none()
-    if not relationship:
-        has_primary = (await db.execute(select(BuddyRelationship.id).where(BuddyRelationship.userId == actor.id, BuddyRelationship.level == 'PRIMARY', BuddyRelationship.status == 'ACTIVE'))).first()
-        relationship = BuddyRelationship(userId=actor.id, buddyUserId=row.redeemer_id, level='SECONDARY' if has_primary else 'PRIMARY', status='ACTIVE', acceptedAt=service.now())
-        db.add(relationship)
-    else:
-        relationship.status, relationship.acceptedAt = 'ACTIVE', service.now()
+    await activate_relationship(db, actor.id, row.redeemer_id)
     row.status = 'CONFIRMED'
     await service.event(db, row.redeemer_id, None, 'INVITATION_CONFIRMED', {'invitationId': str(row.id)})
     await db.commit()
@@ -89,20 +164,51 @@ async def revoke_invitation(invitation_id: uuid.UUID, db: AsyncSession = Depends
         raise HTTPException(409, 'remove confirmed contact through buddy relationship endpoint')
     row.status = 'REVOKED'
     await db.commit()
-    return await invitation_response(db, row)
+    return await invitation_response(db, row, actor_id=actor.id)
+
+
+@router.post('/invitations/{invitation_id}/accept')
+async def accept_invitation(invitation_id: uuid.UUID, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    row = (await db.execute(select(PilotInvitation).where(PilotInvitation.id == invitation_id).with_for_update())).scalar_one_or_none()
+    if not row or row.redeemer_id != actor.id or row.code_hash is not None:
+        raise HTTPException(404, 'invitation not found')
+    if row.status == 'CONFIRMED':
+        return await invitation_response(db, row, actor_id=actor.id)
+    if row.status != 'SENT' or row.expires_at <= service.now():
+        raise HTTPException(409, 'sent unexpired invitation required')
+    await service.lock_users(db, [row.owner_id, actor.id])
+    user_id, buddy_id = (row.owner_id, actor.id) if row.direction == 'SEEK_HELP' else (actor.id, row.owner_id)
+    await activate_relationship(db, user_id, buddy_id, row.relation)
+    row.status = 'CONFIRMED'
+    await service.event(db, row.owner_id, None, 'INVITATION_ACCEPTED', {'invitationId': str(row.id)})
+    await db.commit()
+    return await invitation_response(db, row, actor_id=actor.id)
+
+
+@router.post('/invitations/{invitation_id}/decline')
+async def decline_invitation(invitation_id: uuid.UUID, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    row = (await db.execute(select(PilotInvitation).where(PilotInvitation.id == invitation_id).with_for_update())).scalar_one_or_none()
+    if not row or row.redeemer_id != actor.id or row.code_hash is not None:
+        raise HTTPException(404, 'invitation not found')
+    if row.status != 'SENT' or row.expires_at <= service.now():
+        raise HTTPException(409, 'sent unexpired invitation required')
+    row.status = 'DECLINED'
+    await db.commit()
+    return await invitation_response(db, row, actor_id=actor.id)
 
 
 @router.get('/contacts')
 async def contacts(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
     rows = (await db.execute(select(BuddyRelationship, User.name, PilotAvailability.opted_in, PilotAvailability.observed_at).join(User, User.id == BuddyRelationship.buddyUserId).outerjoin(PilotAvailability, PilotAvailability.user_id == User.id).where(BuddyRelationship.userId == actor.id, BuddyRelationship.status == 'ACTIVE'))).all()
     cutoff = service.now() - timedelta(minutes=2)
-    return [{**relationshipResponse(row).model_dump(), 'name': name, 'available': bool(opted_in and observed_at and observed_at >= cutoff), 'observedAt': observed_at} for row, name, opted_in, observed_at in rows]
+    return [{**relationshipResponse(row).model_dump(), 'name': name, 'available': bool(opted_in and observed_at and observed_at >= cutoff), 'observedAt': observed_at, 'relation': row.relation} for row, name, opted_in, observed_at in rows]
 
 
 @router.get('/contacts/incoming')
 async def incoming_contacts(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
     rows = (await db.execute(select(BuddyRelationship, User.name).join(User, User.id == BuddyRelationship.userId).where(BuddyRelationship.buddyUserId == actor.id, BuddyRelationship.status == 'ACTIVE'))).all()
-    return [{**relationshipResponse(row).model_dump(), 'name': name} for row, name in rows]
+    needs = await user_needs(db, [row.userId for row, name in rows])
+    return [{**relationshipResponse(row).model_dump(), 'name': name, 'needs': needs[row.userId], 'relation': row.relation} for row, name in rows]
 
 
 @router.delete('/contacts/{contact_id}')
@@ -134,31 +240,20 @@ async def availability_row(db, actor):
     await service.lock_users(db, [actor.id])
     row = await db.get(PilotAvailability, actor.id)
     if not row:
-        row = PilotAvailability(user_id=actor.id, enrolled=False, opted_in=False)
+        row = PilotAvailability(user_id=actor.id, opted_in=False)
         db.add(row)
     return row
 
 
-def availability_response(row):
-    return {'enrolled': row.enrolled, 'optedIn': row.opted_in, 'observedAt': row.observed_at}
-
-
-@router.post('/enrollment')
-async def enroll(payload: Enrollment, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
-    expected = os.getenv('BUDDY_PILOT_ENROLLMENT_CODE', '')
-    if not expected or not secrets.compare_digest(payload.code, expected):
-        raise HTTPException(403, 'pilot enrollment code invalid')
-    row = await availability_row(db, actor)
-    row.enrolled = True
-    await db.commit()
-    return availability_response(row)
+async def availability_response(db, row):
+    return {'enrolled': bool(await db.scalar(select(service.is_buddy(row.user_id)))), 'optedIn': row.opted_in, 'observedAt': row.observed_at}
 
 
 @router.get('/availability')
 async def availability(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
     row = await availability_row(db, actor)
     await db.commit()
-    return availability_response(row)
+    return await availability_response(db, row)
 
 
 @router.put('/availability')
@@ -174,7 +269,7 @@ async def update_availability(payload: AvailabilityUpdate, db: AsyncSession = De
         row.latitude = row.longitude = row.observed_at = row.accuracy_m = None
     row.opted_in = payload.optedIn
     await db.commit()
-    return availability_response(row)
+    return await availability_response(db, row)
 
 
 @router.post('/requests', status_code=201)
@@ -205,8 +300,15 @@ async def create_request(payload: RequestCreate, db: AsyncSession = Depends(get_
 
 @router.get('/requests/current')
 async def current_request(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
-    row = (await db.execute(select(PilotRequest).where(PilotRequest.pilot.is_(True), or_(PilotRequest.requester_id == actor.id, PilotRequest.helper_id == actor.id), PilotRequest.status.not_in(service.TERMINAL)).order_by(PilotRequest.created_at.desc()))).scalars().first()
-    return await service.response(db, row, actor.id) if row else None
+    offered = select(PilotAttempt.request_id).where(PilotAttempt.helper_id == actor.id, PilotAttempt.status == 'PENDING', PilotAttempt.expires_at > service.now())
+    request_id = (await db.execute(select(PilotRequest.id).where(PilotRequest.pilot.is_(True), or_(PilotRequest.requester_id == actor.id, PilotRequest.helper_id == actor.id, PilotRequest.id.in_(offered)), PilotRequest.status.not_in(service.TERMINAL)).order_by(PilotRequest.created_at.desc()))).scalars().first()
+    if not request_id:
+        return None
+    try:
+        row = await service.get_request(db, request_id, actor.id)
+    except HTTPException:
+        return None
+    return await service.response(db, row, actor.id)
 
 
 @router.get('/requests/{request_id}')
@@ -227,7 +329,7 @@ async def nearby(request_id: uuid.UUID, payload: NearbySearch, db: AsyncSession 
     row.latitude, row.longitude = payload.latitude, payload.longitude
     if row.status != 'FALLBACK_REQUIRED':
         raise HTTPException(409, 'fallback and search location required')
-    availability = (await db.execute(select(PilotAvailability).where(PilotAvailability.enrolled.is_(True), PilotAvailability.opted_in.is_(True), PilotAvailability.observed_at > service.now() - timedelta(minutes=2), PilotAvailability.user_id != actor.id))).scalars()
+    availability = (await db.execute(select(PilotAvailability).where(service.is_buddy(PilotAvailability.user_id), PilotAvailability.opted_in.is_(True), PilotAvailability.observed_at > service.now() - timedelta(minutes=2), PilotAvailability.user_id != actor.id))).scalars()
     candidates = [(calculate_distance_meters(row.latitude, row.longitude, a.latitude, a.longitude), a.user_id) for a in availability if a.latitude is not None and a.longitude is not None and not await service.occupied(db, a.user_id)]
     row.candidates = [str(user) for distance, user in sorted(candidates) if distance <= 5000][:5]
     row.nearby = True
@@ -249,8 +351,10 @@ async def accept(request_id: uuid.UUID, payload: AttemptAction, db: AsyncSession
         raise HTTPException(409, 'helper already occupied')
     if row.nearby:
         eligibility = await db.get(PilotAvailability, actor.id)
-        if not eligibility or not eligibility.enrolled or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2):
+        if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2):
             raise HTTPException(409, 'helper availability expired')
+        if not await db.scalar(select(service.is_buddy(actor.id))):
+            raise HTTPException(409, 'helper is not a buddy')
     else:
         relationship = (await db.execute(select(BuddyRelationship.id).where(BuddyRelationship.userId == row.requester_id, BuddyRelationship.buddyUserId == actor.id, BuddyRelationship.status == 'ACTIVE').with_for_update())).first()
         if not relationship:

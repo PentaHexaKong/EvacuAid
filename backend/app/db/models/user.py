@@ -19,6 +19,7 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    buddy_code: Mapped[str | None] = mapped_column(String(9), nullable=True, unique=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[object | None] = mapped_column(Geography(geometry_type='POINT', srid=4326), nullable=True)
