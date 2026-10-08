@@ -93,7 +93,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
         raise HTTPException(status_code=409, detail='user location is stale; update location')
     else:
         originLatitude, originLongitude = user.latitude, user.longitude
-    mobilityRequired = any(item.type == 'MOBILITY_LIMITATION' for item in user.accessibility)
+    mobilityRequired = any(item.type == 'MOBILITY_LIMITATION' for item in user.accessibility) or payload.profile == 'WHEELCHAIR'
     rejected: list[RejectedShelter] = []
     if payload.destinationShelterId:
         shelter = await shelterRepository.getShelter(session, payload.destinationShelterId)
@@ -123,7 +123,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     providerFailed = False
     for shelter, _, shelterReasons in viable:
         try:
-            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session, profile=payload.profile)
+            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session, profile='WHEELCHAIR' if mobilityRequired else payload.profile)
         except RoutingUnavailable:
             providerFailed = True
             rejected.append(RejectedShelter(shelterId=shelter.id, reasonCodes=['ROUTING_PROVIDER_UNAVAILABLE']))

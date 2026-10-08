@@ -11,6 +11,7 @@ from app.models.shelter import ShelterCreate
 from app.models.user import LocationUpdate, UserCreate
 from app.routers.navigation import router as navigationRouter
 from app.routers.sessions import router as sessionsRouter
+from app.routers.users import router as usersRouter
 from app.services import navigationService, shelterService, user_service
 from app.services import valhallaProvider
 from app.services.valhallaProvider import RouteData, RoutingUnavailable, ValhallaRoutingProvider
@@ -144,6 +145,7 @@ def originAt(offset):
 def createApi(dbSession):
     api = FastAPI()
     api.include_router(sessionsRouter)
+    api.include_router(usersRouter)
     api.include_router(navigationRouter)
 
     async def getTestSession():
@@ -231,6 +233,60 @@ async def testNavigationRequestProfileReachesEveryCandidate(dbSession, monkeypat
     assert body['route']['profile'] == expectedProfile
     assert len(body['evaluatedCandidates']) == candidateCount
     assert provider.profiles == [profile or 'WALKING'] * candidateCount
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('providerClass,candidateCount', [(RecordingProvider, 2), (RecordingAlternativesProvider, 4)])
+async def testSavedMobilityNeedUsesWheelchairProfileForEveryCandidate(dbSession, monkeypatch, providerClass, candidateCount):
+    await shelter(dbSession, 'First', wheelchairAccessible=True, latitude=-6.201, longitude=106.801)
+    await shelter(dbSession, 'Second', wheelchairAccessible=True, latitude=-6.202, longitude=106.802)
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    provider = providerClass()
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', lambda: provider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        headers = {'Authorization': f"Bearer {guest['access_token']}"}
+        saved = await client.patch(f"/v1/users/{guest['user']['id']}", json={'accessibility': [{'type': 'MOBILITY_LIMITATION'}]}, headers=headers)
+        assert saved.status_code == 200
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['route']['profile'] == 'WHEELCHAIR'
+    assert len(body['evaluatedCandidates']) == candidateCount
+    assert provider.profiles == ['WHEELCHAIR'] * candidateCount
+
+
+@pytest.mark.asyncio
+async def testExplicitWheelchairProfileRejectsInaccessibleShelterWithoutSavedNeed(dbSession, monkeypatch):
+    inaccessible = await shelter(dbSession, 'Inaccessible', wheelchairAccessible=False, latitude=-6.201, longitude=106.801)
+    accessible = await shelter(dbSession, 'Accessible', wheelchairAccessible=True, latitude=-6.202, longitude=106.802)
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    provider = RecordingProvider()
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', lambda: provider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        headers = {'Authorization': f"Bearer {guest['access_token']}"}
+        needs = await client.get(f"/v1/users/{guest['user']['id']}/accessibility", headers=headers)
+        assert needs.status_code == 200 and needs.json() == []
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'profile': 'WHEELCHAIR', 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['destination']['shelterId'] == str(accessible.id)
+    assert body['rejectedCandidates'] == [{'shelterId': str(inaccessible.id), 'reasonCodes': ['WHEELCHAIR_INACCESSIBLE']}]
+    assert body['route']['profile'] == 'WHEELCHAIR'
+    assert provider.profiles == ['WHEELCHAIR']
 
 
 @pytest.mark.asyncio
