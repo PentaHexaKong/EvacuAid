@@ -37,6 +37,7 @@ test.each([
   [404, 'Code not found. Check it and try again.'],
   [409, 'You are already connected, or an invitation is still waiting.'],
   [422, 'The code is 8 letters or numbers.'],
+  [429, 'Too many invitations today. Try again tomorrow.'],
 ])('HTTP %s shows an inline error with the alert role', async (status, message) => {
   mockRequest.mockImplementation((_token: string, path: string) => path === '/me/code' ? Promise.resolve({ code: 'ABCD-1234' }) : Promise.reject(Object.assign(new Error('HTTP error'), { status })));
   const view = render(<BuddyAddScreen />);

@@ -302,6 +302,14 @@ test('helper received invite acceptance posts to its invitation endpoint', async
   await act(async () => {});
 });
 
+test('a received invitation says which way the help goes', async () => {
+  mockAccessibility = [];
+  mockReceived = [{ id: 'asked', status: 'SENT', ownerName: 'Asker', direction: 'SEEK_HELP' }, { id: 'offered', status: 'SENT', ownerName: 'Offerer', direction: 'OFFER_HELP' }];
+  const view = render(<BuddyPilotScreen />);
+  expect(await view.findByText('You will receive help requests from Asker.')).toBeTruthy();
+  expect(view.getByText('Offerer is offering to be your Buddy and will receive your help requests.')).toBeTruthy();
+});
+
 test('helper GPS offers force Auto search and use Skip and confirmed Help this person', async () => {
   mockAccessibility = [];
   mockSession = helperOffer(true);

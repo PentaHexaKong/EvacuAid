@@ -48,7 +48,7 @@ export function BuddyAddScreen() {
       router.back();
     } catch (cause) {
       const status = (cause as ApiError).status;
-      setError(status === 404 || (status === 409 && !direct) ? c('codeNotFound') : status === 409 ? c('alreadyConnected') : status === 422 ? c('codeInvalid') : readableIssue(cause instanceof Error ? cause.message : c('requestFailed'), c));
+      setError(status === 404 || (status === 409 && !direct) ? c('codeNotFound') : status === 409 ? c('alreadyConnected') : status === 422 ? c('codeInvalid') : status === 429 ? c('tooManyInvites') : readableIssue(cause instanceof Error ? cause.message : c('requestFailed'), c));
     } finally { pending.current = false; setBusy(false); }
   };
   return <ScrollView style={styles.page} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}>

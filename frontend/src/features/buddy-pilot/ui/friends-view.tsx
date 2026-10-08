@@ -26,7 +26,7 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
       return <FriendMotion key={item.id}><Card tint="info">
         <StatusChip tone="info" label={c('wantsYou')} />
         <View style={buddyStyles.row}><PersonAvatar name={name} size={48} /><View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{name}</AppText>{!!detail && <AppText style={{ color: colors.muted }}>{detail}</AppText>}</View></View>
-        <AppText style={{ color: colors.muted }}>{c('inviteBodyReceived', { name })}</AppText>
+        <AppText style={{ color: colors.muted }}>{c(item.direction === 'OFFER_HELP' ? 'inviteBodyOffered' : 'inviteBodyReceived', { name })}</AppText>
         <View style={buddyStyles.actions}>
           <View style={buddyStyles.grow}><ActionButton variant="secondary" label={c('declineShort')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}/decline`, {}); }} /></View>
           <View style={buddyStyles.grow}><ActionButton label={c('approve')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}/accept`, {}); }} /></View>
