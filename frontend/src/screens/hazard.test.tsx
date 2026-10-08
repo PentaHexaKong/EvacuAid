@@ -6,7 +6,7 @@ import { findHazard } from '@/features/hazards/use-recent-hazards';
 
 const mockNavigate = jest.fn();
 let mockId = 'bmkg:1';
-jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: mockNavigate }), useLocalSearchParams: () => ({ id: mockId }) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useRouter: () => ({ navigate: mockNavigate }), useLocalSearchParams: () => ({ id: mockId }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('@/features/hazards/use-recent-hazards', () => ({ findHazard: jest.fn() }));
 jest.mock('@/components/page-scroll-view', () => {

@@ -6,7 +6,7 @@ import { levelLabels, sampleAlerts } from '@/features/content/samples';
 import id from '@/localization/id.json';
 
 const mockRouter = { push: jest.fn() };
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: 'rain' }) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: 'rain' }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/id.json')[key] ?? key, i18n: { language: 'id' } }) }));
 
 beforeEach(() => jest.clearAllMocks());

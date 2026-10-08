@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import * as Speech from 'expo-speech';
+import { useIsFocused } from 'expo-router';
 
 export async function speak(text: string, language: string): Promise<void> {
   if (await AccessibilityInfo.isScreenReaderEnabled()) AccessibilityInfo.announceForAccessibility(text);
@@ -14,6 +15,7 @@ export function stopSpeaking(): void {
 
 export function useReadAloud(text: string, options: { auto: boolean }): { speaking: boolean; toggle: () => void } {
   const { i18n } = useTranslation();
+  const focused = useIsFocused();
   const [speaking, setSpeaking] = useState(false);
   const active = useRef(false);
   const generation = useRef(0);
@@ -34,8 +36,11 @@ export function useReadAloud(text: string, options: { auto: boolean }): { speaki
     })().catch(finish);
   }, [text, i18n.language]);
   useEffect(() => {
-    if (options.auto && !autoRead.current) { autoRead.current = true; toggle(); }
-  }, [options.auto, toggle]);
+    if (focused && options.auto && !autoRead.current) { autoRead.current = true; toggle(); }
+  }, [focused, options.auto, toggle]);
+  useEffect(() => {
+    if (!focused) { generation.current += 1; active.current = false; setSpeaking(false); stopSpeaking(); }
+  }, [focused]);
   useEffect(() => () => { generation.current += 1; active.current = false; stopSpeaking(); }, []);
   return { speaking, toggle };
 }

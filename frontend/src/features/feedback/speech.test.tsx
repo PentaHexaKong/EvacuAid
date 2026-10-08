@@ -4,11 +4,13 @@ import * as Speech from 'expo-speech';
 import { speak, stopSpeaking, useReadAloud } from './speech';
 
 let mockLanguage = 'en';
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('expo-speech', () => ({ stop: jest.fn(() => Promise.resolve()), speak: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: mockLanguage } }) }));
 
 beforeEach(() => {
-  jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en';
+  jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en'; mockFocused = true;
   jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false);
   jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
 });
@@ -73,4 +75,44 @@ test('unmount cancels a pending read and stop swallows rejections', async () => 
   jest.mocked(Speech.stop).mockRejectedValueOnce(new Error('stop'));
   stopSpeaking();
   await act(async () => {});
+});
+
+
+test('losing focus stops narration and returning does not auto read again', async () => {
+  const view = renderHook(() => useReadAloud('Warning', { auto: true }));
+  await waitFor(() => expect(view.result.current.speaking).toBe(true));
+  jest.mocked(Speech.stop).mockClear();
+  mockFocused = false;
+  view.rerender({});
+  expect(view.result.current.speaking).toBe(false);
+  expect(Speech.stop).toHaveBeenCalledTimes(1);
+  mockFocused = true;
+  view.rerender({});
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(1);
+  expect(view.result.current.speaking).toBe(false);
+  act(() => view.result.current.toggle());
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  expect(view.result.current.speaking).toBe(true);
+});
+
+test.each([['screenReader', false], ['screenReader', true], ['stop', false]] as const)('losing focus cancels a pending %s check even after returning (screen reader: %s)', async (pending, screenReader) => {
+  let resolve: () => void = () => {};
+  if (pending === 'screenReader') jest.mocked(AccessibilityInfo.isScreenReaderEnabled).mockReturnValueOnce(new Promise<boolean>(done => { resolve = () => done(screenReader); }));
+  else jest.mocked(Speech.stop).mockReturnValueOnce(new Promise<void>(done => { resolve = done; }));
+  const view = renderHook(() => useReadAloud('Warning', { auto: true }));
+  await act(async () => {});
+  jest.mocked(Speech.stop).mockClear();
+  mockFocused = false;
+  view.rerender({});
+  expect(Speech.stop).toHaveBeenCalledTimes(1);
+  expect(view.result.current.speaking).toBe(false);
+  mockFocused = true;
+  view.rerender({});
+  await act(async () => resolve());
+  expect(Speech.speak).not.toHaveBeenCalled();
+  expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled();
+  expect(view.result.current.speaking).toBe(false);
+  act(() => view.result.current.toggle());
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
 });
