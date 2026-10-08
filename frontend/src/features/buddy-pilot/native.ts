@@ -38,6 +38,7 @@ if (!TaskManager.isTaskDefined(TASK)) TaskManager.defineTask<{ locations: Locati
 export function useBuddyNative({ sessionId, active, token, onRefresh, language = 'en' }: { sessionId: string | null; active: boolean | undefined; token: string | null; language?: 'id' | 'en'; onRefresh: (requestId?: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
+  const [foregroundOnly, setForegroundOnly] = useState(false);
   const [location, setLocation] = useState<BuddyPosition | null>(null);
   const watch = useRef<Location.LocationSubscription | null>(null);
   const generation = useRef(0);
@@ -95,7 +96,8 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
       const permission = await Location.requestBackgroundPermissionsAsync();
       ensureCurrent();
-      if (!permission.granted) { setError(message('Sharing works while the app is open. Allow background location in Settings to continue when locked.', 'Lokasi dibagikan saat aplikasi terbuka. Izinkan lokasi latar belakang di Pengaturan agar berlanjut saat terkunci.')); return; }
+      setForegroundOnly(!permission.granted);
+      if (!permission.granted) return;
       await Location.startLocationUpdatesAsync(TASK, { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 5, deferredUpdatesInterval: 15000, pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: true, foregroundService: { notificationTitle: 'EvacuAid Buddy', notificationBody: message('Sharing location during your accepted Buddy session.', 'Berbagi lokasi selama sesi Buddy yang diterima.') } });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
     } catch (cause) { fail(cause); throw cause; } finally { starting.current = false; }
@@ -156,7 +158,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     }, 10000);
     return () => clearInterval(timer);
   }, [tracking, active, sessionId, token]);
-  return { error, tracking, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
+  return { error, tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
 }
 
 export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en'; onCommand: (transcript: string) => void }) {

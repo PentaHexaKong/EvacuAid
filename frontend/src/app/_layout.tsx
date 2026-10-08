@@ -37,7 +37,7 @@ function FirstRunGate() {
     const link = (url: string) => {
       const parsed = Linking.parse(url);
       const code = parsed.queryParams?.code;
-      if ((parsed.path === 'buddy-invite' || parsed.hostname === 'buddy-invite') && typeof code === 'string') setBuddyTarget(`/buddy?code=${encodeURIComponent(code)}`);
+      if ((parsed.path === 'buddy-invite' || parsed.hostname === 'buddy-invite') && typeof code === 'string') setBuddyTarget(`/buddy-invite?code=${encodeURIComponent(code)}`);
     };
     const response = Notifications.addNotificationResponseReceivedListener(notification);
     const links = Linking.addEventListener('url', value => link(value.url));
@@ -86,6 +86,7 @@ function Navigation() {
     <Stack.Screen name="destinations/index" options={{ headerShown: false }} />
     <Stack.Screen name="destinations/[id]" options={{ headerShown: false }} />
     {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: true, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
+    <Stack.Screen name="buddy-add" options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: true, sheetAllowedDetents: 'fitToContents', gestureEnabled: true, contentStyle: { backgroundColor: colors.surface } }} />
     <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />

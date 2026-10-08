@@ -247,3 +247,23 @@ declare module '@tabler/icons-react-native/IconLifebuoy' {
   const Icon: typeof import('@tabler/icons-react-native').IconLifebuoy;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconShare' {
+  const Icon: typeof import('@tabler/icons-react-native').IconShare;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconX' {
+  const Icon: typeof import('@tabler/icons-react-native').IconX;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconPhone' {
+  const Icon: typeof import('@tabler/icons-react-native').IconPhone;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconRoute' {
+  const Icon: typeof import('@tabler/icons-react-native').IconRoute;
+  export default Icon;
+}

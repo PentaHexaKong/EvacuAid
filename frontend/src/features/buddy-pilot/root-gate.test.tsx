@@ -32,7 +32,7 @@ test('retains Buddy target through onboarding and allows repeated notification o
   expect(mockReplace).not.toHaveBeenCalled();
   mockCompleted = true;
   view.rerender(<RootLayout />);
-  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/buddy?code=pilot-code'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/buddy-invite?code=pilot-code'));
   const response = { notification: { request: { content: { data: { requestId: 'session-id' } } } } };
   await act(async () => { mockNotification(response); });
   await act(async () => { mockNotification(response); });

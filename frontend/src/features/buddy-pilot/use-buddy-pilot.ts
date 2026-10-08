@@ -8,6 +8,7 @@ export function useBuddyPilot(token: string | null) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [incomingContacts, setIncomingContacts] = useState<Contact[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [received, setReceived] = useState<Invitation[]>([]);
   const [inbox, setInbox] = useState<InboxItem[]>([]);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -37,10 +38,10 @@ export function useBuddyPilot(token: string | null) {
         if (current) return current;
         return selected.current ? get<Session>(`/requests/${selected.current}`) : null;
       };
-      const [nextContacts, nextInvitations, nextInbox, nextAvailability, nextSession, nextIncoming] = await Promise.all([
+      const [nextContacts, nextInvitations, nextInbox, nextAvailability, nextSession, nextIncoming, nextReceived] = await Promise.all([
         get<Contact[]>('/contacts'), get<Invitation[]>('/invitations'), get<InboxItem[]>('/inbox'), get<Availability>('/availability'),
         getSession(),
-        get<Contact[]>('/contacts/incoming'),
+        get<Contact[]>('/contacts/incoming'), get<Invitation[]>('/invitations/received'),
       ]);
       let nextMessages: Message[] = [];
       let nextLocations: SharedPosition[] = [];
@@ -49,7 +50,7 @@ export function useBuddyPilot(token: string | null) {
         nextMessages = chat; nextLocations = positions.locations;
       }
       if (version !== generation.current) return;
-      setContacts(keep(nextContacts)); setIncomingContacts(keep(nextIncoming)); setInvitations(keep(nextInvitations)); setInbox(keep(nextInbox)); setAvailability(keep<Availability | null>(nextAvailability));
+      setContacts(keep(nextContacts)); setIncomingContacts(keep(nextIncoming)); setInvitations(keep(nextInvitations)); setReceived(keep(nextReceived)); setInbox(keep(nextInbox)); setAvailability(keep<Availability | null>(nextAvailability));
       setSession(keep(nextSession)); setMessages(keep(nextMessages)); setLocations(keep(nextLocations)); setError(null);
     } catch (cause) {
       if (version !== generation.current || (cause as Error).name === 'AbortError') return;
@@ -93,5 +94,17 @@ export function useBuddyPilot(token: string | null) {
   };
 
   const dismissSession = () => { selected.current = null; setSession(null); void refresh(); };
-  return { contacts, incomingContacts, invitations, inbox, availability, session, messages, locations, error, loading, busy, refresh, run, dismissSession };
+  return { contacts, incomingContacts, invitations, received, inbox, availability, session, messages, locations, error, loading, busy, refresh, run, dismissSession };
+}
+
+export function useBuddyCode(token: string | null) {
+  const [result, setResult] = useState<{ token: string; code: string } | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    const controller = new AbortController();
+    void buddyRequest<{ code: string }>(token, '/me/code', 'GET', undefined, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setResult({ token, code: value.code }); }).catch(() => {});
+    return () => controller.abort();
+  }, [token]);
+  return result?.token === token ? result?.code ?? null : null;
 }

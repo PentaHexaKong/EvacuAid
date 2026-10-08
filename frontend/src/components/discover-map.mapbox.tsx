@@ -96,6 +96,13 @@ function ShelterPin({ item, active, lifted, onSelect }: { item: DiscoverMarker; 
   </View>;
 }
 
+function PersonPin({ item, onSelect }: { item: DiscoverMarker; onSelect: (id: string) => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={() => onSelect(item.id)} style={styles.person}>
+    <View style={styles.personHalo} />
+    <View style={styles.personRing}><AppText variant="button" style={{ color: colors.surface, fontSize: 17 }}>{item.initials}</AppText></View>
+  </Pressable>;
+}
+
 function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onToggleMode, userLocation, focus, onLocate, topInset, bottomInset, creditsInset, controlsStyle, onFail }: DiscoverMapProps & { onFail: () => void }) {
   const { t } = useTranslation();
   const camera = useRef<Camera>(null);
@@ -108,7 +115,7 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
     return () => clearTimeout(timeout);
   }, []);
   const target = useCallback((): Bounds | null => {
-    const nearby = items.filter(item => item.kind === 'destination').slice(0, 3).map(markerPosition);
+    const nearby = [...items.filter(item => item.kind === 'destination').slice(0, 3), ...items.filter(item => item.kind === 'person')].map(markerPosition);
     // An evacuation route always wins. Otherwise a focus (an epicentre opened from its detail page) is shown until the user asks for their own location again.
     const points: [number, number][] = route?.length ? route : focus ? focusCorners(focus) : userLocation ? [position(userLocation), ...nearby] : items.map(markerPosition);
     if (!points.length) return null;
@@ -138,6 +145,9 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
       {tilted && <PinShadows items={items} />}
       {items.map(item => {
         const active = selected === item.id;
+        if (item.kind === 'person') return <MarkerView key={item.id} coordinate={markerPosition(item)} anchor={{ x: 0.5, y: 0.5 }} allowOverlap allowOverlapWithPuck>
+          <PersonPin item={item} onSelect={onSelect} />
+        </MarkerView>;
         if (item.kind === 'destination') return <MarkerView key={item.id} coordinate={markerPosition(item)} anchor={{ x: 0.5, y: 1 }} allowOverlap allowOverlapWithPuck>
           <ShelterPin item={item} active={active} lifted={tilted} onSelect={onSelect} />
         </MarkerView>;
@@ -159,6 +169,9 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
 }
 
 const styles = StyleSheet.create({
+  person: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  personHalo: { position: 'absolute', width: 64, height: 64, borderRadius: radius.pill, backgroundColor: `${colors.primary}29` },
+  personRing: { width: 48, height: 48, borderRadius: radius.pill, borderWidth: 3, borderColor: colors.surface, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   pin: { alignItems: 'center', paddingBottom: 8 },
   pinTail: { position: 'absolute', bottom: 3.3, width: 16, height: 16, borderBottomRightRadius: 4, backgroundColor: colors.surface, boxShadow: `0 2px 6px ${colors.ink}40`, transform: [{ rotate: '45deg' }] },
   pinShadow: { position: 'absolute', top: 0, borderRadius: radius.pill, backgroundColor: colors.surface, boxShadow: `0 2px 6px ${colors.ink}40` },

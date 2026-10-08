@@ -1,11 +1,13 @@
 import { useAccess } from '@/features/access/use-access';
-import { useContext, useState } from 'react';
-import { Stack } from 'expo-router';
+import { useCallback, useContext, useState } from 'react';
+import { Stack, useFocusEffect } from 'expo-router';
 import { TabHeader } from '@/components/tab-shell';
 import { ActivityIndicator } from 'react-native';
-import Animated, { withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { ActionButton, AppText, Page } from '@/components/ui';
 import { Segmented } from '@/components/native-controls';
+import { useProfile } from '@/features/profile/context';
+import { HelperContent, TAB_SHIFT, tabEnter } from '@/features/buddy-pilot/ui/helper-buddy';
 import { useGuestSession } from '@/features/profile/session';
 import { buddyRequest } from '@/features/buddy-pilot/api';
 import { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
@@ -17,26 +19,21 @@ import { NearbyView } from '@/features/buddy-pilot/ui/nearby-view';
 import { SessionMap, SessionView } from '@/features/buddy-pilot/ui/session-view';
 import { Card } from '@/features/buddy-pilot/ui/parts';
 import { colors, SystemReduceMotionContext } from '@/theme';
-import { duration, ease } from '@/theme/motion';
 
 export function BuddyPilotScreen() {
   const { token, user } = useGuestSession();
   const state = useBuddyPilot(token);
+  const { accessibility, ready } = useProfile();
+  const refresh = state.refresh;
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   const { c } = useBuddyCopy();
   if (!token || !user) return <Page><AppText accessibilityRole="alert">{c('requestFailed')}</AppText></Page>;
-  if (state.loading) return <Page><ActivityIndicator accessibilityLabel={c('checking')} /></Page>;
+  if (state.loading || !ready) return <Page><ActivityIndicator accessibilityLabel={c('checking')} /></Page>;
+  if (accessibility.length === 0) return <HelperContent key={user.id} token={token} userId={user.id} state={state} />;
   return <BuddyContent key={user.id} token={token} userId={user.id} state={state} />;
 }
 
 type Tab = 'buddies' | 'nearby';
-
-// The incoming tab fades in from the side its segment sits on: a short nudge, not a page slide.
-const TAB_SHIFT = 12;
-const tabEnter = (from: number) => () => {
-  'worklet';
-  const timing = { duration: duration.state, easing: ease.out };
-  return { initialValues: { opacity: 0, transform: [{ translateX: from }] }, animations: { opacity: withTiming(1, timing), transform: [{ translateX: withTiming(0, timing) }] } };
-};
 
 function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
   const { soundFree } = useAccess();
