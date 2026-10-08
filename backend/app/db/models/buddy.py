@@ -17,6 +17,7 @@ class BuddyRelationship(Base):
     buddyUserId: Mapped[uuid.UUID] = mapped_column('buddy_user_id', UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     level: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    relation: Mapped[str | None] = mapped_column(String(16))
     createdAt: Mapped[datetime] = mapped_column('created_at', DateTime(timezone=True), server_default=func.now(), nullable=False)
     updatedAt: Mapped[datetime] = mapped_column('updated_at', DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     acceptedAt: Mapped[datetime | None] = mapped_column('accepted_at', DateTime(timezone=True), nullable=True)

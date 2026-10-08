@@ -12,10 +12,12 @@ from app.db.models.buddy import AssistanceRequest as PilotRequest
 class PilotInvitation(Base):
     __tablename__ = 'pilot_invitations'
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
-    owner_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
-    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    redeemer_id: Mapped[uuid.UUID | None] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
+    owner_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), index=True)
+    code_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    redeemer_id: Mapped[uuid.UUID | None] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), index=True)
     status: Mapped[str] = mapped_column(String(24), default='PENDING')
+    direction: Mapped[str] = mapped_column(String(16), default='SEEK_HELP', server_default='SEEK_HELP')
+    relation: Mapped[str | None] = mapped_column(String(16))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -23,7 +25,6 @@ class PilotInvitation(Base):
 class PilotAvailability(Base):
     __tablename__ = 'pilot_availability'
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    enrolled: Mapped[bool] = mapped_column(Boolean, default=False)
     opted_in: Mapped[bool] = mapped_column(Boolean, default=False)
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
@@ -33,7 +34,7 @@ class PilotAvailability(Base):
 
 class PilotAttempt(Base):
     __tablename__ = 'pilot_attempts'
-    __table_args__ = (Index('uq_pilot_pending_attempt', 'request_id', unique=True, postgresql_where=text("status = 'PENDING'")),)
+    __table_args__ = (Index('uq_pilot_pending_attempt', 'request_id', unique=True, postgresql_where=text("status = 'PENDING'")), Index('ix_pilot_pending_attempt_helper', 'helper_id', postgresql_where=text("status = 'PENDING'")))
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('assistance_requests.id', ondelete='CASCADE'))
     helper_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))

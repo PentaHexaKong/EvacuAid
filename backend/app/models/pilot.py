@@ -11,8 +11,10 @@ class InviteRedeem(BaseModel):
     code: str = Field(min_length=6, max_length=64)
 
 
-class Enrollment(BaseModel):
-    code: str = Field(min_length=1, max_length=128)
+class InviteDirect(BaseModel):
+    code: str = Field(min_length=8, max_length=16)
+    relation: Literal['KELUARGA', 'TEMAN', 'TETANGGA', 'PENDAMPING', 'LAINNYA']
+    direction: Literal['SEEK_HELP', 'OFFER_HELP']
 
 
 class AvailabilityUpdate(BaseModel):

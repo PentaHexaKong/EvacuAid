@@ -2,15 +2,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, exists, or_, select
 
-from app.db.models import User
+from app.db.models import BuddyRelationship, User
 from app.db.models.pilot import PilotAttempt, PilotInbox, PilotLocation, PilotOutbox, PilotRequest
 from app.utils.geo import calculate_distance_meters
 
 
 TERMINAL = ('COMPLETED', 'INTERRUPTED', 'UNANSWERED', 'SAFE', 'DECLINED', 'CANCELLED', 'EXPIRED')
 CONNECTED = ('ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'COMPLETION_PENDING')
+
+
+def is_buddy(user_id):
+    return exists().where(BuddyRelationship.buddyUserId == user_id, BuddyRelationship.status == 'ACTIVE')
 
 
 def now():
@@ -81,7 +85,7 @@ async def advance(db, request):
     while candidates:
         helper = uuid.UUID(candidates.pop(0))
         availability = await db.get(PilotAvailability, helper)
-        if availability and availability.enrolled and availability.opted_in and availability.observed_at and availability.observed_at > now() - timedelta(minutes=2) and availability.latitude is not None and request.latitude is not None and calculate_distance_meters(request.latitude, request.longitude, availability.latitude, availability.longitude) <= 5000 and not await occupied(db, helper):
+        if availability and availability.opted_in and await db.scalar(select(is_buddy(helper))) and availability.observed_at and availability.observed_at > now() - timedelta(minutes=2) and availability.latitude is not None and request.latitude is not None and calculate_distance_meters(request.latitude, request.longitude, availability.latitude, availability.longitude) <= 5000 and not await occupied(db, helper):
             request.candidates = candidates
             await offer(db, request, helper, 30)
             return
