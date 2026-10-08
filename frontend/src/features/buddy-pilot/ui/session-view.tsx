@@ -129,7 +129,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
     </Card>}
     {active && !session.meetingConfirmed && !requester && <CheckOption label={c('wheelchair')} checked={wheelchair} onToggle={setWheelchair} />}
 
-    {active && route?.route && <RouteView key={`${session.id}:${route.route.geometry.coordinates[0]?.join(',')}:${route.destination?.shelterId ?? route.leg}`} route={route} position={native.location} target={requesterPoint} onInstruction={setCurrentInstruction} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} voiceEnabled={preferences.voiceEnabled} />}
+    {active && route?.route && <RouteView key={`${session.id}:${route.route.geometry.coordinates[0]?.join(',')}:${route.destination?.shelterId ?? route.leg}`} route={route} position={native.location} target={requesterPoint} onInstruction={setCurrentInstruction} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} voiceEnabled={preferences.voiceEnabled && !soundFree} />}
 
     {active && <Card>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: messagesOpen }} onPress={() => setMessagesOpen(open => !open)} style={[buddyStyles.row, { minHeight: 44, justifyContent: 'space-between' }]}>
