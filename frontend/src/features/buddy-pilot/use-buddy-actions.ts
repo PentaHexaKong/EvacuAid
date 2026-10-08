@@ -105,10 +105,11 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const askedFor = useRef<string | null>(null);
   const askFromHome = useEffectEvent(() => askForHelp());
   useEffect(() => {
-    if (!params.help || askedFor.current === params.help || state.loading || state.error || session) return;
+    if (!params.help || askedFor.current === params.help || state.loading || state.error || (session && !terminalStatuses.has(session.status))) return;
     askedFor.current = params.help;
+    if (session) state.dismissSession();
     askFromHome();
-  }, [params.help, state.loading, state.error, session]);
+  }, [params.help, state.loading, state.error, session, state.dismissSession]);
   const availabilityPosition = useEffectEvent(() => native.obtainLocation());
   const availabilityFailure = useEffectEvent((cause: unknown) => {
     if ((cause as ApiError)?.status === 409) { void refreshState(); return; }

@@ -90,3 +90,34 @@ test('Home help waits through loading and errors, then asks the loaded primary B
     expect(alert).toHaveBeenCalledTimes(1);
   } finally { alert.mockRestore(); }
 });
+
+test.each(['COMPLETED', 'INTERRUPTED', 'UNANSWERED'])('Home help dismisses a %s session before asking once', status => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const idle = { loading: false, error: null, locations: [], contacts: [{ level: 'PRIMARY', buddyUserId: 'buddy' }], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() };
+  mockParams = { help: 'next' };
+  try {
+    const view = renderHook(({ selected }: { selected: ReturnType<typeof session> | null }) => useBuddyActions({ token: 'token', userId: 'me', state: { ...idle, session: selected } as never }), { initialProps: { selected: session(status) } });
+    expect(idle.dismissSession).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('send', 'consent', expect.any(Array));
+    expect(idle.dismissSession.mock.invocationCallOrder[0]).toBeLessThan(alert.mock.invocationCallOrder[0]);
+    expect(idle.run).not.toHaveBeenCalled();
+    view.rerender({ selected: null });
+    expect(idle.dismissSession).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledTimes(1);
+  } finally { alert.mockRestore(); }
+});
+
+test.each(['WAITING', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'COMPLETION_PENDING'])('Home help waits for a non-terminal %s session', status => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const idle = { loading: false, error: null, locations: [], contacts: [{ level: 'PRIMARY', buddyUserId: 'buddy' }], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() };
+  mockParams = { help: 'pending' };
+  try {
+    const view = renderHook(({ selected }: { selected: ReturnType<typeof session> | null }) => useBuddyActions({ token: 'token', userId: 'me', state: { ...idle, session: selected } as never }), { initialProps: { selected: session(status) } });
+    expect(idle.dismissSession).not.toHaveBeenCalled();
+    expect(alert).not.toHaveBeenCalled();
+    view.rerender({ selected: null });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('send', 'consent', expect.any(Array));
+  } finally { alert.mockRestore(); }
+});
