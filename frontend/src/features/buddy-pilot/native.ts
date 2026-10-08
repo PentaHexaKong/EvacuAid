@@ -162,25 +162,30 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
 export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en'; onCommand: (transcript: string) => void }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useSpeechRecognitionEvent('start', () => setListening(true));
-  useSpeechRecognitionEvent('end', () => setListening(false));
+  // Recognition events reach every mounted listener; Home and Buddy each act only on the speech they started.
+  const mine = useRef(false);
+  useSpeechRecognitionEvent('start', () => { if (mine.current) setListening(true); });
+  useSpeechRecognitionEvent('end', () => { if (!mine.current) return; mine.current = false; setListening(false); });
   useSpeechRecognitionEvent('error', event => {
+    if (!mine.current) return;
+    mine.current = false;
     setListening(false);
     if (event.error === 'aborted') return;
     setError(language === 'id' ? 'Pengenalan suara berhenti. Kontrol sentuh tetap tersedia.' : 'Speech recognition stopped. Touch controls are still available.');
   });
-  useSpeechRecognitionEvent('result', event => { if (event.isFinal && event.results[0]?.transcript) onCommand(event.results[0].transcript); });
+  useSpeechRecognitionEvent('result', event => { if (mine.current && event.isFinal && event.results[0]?.transcript) onCommand(event.results[0].transcript); });
   const startListening = async () => {
     setError(null);
     try {
       await Speech.stop();
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) throw new Error(language === 'id' ? 'Izin mikrofon dan pengenalan suara diperlukan. Kontrol sentuh tetap tersedia.' : 'Microphone and speech permission are required. Touch controls remain available.');
+      mine.current = true;
       ExpoSpeechRecognitionModule.start({ lang: language === 'id' ? 'id-ID' : 'en-US', interimResults: false, continuous: false });
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Speech recognition unavailable.'); }
+    } catch (cause) { mine.current = false; setError(cause instanceof Error ? cause.message : 'Speech recognition unavailable.'); }
   };
   const speak = (text: string) => speakAloud(text, language);
-  useEffect(() => () => { ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
+  useEffect(() => () => { if (mine.current) ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
   return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), speak };
 }
 

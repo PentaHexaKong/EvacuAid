@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,8 @@ import IconChevronUp from '@tabler/icons-react-native/IconChevronUp';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import IconMap from '@tabler/icons-react-native/IconMap';
 import IconUsers from '@tabler/icons-react-native/IconUsers';
+import IconVolume from '@tabler/icons-react-native/IconVolume';
+import IconLifebuoy from '@tabler/icons-react-native/IconLifebuoy';
 import { AlertRow } from '@/components/content';
 import { DiscoverDisaster } from '@/features/hazards/discover-disaster';
 import { Logo } from '@/components/logo';
@@ -17,6 +19,9 @@ import { SettingsMenu } from '@/components/settings-menu';
 import { TabHeader, TabScrollView } from '@/components/tab-shell';
 import { AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
+import { SpeakButton } from '@/components/speak-button';
+import { useBuddySpeech } from '@/features/buddy-pilot/native';
+import { homeCommand, type HomeCommand } from '@/features/voice/home-command';
 import { formatDistance } from '@/features/navigation/distance';
 import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
 import { useAccess } from '@/features/access/use-access';
@@ -65,6 +70,36 @@ function RouteAction({ level, ink, tint, onRoute }: { level: AlertLevel; ink: st
       : <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} /></Group>;
 }
 
+// Voice-first Home (visual need): spoken commands and the three rows below Speak run the same actions.
+function useVoiceHome(readText: string, nearest: RefObject<string | null>) {
+  const { t, i18n } = useTranslation();
+  const router = useRouter();
+  const haptics = useHaptics();
+  const say = (text: string) => { void speak(text, i18n.language).catch(() => {}); };
+  const run = (command: HomeCommand) => {
+    if (command === 'readAlert') say(readText);
+    else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/discover'); }
+    else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
+  };
+  const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
+    const command = homeCommand(transcript);
+    if (command) run(command); else say(t('voiceUnknown'));
+  } });
+  useEffect(() => { if (voice.error) say(t('voiceUnavailable')); }, [voice.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = () => { haptics.tap(); if (voice.listening) voice.stopListening(); else void voice.startListening(); };
+  return { listening: voice.listening, failed: Boolean(voice.error), toggle, run };
+}
+
+// Owns the shelter lookup on the voice Home, where the sky's route row is not shown, and keeps a spoken line for the "nearest" command.
+function NearestRow({ nearest, onPress }: { nearest: RefObject<string | null>; onPress: () => void }) {
+  const { t, i18n } = useTranslation();
+  const { shelters } = useEvacuationRoute();
+  const shelter = shelters?.[0];
+  const detail = shelter ? `${shelter.name} · ${formatDistance(shelter.distanceM, i18n.language)}` : t('homeNearestDetail');
+  useEffect(() => { nearest.current = shelter ? `${t('homeNearest')}: ${shelter.name}, ${formatDistance(shelter.distanceM, i18n.language)}` : null; }, [shelter, nearest, t, i18n.language]);
+  return <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMapPin size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeNearest')} detail={detail} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={onPress} />;
+}
+
 export function OverviewScreen() {
   const access = useAccess();
   const { t, i18n } = useTranslation();
@@ -83,6 +118,10 @@ export function OverviewScreen() {
   const listed = level === 'normal' ? sampleAlerts : sampleAlerts.filter(item => item.id !== alert.id);
   const haptics = useHaptics();
   const [expanded, setExpanded] = useState(false);
+  const nearest = useRef<string | null>(null);
+  const voice = useVoiceHome(level === 'normal' ? t('homeNoWarning') : summary, nearest);
+  const voiceHome = access.voiceHome;
+  const collapsible = access.simpleHome || voiceHome;
   useEffect(() => {
     if (level === 'normal' || vibratedAlerts.has(alert.id)) return;
     vibratedAlerts.add(alert.id);
@@ -91,6 +130,8 @@ export function OverviewScreen() {
   const openAlert = (id: string) => router.push({ pathname: '/alert/[id]', params: { id } });
   const chevron = <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />;
   return <TabScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+    {/* Magic Tap (two-finger double-tap) reaches the element VoiceOver is on and then its ancestors, so it wraps the whole page. */}
+    <View onMagicTap={voiceHome ? voice.toggle : undefined}>
       <TabHeader><Logo height={32} color={ink} /></TabHeader>
       <SettingsMenu notifications />
       <View style={styles.header}>
@@ -108,15 +149,27 @@ export function OverviewScreen() {
               <Tap onPress={() => openAlert(alert.id)} style={styles.readLink}><AppText variant="button" style={{ color: ink }}>{t('homeReadAlert')}</AppText><IconArrowRight size={18} strokeWidth={2.25} color={ink} /></Tap>
             </>}
         </View>
-        <RouteAction level={level} ink={ink} tint={stops[2]} onRoute={() => router.navigate({ pathname: '/discover', params: { route: String(Date.now()) } })} />
+        {voiceHome
+          ? <View style={{ gap: 12 }}>
+            <SpeakButton listening={voice.listening} label={t(voice.listening ? 'voiceListening' : 'voiceSpeak')} detail={t(voice.listening ? 'voiceListeningDetail' : 'voiceSpeakDetail')} hint={t('voiceHint')} onPress={voice.toggle} />
+            {/* Visible examples for low vision; VoiceOver already hears them through the button's hint. A failure is shown here as well as spoken, for people who see the screen but did not hear it. */}
+            {voice.failed
+              ? <AppText accessibilityRole="alert" style={{ color: ink }}>{t('voiceUnavailable')}</AppText>
+              : <AppText accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ color: ink }}>{t('voiceExamples')}</AppText>}
+          </View>
+          : <RouteAction level={level} ink={ink} tint={stops[2]} onRoute={() => router.navigate({ pathname: '/discover', params: { route: String(Date.now()) } })} />}
       </View>
       <View style={styles.content}>
-        <Group inset={0}>
+        {voiceHome ? <Group inset={0}>
+          <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconVolume size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeReadAloud')} detail={level === 'normal' ? t('homeNoWarning') : t(alert.title)} trailing={chevron} onPress={() => voice.run('readAlert')} />
+          <NearestRow nearest={nearest} onPress={() => voice.run('nearest')} />
+          <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconLifebuoy size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeAskHelp')} detail={t('homeAskHelpDetail')} trailing={chevron} onPress={() => voice.run('help')} />
+        </Group> : <Group inset={0}>
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMap size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickMap')} detail={t('quickMapDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/discover'); }} />
-        </Group>
-        {access.simpleHome && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}
-        {(!access.simpleHome || expanded) && <>
+        </Group>}
+        {collapsible && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}
+        {(!collapsible || expanded) && <>
         <View style={{ gap: 12 }}>
           <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
           {listed.length
@@ -126,6 +179,7 @@ export function OverviewScreen() {
         <DiscoverDisaster />
         </>}
       </View>
+    </View>
   </TabScrollView>;
 }
 

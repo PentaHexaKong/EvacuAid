@@ -76,18 +76,39 @@ test('a stationary sharer keeps uploading fresh positions', async () => {
 });
 
 
-test('an intentional speech abort is not reported, other recognition errors are localized', () => {
+function speechHarness(onCommand = jest.fn()) {
   const { useSpeechRecognitionEvent, ExpoSpeechRecognitionModule } = jest.requireMock('expo-speech-recognition') as { useSpeechRecognitionEvent: jest.Mock; ExpoSpeechRecognitionModule: Record<string, jest.Mock> };
   ExpoSpeechRecognitionModule.abort = jest.fn();
-  const { renderHook, act } = jest.requireActual('@testing-library/react-native');
+  ExpoSpeechRecognitionModule.start = jest.fn();
+  ExpoSpeechRecognitionModule.requestPermissionsAsync = jest.fn().mockResolvedValue({ granted: true });
+  const { renderHook } = jest.requireActual('@testing-library/react-native');
   const { useBuddySpeech } = jest.requireActual('./native');
   const handlers: Record<string, (event: unknown) => void> = {};
   useSpeechRecognitionEvent.mockImplementation((name: string, handler: (event: unknown) => void) => { handlers[name] = handler; });
-  const { result } = renderHook(() => useBuddySpeech({ language: 'id', onCommand: jest.fn() }));
+  return { handlers, ...renderHook(() => useBuddySpeech({ language: 'id', onCommand })) };
+}
+
+test('an intentional speech abort is not reported, other recognition errors are localized', async () => {
+  const { act } = jest.requireActual('@testing-library/react-native');
+  const { handlers, result } = speechHarness();
+  await act(async () => result.current.startListening());
   act(() => handlers.error({ error: 'aborted', message: 'Speech recognition aborted.' }));
   expect(result.current.error).toBeNull();
+  await act(async () => result.current.startListening());
   act(() => handlers.error({ error: 'network', message: 'Network error' }));
   expect(result.current.error).toBe('Pengenalan suara berhenti. Kontrol sentuh tetap tersedia.');
+});
+
+test('speech started by another screen is ignored, so Home and Buddy never both act on one sentence', async () => {
+  const { act } = jest.requireActual('@testing-library/react-native');
+  const onCommand = jest.fn();
+  const { handlers, result } = speechHarness(onCommand);
+  act(() => { handlers.start({}); handlers.result({ isFinal: true, results: [{ transcript: 'tolong' }] }); });
+  expect(result.current.listening).toBe(false);
+  expect(onCommand).not.toHaveBeenCalled();
+  await act(async () => result.current.startListening());
+  act(() => { handlers.start({}); handlers.result({ isFinal: true, results: [{ transcript: 'tolong' }] }); });
+  expect(onCommand).toHaveBeenCalledWith('tolong');
 });
 
 test('inbox notifications fire once per new incoming item and never for history', async () => {

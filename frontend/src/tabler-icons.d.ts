@@ -237,3 +237,13 @@ declare module '@tabler/icons-react-native/IconWorld' {
   const Icon: typeof import('@tabler/icons-react-native').IconWorld;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconMicrophone' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMicrophone;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconLifebuoy' {
+  const Icon: typeof import('@tabler/icons-react-native').IconLifebuoy;
+  export default Icon;
+}

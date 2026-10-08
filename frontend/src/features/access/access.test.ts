@@ -10,17 +10,17 @@ jest.mock('../profile/context', () => ({ useProfile: () => ({ accessibility: moc
 jest.mock('../preferences/context', () => ({ usePreferences: () => ({ preferences: mockPreferences }) }));
 
 const base: Access = {
-  listen: true, autoRead: false, listFirst: false, captions: true,
+  listen: true, autoRead: false, listFirst: false, voiceHome: false, captions: true,
   soundFree: false, stepFree: false, simpleHome: false, largeTargets: false,
 };
 const cases: { name: string; needs: readonly AccessibilityType[]; voiceEnabled?: boolean; textEnabled?: boolean; expected: Partial<Access> }[] = [
   { name: 'no needs with defaults', needs: [], expected: {} },
-  { name: 'visual impairment', needs: ['VISUAL_IMPAIRMENT'], expected: { autoRead: true, listFirst: true } },
+  { name: 'visual impairment', needs: ['VISUAL_IMPAIRMENT'], expected: { autoRead: true, listFirst: true, voiceHome: true } },
   { name: 'hearing impairment', needs: ['HEARING_IMPAIRMENT'], expected: { listen: false, soundFree: true } },
   { name: 'mobility limitation', needs: ['MOBILITY_LIMITATION'], expected: { stepFree: true } },
   { name: 'elderly', needs: ['ELDERLY'], expected: { simpleHome: true, largeTargets: true } },
-  { name: 'visual impairment with voice off', needs: ['VISUAL_IMPAIRMENT'], voiceEnabled: false, expected: { listen: false, listFirst: true } },
-  { name: 'hearing wins over visual with text off', needs: ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT'], textEnabled: false, expected: { listen: false, soundFree: true, listFirst: true } },
+  { name: 'visual impairment with voice off', needs: ['VISUAL_IMPAIRMENT'], voiceEnabled: false, expected: { listen: false, listFirst: true, voiceHome: true } },
+  { name: 'hearing wins over visual with text off', needs: ['VISUAL_IMPAIRMENT', 'HEARING_IMPAIRMENT'], textEnabled: false, expected: { listen: false, soundFree: true, listFirst: true, voiceHome: true } },
   { name: 'mobility and elderly', needs: ['MOBILITY_LIMITATION', 'ELDERLY'], expected: { stepFree: true, simpleHome: true, largeTargets: true } },
   { name: 'other', needs: ['OTHER'], expected: {} },
   { name: 'unknown string', needs: ['UNKNOWN' as AccessibilityType], expected: {} },

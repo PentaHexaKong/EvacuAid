@@ -5,6 +5,7 @@ export type Access = {
   listen: boolean;
   autoRead: boolean;
   listFirst: boolean;
+  voiceHome: boolean;
   captions: boolean;
   soundFree: boolean;
   stepFree: boolean;
@@ -20,6 +21,7 @@ export function accessFor(needs: readonly AccessibilityType[], preferences: Pick
     listen: preferences.voiceEnabled && !soundFree,
     autoRead: visual && preferences.voiceEnabled && !soundFree,
     listFirst: visual,
+    voiceHome: visual,
     captions: preferences.textEnabled || soundFree,
     soundFree,
     stepFree: needs.includes('MOBILITY_LIMITATION'),
