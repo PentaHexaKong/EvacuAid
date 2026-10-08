@@ -49,6 +49,12 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, focu
       })}
       {route && <Polyline coordinates={route.map(([longitude, latitude]) => ({ latitude, longitude }))} strokeColor={colors.primary} strokeWidth={6} lineCap="round" lineJoin="round" />}
       {items.map(item => {
+        if (item.kind === 'person') return <Marker key={item.id} identifier={item.id} coordinate={item.coordinate} anchor={{ x: 0.5, y: 0.5 }} title={item.title} accessibilityLabel={item.title} onPress={() => onSelect(item.id)}>
+          <View style={styles.person}>
+            <View style={styles.personHalo} />
+            <View style={styles.personRing}><AppText variant="button" style={{ color: colors.surface, fontSize: 17 }}>{item.initials}</AppText></View>
+          </View>
+        </Marker>;
         const Icon = item.kind === 'alert' ? IconAlertTriangle : IconMapPin;
         const active = selected === item.id;
         const tint = item.kind === 'alert' ? colors.caution : colors.primary;
@@ -65,6 +71,9 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, focu
 }
 
 const styles = StyleSheet.create({
+  person: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  personHalo: { position: 'absolute', width: 64, height: 64, borderRadius: radius.pill, backgroundColor: `${colors.primary}29` },
+  personRing: { width: 48, height: 48, borderRadius: radius.pill, borderWidth: 3, borderColor: colors.surface, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   controls: { position: 'absolute', top: 0, right: 16, height: MAP_CONTROLS_BOX },
   notice: { position: 'absolute', left: 16, right: 16, padding: 12, ...corner(radius.md), backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
 });

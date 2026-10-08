@@ -18,7 +18,7 @@ jest.mock('react-native-maps', () => {
       return <View>{children}</View>;
     }),
     Polyline: ({ coordinates }: { coordinates: object[] }) => <View testID="route-line" coordinates={coordinates} />,
-    Marker: ({ title, onPress }: { title: string; onPress: () => void }) => <Pressable accessibilityRole="button" onPress={onPress}><Text>{title}</Text></Pressable>,
+    Marker: ({ title, onPress, children }: { title: string; onPress: () => void; children: React.ReactNode }) => <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}><Text>{title}</Text>{children}</Pressable>,
   };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/en.json')[key] ?? key }) }));
@@ -39,6 +39,14 @@ test('marker taps select the matching item and a single item is centered', () =>
   expect(onSelect).toHaveBeenCalledWith('rain');
   view.rerender(<DiscoverMap items={[]} selected={null} onSelect={onSelect} {...insets} />);
   expect(view.queryByText('Rain')).toBeNull();
+});
+test('a person marker renders their name and initials and selects them', () => {
+  const onSelect = jest.fn();
+  const person = { id: 'person', title: 'Test Person', kind: 'person' as const, initials: 'TP', coordinate: { latitude: -6.27, longitude: 106.82 } };
+  const view = render(<DiscoverMap items={[person]} selected={null} onSelect={onSelect} {...insets} />);
+  expect(view.getByText('TP')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Test Person' }));
+  expect(onSelect).toHaveBeenCalledWith('person');
 });
 test('several items fit inside the insets', () => {
   const two = [...items, { id: 'hall', title: 'Hall', kind: 'destination' as const, coordinate: { latitude: -6.27, longitude: 106.82 } }];

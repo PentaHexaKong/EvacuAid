@@ -1,7 +1,7 @@
 import { AppState } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { buddyRequest } from './api';
-import { useBuddyPilot } from './use-buddy-pilot';
+import { useBuddyCode, useBuddyPilot } from './use-buddy-pilot';
 
 jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.fn() }));
 const request = jest.mocked(buddyRequest);
@@ -9,6 +9,7 @@ const active = { id: 'session', status: 'ACCEPTED' };
 
 beforeEach(() => {
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+  jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
   request.mockReset();
   request.mockImplementation(async (_token, path) => {
     if (path === '/requests/current') return active;
@@ -90,4 +91,30 @@ test('active events during refresh keep a single poll loop', async () => {
     const nextCalls = request.mock.calls.filter(([, path]) => path === '/contacts').length;
     expect({ initialCalls, nextCalls }).toEqual({ initialCalls: 1, nextCalls: 2 });
   } finally { unmount(); subscription.mockRestore(); jest.useRealTimers(); }
+});
+
+test('received invitations join the existing refresh and update after accepting one', async () => {
+  const implementation = request.getMockImplementation()!;
+  const received = [{ id: 'received', status: 'SENT', direction: 'SEEK_HELP', ownerName: 'Test friend', ownerNeeds: ['HEARING_IMPAIRMENT'] }];
+  request.mockImplementation(async (token, path, ...args) => path === '/invitations/received' ? received : implementation(token, path, ...args));
+  const { result } = renderHook(() => useBuddyPilot('token'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.received).toEqual(received);
+  expect(request.mock.calls.filter(([, path]) => path === '/invitations/received')).toHaveLength(1);
+  request.mockImplementation(async (token, path, ...args) => path === '/invitations/received' ? [] : implementation(token, path, ...args));
+  await act(async () => { await result.current.run('/invitations/received/accept', {}); });
+  expect(result.current.received).toEqual([]);
+});
+
+test('permanent codes load once per token and a late previous user response is ignored', async () => {
+  let resolveOld!: (value: { code: string }) => void;
+  request.mockImplementation((token) => token === 'old' ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve({ code: 'K7Q2-M9XD' }));
+  const { result, rerender } = renderHook(({ token }: { token: string }) => useBuddyCode(token), { initialProps: { token: 'old' } });
+  expect(result.current).toBeNull();
+  rerender({ token: 'new' });
+  await waitFor(() => expect(result.current).toBe('K7Q2-M9XD'));
+  await act(async () => { resolveOld({ code: 'ABCD-1234' }); });
+  expect(result.current).toBe('K7Q2-M9XD');
+  rerender({ token: 'new' });
+  expect(request.mock.calls.filter(([token]) => token === 'new')).toHaveLength(1);
 });

@@ -15,23 +15,29 @@ let mockListening = false;
 let mockSession: unknown = null;
 let mockContacts: unknown[] = [];
 let mockInvitations: unknown[] = [];
+let mockReceived: unknown[] = [];
+let mockIncomingContacts: unknown[] = [];
+let mockAccessibility: { type: string }[] = [];
+const mockPush = jest.fn();
 let mockParams: { code?: string } = {};
-let mockAvailability = { optedIn: false };
+let mockAvailability = { optedIn: false, enrolled: true };
 let mockLocation: { latitude: number; longitude: number; accuracyM?: number; observedAt?: string } | null = null;
 const mockBuddyRequest = jest.fn();
 let mockCommand: (command: string) => void;
 jest.mock('expo-router', () => {
   const { Pressable, View } = jest.requireActual('react-native');
+  const { useEffect } = jest.requireActual('react');
   const Toolbar = Object.assign(({ children }: { children: React.ReactNode }) => <View>{children}</View>, {
+    Button: ({ accessibilityLabel, onPress }: { accessibilityLabel: string; onPress: () => void }) => <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} />,
     View: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     Menu: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel: string }) => <View accessibilityLabel={accessibilityLabel}>{children}</View>,
     MenuAction: ({ children, onPress }: { children: string; onPress: () => void }) => <Pressable accessibilityRole="menuitem" accessibilityLabel={children} onPress={onPress} />,
   });
-  return { useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
+  return { useRouter: () => ({ push: mockPush }), useFocusEffect: (callback: () => void) => useEffect(callback, [callback]), useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'private', user: { id: 'helper' } }) }));
-jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
+jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockAccessibility, ready: true }) }));
 jest.mock('@/components/discover-map.native', () => ({ DiscoverMap: () => { const { View } = jest.requireActual('react-native'); return <View testID="session-map" />; } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('expo-router/react-navigation', () => ({ useHeaderHeight: () => 100 }));
@@ -45,12 +51,12 @@ jest.mock('@/features/buddy-pilot/native', () => ({
   useBuddySpeech: ({ onCommand }: { onCommand: (command: string) => void }) => { mockCommand = onCommand; return { speak: mockSpeak, error: null, listening: mockListening, startListening: mockStartListening, stopListening: mockStopListening }; },
 }));
 jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
-jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyPilot: () => ({
-  contacts: mockContacts, invitations: mockInvitations, incomingContacts: [], inbox: [], availability: mockAvailability, session: mockSession,
+jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyCode: jest.requireActual('@/features/buddy-pilot/use-buddy-pilot').useBuddyCode, useBuddyPilot: () => ({
+  contacts: mockContacts, invitations: mockInvitations, incomingContacts: mockIncomingContacts, received: mockReceived, inbox: [], availability: mockAvailability, session: mockSession,
   messages: [], locations: [], error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh,
 }) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockSession = null; mockContacts = []; mockInvitations = []; mockParams = {}; mockAvailability = { optedIn: false }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
+beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
 
 test('empty Buddy state offers real invitation and nearby actions without sample people', () => {
   const view = render(<BuddyPilotScreen />);
@@ -105,7 +111,7 @@ test('a new invitation link updates the code on an already mounted Buddy screen'
 test('a delayed availability refresh rejected after opt-out reloads state instead of showing an error', async () => {
   jest.useFakeTimers();
   Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true });
-  mockAvailability = { optedIn: true };
+  mockAvailability = { optedIn: true, enrolled: true };
   mockBuddyRequest.mockRejectedValue(Object.assign(new Error('availability refresh requires an active opt-in'), { status: 409 }));
   const view = render(<BuddyPilotScreen />);
   await act(async () => { jest.advanceTimersByTime(60000); });
@@ -135,7 +141,7 @@ test('the segmented control switches between My Buddies and Nearby, and the dev 
   expect(view.getByRole('switch', { name: 'I am available to help' })).toBeTruthy();
   expect(view.getByText('No nearby requests yet')).toBeTruthy();
   expect(view.getByText('Turn on “I am available to help” to receive requests from people near you.')).toBeTruthy();
-  mockAvailability = { optedIn: true };
+  mockAvailability = { optedIn: true, enrolled: true };
   view.rerender(<BuddyPilotScreen />);
   expect(view.getByText('When there is an emergency nearby and someone needs a Buddy, their request appears here.')).toBeTruthy();
   expect(view.getByRole('button', { name: 'Simulate GPS alert request' })).toBeTruthy();
@@ -256,4 +262,92 @@ test.each([false, true])('automatic maneuver speech follows soundFree with voice
   await waitFor(() => expect(view.getByText('Continue to the shelter')).toBeTruthy());
   if (soundFree) expect(mockSpeak).not.toHaveBeenCalled();
   else expect(mockSpeak).toHaveBeenCalledWith('Continue to the shelter');
+});
+
+const helperOffer = (nearby = false) => ({ id: 'helper-session', requesterUserId: 'friend', helperUserId: null, requesterName: 'Test friend', helperName: null, status: 'WAITING', nearby, message: '', supportNeeds: ['HEARING_IMPAIRMENT'], createdAt: new Date().toISOString(), attempts: [{ id: 'helper-offer', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] });
+
+test('helpers see Added friends and Auto search without requester actions', async () => {
+  mockAccessibility = [];
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByRole('tab', { name: 'Added friends' })).toBeTruthy();
+  expect(view.getByRole('tab', { name: 'Auto search' })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Request help' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Find nearby helpers' })).toBeNull();
+  await waitFor(() => expect(view.getByText('K7Q2-M9XD')).toBeTruthy());
+  expect(mockBuddyRequest).toHaveBeenCalledWith('private', '/me/code', 'GET', undefined, expect.any(AbortSignal));
+});
+
+test('helper friend acceptance confirms location sharing and submits the offer identity', async () => {
+  mockAccessibility = [];
+  mockSession = helperOffer();
+  mockRun.mockResolvedValue({ id: 'helper-session' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByRole('button', { name: 'Decline' })).toBeTruthy();
+  expect(view.queryByRole('checkbox')).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: 'Accept & help' }));
+  expect(mockRun).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('Help Test friend?', 'Your location is shared with Test friend during this session. You can stop it any time.', expect.any(Array));
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(mockRun).toHaveBeenCalledWith('/requests/helper-session/accept', { attemptId: 'helper-offer', sharingConsent: true });
+  alert.mockRestore();
+});
+
+test('helper received invite acceptance posts to its invitation endpoint', async () => {
+  mockAccessibility = [];
+  mockReceived = [{ id: 'received-1', status: 'SENT', ownerName: 'Test friend', ownerNeeds: ['VISUAL_IMPAIRMENT'], relation: 'TEMAN' }];
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Accept' }));
+  expect(mockRun).toHaveBeenCalledWith('/invitations/received-1/accept', {});
+  await act(async () => {});
+});
+
+test('helper GPS offers force Auto search and use Skip and confirmed Help this person', async () => {
+  mockAccessibility = [];
+  mockSession = helperOffer(true);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByRole('tab', { name: 'Auto search' })).toHaveProp('accessibilityState', { selected: true });
+  expect(view.getByText('The system found Test friend in an emergency area with no Buddy helping yet.')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Help this person' }));
+  expect(mockRun).not.toHaveBeenCalled();
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(mockRun).toHaveBeenCalledWith('/requests/helper-session/accept', { attemptId: 'helper-offer', sharingConsent: true });
+  mockRun.mockClear();
+  fireEvent.press(view.getByRole('button', { name: 'Skip' }));
+  expect(mockRun).toHaveBeenCalledWith('/requests/helper-session/decline', { attemptId: 'helper-offer' });
+  alert.mockRestore();
+});
+
+test('a friend offer forces Added friends after the helper selects Auto search', async () => {
+  mockAccessibility = [];
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('tab', { name: 'Auto search' }));
+  mockSession = helperOffer();
+  view.rerender(<BuddyPilotScreen />);
+  expect(view.getByRole('tab', { name: 'Added friends' })).toHaveProp('accessibilityState', { selected: true });
+  expect(view.getByRole('button', { name: 'Accept & help' })).toBeTruthy();
+  await act(async () => {});
+});
+
+test('helper friend decline requires confirmation', async () => {
+  mockAccessibility = [];
+  mockSession = helperOffer();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Decline' }));
+  expect(mockRun).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith("Decline Test friend's request?", "Test friend will be told you can't help right now.", expect.any(Array));
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(mockRun).toHaveBeenCalledWith('/requests/helper-session/decline', { attemptId: 'helper-offer' });
+  alert.mockRestore();
+});
+
+test('a helper who is nobody\'s Buddy yet sees how auto search turns on instead of the availability switch', async () => {
+  mockAccessibility = [];
+  mockAvailability = { optedIn: false, enrolled: false };
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(await view.findByRole('tab', { name: 'Auto search' }));
+  expect(view.getByText('Become a Buddy first')).toBeTruthy();
+  expect(view.queryByRole('switch', { name: 'I am available to help' })).toBeNull();
 });

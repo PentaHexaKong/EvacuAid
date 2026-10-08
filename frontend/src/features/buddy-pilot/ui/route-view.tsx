@@ -10,7 +10,7 @@ import { distanceM, routeProgress } from '../navigation';
 import { buddyStyles, Card, StatusChip } from './parts';
 
 // Navigation logic is the pilot's NavigationPanel, unchanged; only the presentation is new.
-export function RouteView({ route, position, target, onInstruction, speak, reroute, voiceEnabled }: { route: BuddyRoute; position: Position | null; target: Position | null; onInstruction: (instruction: string) => void; speak: (text: string) => Promise<void>; reroute: () => void; voiceEnabled: boolean }) {
+export function RouteView({ route, title, position, target, onInstruction, speak, reroute, voiceEnabled }: { route: BuddyRoute; title?: string; position: Position | null; target: Position | null; onInstruction: (instruction: string) => void; speak: (text: string) => Promise<void>; reroute: () => void; voiceEnabled: boolean }) {
   const { c } = useBuddyCopy();
   const { soundFree } = useAccess();
   const [progress, setProgress] = useState<ReturnType<typeof routeProgress>>(null);
@@ -53,7 +53,7 @@ export function RouteView({ route, position, target, onInstruction, speak, rerou
       <StatusChip tone={accessible ? 'info' : 'neutral'} label={accessible ? c('accessible') : c('accessUnknown')} />
     </View>
     <View style={{ gap: 2 }}>
-      <AppText variant="section">{destination?.name ?? c('instructions')}</AppText>
+      <AppText variant="section">{title ?? destination?.name ?? c('instructions')}</AppText>
       <AppText style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{remainingM} m · {c('eta')}: {minutes} {c('minutes')}</AppText>
     </View>
     {progress

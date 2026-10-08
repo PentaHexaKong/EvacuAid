@@ -38,8 +38,8 @@ export function StatStrip({ items }: { items: { value: string; label: string }[]
   </View>;
 }
 
-export function Card({ children, tint, style }: { children: ReactNode; tint?: 'caution' | 'info'; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.card, tint === 'caution' && styles.cardCaution, tint === 'info' && styles.cardInfo, style]}>{children}</View>;
+export function Card({ children, tint, style }: { children: ReactNode; tint?: 'caution' | 'info' | 'critical'; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.card, tint === 'caution' && styles.cardCaution, tint === 'critical' && styles.cardCritical, tint === 'info' && styles.cardInfo, style]}>{children}</View>;
 }
 
 export function EmptyCard({ title, body, art, children }: { title: string; body: string; art: ImageSourcePropType; children?: ReactNode }) {
@@ -75,6 +75,7 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, ...corner(radius.sm), backgroundColor: colors.surface },
   card: { gap: 14, padding: 16, ...corner(radius.lg), backgroundColor: colors.surface, boxShadow: ELEVATION },
   // Tinted cards mark state, so they keep a border and drop the elevation.
+  cardCritical: { backgroundColor: colors.criticalSoft, borderWidth: 1, borderColor: colors.criticalBorder, boxShadow: undefined },
   cardCaution: { backgroundColor: colors.cautionSoft, borderWidth: 1, borderColor: colors.cautionBorder, boxShadow: undefined },
   cardInfo: { backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.borderStrong, boxShadow: undefined },
 });

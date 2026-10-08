@@ -1,6 +1,7 @@
 import { useAccess } from '@/features/access/use-access';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, AppState, Linking } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
@@ -24,7 +25,6 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const code = codeInput.source === params.code ? codeInput.value : params.code ?? '';
   const setCode = (value: string) => setCodeInput({ source: params.code, value });
   const [invite, setInvite] = useState<Invitation | null>(null);
-  const [enrollment, setEnrollment] = useState('');
   const [helper, setHelper] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
@@ -73,7 +73,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const transition = async (action: string, body: unknown = {}) => {
     if (!session) return;
     const result = await state.run<Session>(`/requests/${session.id}/${action}`, body);
-    if (result) { if (action === 'decline') state.dismissSession(); else await state.refresh(result.id); }
+    if (!result) return;
+    if (action === 'accept') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (action === 'decline') state.dismissSession(); else await state.refresh(result.id);
   };
   // One path for "help me" from voice and from Home: confirm out loud, then ask the chosen or primary Buddy.
   // Without a Buddy it says so and offers 112; it never dials on its own.
@@ -172,7 +174,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const setCurrentInstruction = (instruction: string) => { currentInstruction.current = instruction; };
   const resetIdempotency = () => { idempotency.current = null; };
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, enrollment, setEnrollment, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, setCurrentInstruction, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, setCurrentInstruction, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;

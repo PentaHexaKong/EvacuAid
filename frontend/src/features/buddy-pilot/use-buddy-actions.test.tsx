@@ -12,7 +12,7 @@ jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibil
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
 jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
 jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: () => ({ speak: jest.fn(), error: null }) }));
-jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, location: null, obtainLocation: jest.fn(), enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
+jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, foregroundOnly: false, location: null, obtainLocation: jest.fn(), enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
 
 const session = (status: string) => ({ id: 'session', status, requesterUserId: 'requester', attempts: [] });
 const state = (status: string) => ({ session: session(status), error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() }) as never;

@@ -57,6 +57,17 @@ test('markers use [longitude, latitude] and tapping one selects it', () => {
   fireEvent.press(view.getByRole('button', { name: 'Rain' }));
   expect(onSelect).toHaveBeenCalledWith('rain');
 });
+test('a person marker renders their name and initials and frames them with the native puck', () => {
+  const onSelect = jest.fn();
+  const person = { id: 'person', title: 'Test Person', kind: 'person' as const, initials: 'TP', coordinate: { latitude: -6.28, longitude: 106.83 } };
+  const view = render(<DiscoverMap items={[hall, person, rain]} selected={null} onSelect={onSelect} {...insets} userLocation={{ latitude: -6.3, longitude: 106.9 }} />);
+  expect(view.getByText('TP')).toBeTruthy();
+  expect(view.getByTestId('location-puck')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Test Person' }));
+  expect(onSelect).toHaveBeenCalledWith('person');
+  settle();
+  expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds([[106.9, -6.3], [106.82, -6.27], [106.83, -6.28]]) }));
+});
 
 test('credits follow their inset without changing camera framing and default to the framing inset', () => {
   const props = { ...insets, bottomInset: 400, items: [rain, hall], selected: null, onSelect: jest.fn() };
