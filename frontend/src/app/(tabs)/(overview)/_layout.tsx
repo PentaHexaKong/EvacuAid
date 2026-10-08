@@ -1,6 +1,5 @@
-import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { TabStack } from '@/components/tab-shell';
 
 export default function Layout() {
-  return <Stack screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', contentStyle: { backgroundColor: colors.canvas } }}><Stack.Screen name="index" options={{ title: 'EvacuAid' }} /></Stack>;
+  return <TabStack name="index" />;
 }

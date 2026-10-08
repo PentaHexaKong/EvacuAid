@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { Image, ScrollView, StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { AppText, Tap } from '@/components/ui';
+import { usePressScale } from '@/components/press';
 import { colors, corner, radius } from '@/theme';
-import quakeArt from '../../../assets/brand/hazards/quake.png';
-import floodArt from '../../../assets/brand/hazards/flood.png';
-import volcanoArt from '../../../assets/brand/hazards/volcano.png';
-import hazardArt from '../../../assets/brand/hazards/hazard.png';
-import { parseFeltIntensity, parseQuakeRegion } from './region';
-import { relativeTime } from './time';
+import { HazardBanner } from './hazard-banner';
+import { hazardFacts } from './hazard-facts';
 import { useRecentHazards } from './use-recent-hazards';
 import type { HazardItem, HazardType } from './api';
 
-const ART: Partial<Record<HazardType, ImageSourcePropType>> = { earthquake: quakeArt, flood: floodArt, volcano: volcanoArt };
-const SPOKEN_TIME = { timeJustNow: 'timeJustNow', timeMinutes: 'a11yMinutes', timeHours: 'a11yHours', timeDays: 'a11yDays' } as const;
 const GUTTER = 20;
 const GAP = 12;
+const BANNER = 132;
 
 export function DiscoverDisaster() {
   const { t } = useTranslation();
@@ -52,42 +50,26 @@ export function DiscoverDisaster() {
 }
 
 function HazardCard({ item, width }: { item: HazardItem; width: number }) {
-  const { t } = useTranslation();
-  const time = relativeTime(item.occurredAt);
-  const quake = item.type === 'earthquake' && item.magnitude != null;
-  const region = quake ? parseQuakeRegion(item.region) : null;
-  const felt = parseFeltIntensity(item.felt);
-  // The figure is the card's hero: magnitude for quakes, report count for citizen reports.
-  const figure = quake ? item.magnitude!.toFixed(1) : String(item.reportCount ?? '');
-  const caption = quake ? t('magnitudeCaption') : t('reportsCaption', { count: item.reportCount ?? 0 });
-  const title = region ? t('quakePlace', { distance: region.distanceKm, direction: t(`dir_${region.direction}`), place: region.place }) : t(`hazard_${item.type}`);
-  const setting = region?.setting ? t(region.setting === 'sea' ? 'quakeSea' : 'quakeLand') : null;
-  const detail = region ? [region.area, setting].filter(Boolean).join(' · ') : quake ? item.region : null;
-  const footer = t('timeAndSource', { time: t(time.key, { count: time.count }), source: item.source });
-  const spokenFelt = felt && t('a11yFelt', { intensity: felt.to ? t('a11yRange', { from: felt.from, to: felt.to }) : felt.from });
-  const label = [
-    quake ? t('a11yQuakeTitle', { magnitude: figure }) : `${t(`hazard_${item.type}`)}, ${figure} ${caption}`,
-    region ? title : null,
-    detail,
-    spokenFelt,
-    t(SPOKEN_TIME[time.key], { count: time.count }),
-    t('a11ySource', { source: item.source }),
-  ].filter(Boolean).join('. ');
-  return <View accessible accessibilityLabel={label} style={[styles.card, { width }]}>
-    <View style={styles.art}>
-      <View style={styles.figure}>
-        <AppText variant="figure" style={{ color: colors.ink }}>{figure}</AppText>
-        <AppText variant="small" numberOfLines={2} style={{ color: colors.muted }}>{caption}</AppText>
+  const { t, i18n } = useTranslation();
+  const router = useRouter();
+  const press = usePressScale(0.98);
+  const facts = hazardFacts(item, t, i18n.language);
+  return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={facts.label} accessibilityHint={t('hazardOpenHint')} onPress={() => router.push({ pathname: '/hazard/[id]', params: { id: item.id } })}>
+    <Animated.View style={[styles.card, { width }, press.style]}>
+      <HazardBanner type={item.type} height={BANNER} fade={64} fadeTo={colors.surface} />
+      {/* The type sits on a solid pill, so no text is ever set straight onto a photo. */}
+      <View style={styles.type}><AppText variant="small" style={styles.typeText}>{facts.typeName}</AppText></View>
+      <View style={styles.body}>
+        <View style={styles.figure}>
+          <AppText variant="figure">{facts.figure}</AppText>
+          <AppText variant="small" numberOfLines={2} style={styles.caption}>{facts.caption}</AppText>
+        </View>
+        <AppText variant="section" numberOfLines={2}>{facts.title}</AppText>
+        {facts.lines.map(line => <AppText key={line} variant="small" numberOfLines={2} style={{ color: colors.muted }}>{line}</AppText>)}
+        <AppText variant="small" style={styles.footer}>{facts.footer}</AppText>
       </View>
-      <Image source={ART[item.type] ?? hazardArt} style={styles.image} />
-    </View>
-    <View style={styles.body}>
-      <AppText variant="section" numberOfLines={2}>{title}</AppText>
-      {detail && <AppText variant="small" numberOfLines={2} style={{ color: colors.muted }}>{detail}</AppText>}
-      {felt && <View style={styles.tag}><AppText variant="small" style={{ color: colors.ink }}>{t('felt', { intensity: felt.text })}</AppText></View>}
-      <AppText variant="small" style={styles.footer}>{footer}</AppText>
-    </View>
-  </View>;
+    </Animated.View>
+  </Pressable>;
 }
 
 const styles = StyleSheet.create({
@@ -96,13 +78,14 @@ const styles = StyleSheet.create({
   chip: { minHeight: 40, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   row: { flexDirection: 'row', paddingHorizontal: GUTTER, gap: GAP },
-  skeleton: { height: 236, ...corner(radius.lg), backgroundColor: colors.chip },
+  skeleton: { height: 300, ...corner(radius.lg), backgroundColor: colors.chip },
   message: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  card: { ...corner(radius.lg), borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' },
-  art: { height: 112, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 6, paddingBottom: 8, backgroundColor: colors.accentSoft },
-  figure: { flexShrink: 1, paddingBottom: 6, gap: 0 },
-  image: { width: 96, height: 96 },
-  body: { flexGrow: 1, padding: 14, gap: 6 },
-  tag: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.chip },
-  footer: { color: colors.muted, marginTop: 'auto', paddingTop: 4, fontVariant: ['tabular-nums'] },
+  card: { flexGrow: 1, ...corner(radius.lg), borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' },
+  type: { position: 'absolute', top: 12, left: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.surface },
+  typeText: { color: colors.ink, fontWeight: '600' },
+  // Pulled up into the faded foot of the photo, so the figure reads as rising out of it.
+  body: { flexGrow: 1, marginTop: -28, paddingHorizontal: 14, paddingBottom: 14, gap: 4 },
+  figure: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  caption: { flexShrink: 1, color: colors.muted },
+  footer: { color: colors.muted, marginTop: 'auto', paddingTop: 8, fontVariant: ['tabular-nums'] },
 });

@@ -217,3 +217,8 @@ declare module '@tabler/icons-react-native/IconMap' {
   const Icon: typeof import('@tabler/icons-react-native').IconMap;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconUsersGroup' {
+  const Icon: typeof import('@tabler/icons-react-native').IconUsersGroup;
+  export default Icon;
+}

@@ -2,12 +2,12 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Com
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox, { Camera, FillLayer, LineLayer, LocationPuck, MapView, MarkerView, RasterDemSource, ShapeSource, StyleImport, Terrain } from '@rnmapbox/maps';
+import Mapbox, { Camera, CircleLayer, FillLayer, LineLayer, LocationPuck, MapView, MarkerView, RasterDemSource, ShapeSource, StyleImport, Terrain } from '@rnmapbox/maps';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconCube from '@tabler/icons-react-native/IconCube';
 import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
 import IconMap from '@tabler/icons-react-native/IconMap';
-import IconMapPin from '@tabler/icons-react-native/IconMapPin';
+import IconUsersGroup from '@tabler/icons-react-native/IconUsersGroup';
 import { useTranslation } from 'react-i18next';
 import { AppText } from './ui';
 import { MapBoundary, MapFallback } from './map-boundary';
@@ -16,7 +16,7 @@ import { MapControls } from './native-controls';
 import { colors, corner, hazard, radius, SystemReduceMotionContext } from '@/theme';
 import type { ZoneCollection } from '@/features/hazards/zones';
 import type { DiscoverMapProps, DiscoverMarker, LatLng } from './discover-map';
-import { boundsCenter, MAP_CONTROLS_BOX, visibleBounds, type Bounds } from './map-framing';
+import { boundsCenter, focusCorners, MAP_CONTROLS_BOX, visibleBounds, type Bounds } from './map-framing';
 
 void Mapbox.setAccessToken(mapboxToken() ?? null);
 Mapbox.setTelemetryEnabled(false);
@@ -73,7 +73,30 @@ function ZoneLayers({ zones }: { zones: ZoneCollection }) {
   </ShapeSource>;
 }
 
-function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onToggleMode, userLocation, onLocate, topInset, bottomInset, controlsStyle, onFail }: DiscoverMapProps & { onFail: () => void }) {
+// Shelter pins stand upright; in 3D each one floats over a soft shadow that lies flat on the ground.
+const PIN_LIFT = 3;
+
+function PinShadows({ items }: { items: DiscoverMarker[] }) {
+  const shape = useMemo(() => ({ type: 'FeatureCollection' as const, features: items.filter(item => item.kind === 'destination').map(item => ({ type: 'Feature' as const, id: item.id, properties: {}, geometry: { type: 'Point' as const, coordinates: markerPosition(item) } })) }), [items]);
+  return <ShapeSource id="shelter-shadows" shape={shape}>
+    <CircleLayer id="shelter-shadow" style={{ circleColor: colors.ink, circleOpacity: 0.36, circleRadius: 15, circleBlur: 1, circlePitchAlignment: 'map' }} />
+  </ShapeSource>;
+}
+
+function ShelterPin({ item, active, lifted, onSelect }: { item: DiscoverMarker; active: boolean; lifted: boolean; onSelect: (id: string) => void }) {
+  const size = active ? 40 : 32;
+  return <View style={[styles.pin, lifted && { paddingBottom: 8 + PIN_LIFT }]}>
+    <View style={[styles.pinShadow, { width: size + 8, height: size + 8 }]} />
+    <View style={[styles.pinTail, lifted && { bottom: 3.3 + PIN_LIFT }]} />
+    <Pressable accessibilityRole="button" accessibilityLabel={item.title} accessibilityState={{ selected: active }} onPress={() => onSelect(item.id)} hitSlop={4} style={styles.pinRing}>
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: active ? colors.ink : colors.primary }}>
+        <IconUsersGroup size={active ? 24 : 20} strokeWidth={2.25} color={colors.surface} />
+      </View>
+    </Pressable>
+  </View>;
+}
+
+function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onToggleMode, userLocation, focus, onLocate, topInset, bottomInset, creditsInset, controlsStyle, onFail }: DiscoverMapProps & { onFail: () => void }) {
   const { t } = useTranslation();
   const camera = useRef<Camera>(null);
   const safeArea = useSafeAreaInsets();
@@ -86,10 +109,11 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
   }, []);
   const target = useCallback((): Bounds | null => {
     const nearby = items.filter(item => item.kind === 'destination').slice(0, 3).map(markerPosition);
-    const points: [number, number][] = route?.length ? route : userLocation ? [position(userLocation), ...nearby] : items.map(markerPosition);
+    // An evacuation route always wins. Otherwise a focus (an epicentre opened from its detail page) is shown until the user asks for their own location again.
+    const points: [number, number][] = route?.length ? route : focus ? focusCorners(focus) : userLocation ? [position(userLocation), ...nearby] : items.map(markerPosition);
     if (!points.length) return null;
     return visibleBounds(points, { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 }, size);
-  }, [route, userLocation, items, topInset, bottomInset, size]);
+  }, [focus, route, userLocation, items, topInset, bottomInset, size]);
   const [view, setView] = useState<Bounds | null>(null);
   useEffect(() => {
     const settle = setTimeout(() => setView(target()), FRAME_SETTLE_MS);
@@ -99,7 +123,8 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
     const next = target();
     if (next) camera.current?.setCamera(tilted ? { ...boundsCenter(next, size.width), pitch: PITCH_3D, animationDuration: 400 } : { bounds: next, padding: NO_PADDING, animationDuration: 400 });
   };
-  const ornament = { bottom: bottomInset - safeArea.bottom + 8 };
+  // ponytail: native ornaments hop per snap, not per drag frame; if needed, disable logoEnabled and animate our wordmark and attribution button from sheetTop.
+  const ornament = { bottom: (creditsInset ?? bottomInset) - safeArea.bottom + 8 };
   const tilted = mode === '3d';
   const styleUrl = mapboxStyleUrl();
   return <View style={StyleSheet.absoluteFill}>
@@ -110,13 +135,15 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
       {userLocation && <LocationPuck puckBearingEnabled={false} pulsing={{ isEnabled: false }} />}
       {zones && zones.features.length > 0 && <ZoneLayers zones={zones} />}
       {route && <RouteLayers route={route} />}
+      {tilted && <PinShadows items={items} />}
       {items.map(item => {
-        const Icon = item.kind === 'alert' ? IconAlertTriangle : IconMapPin;
         const active = selected === item.id;
-        const tint = item.kind === 'alert' ? colors.caution : colors.primary;
+        if (item.kind === 'destination') return <MarkerView key={item.id} coordinate={markerPosition(item)} anchor={{ x: 0.5, y: 1 }} allowOverlap allowOverlapWithPuck>
+          <ShelterPin item={item} active={active} lifted={tilted} onSelect={onSelect} />
+        </MarkerView>;
         return <MarkerView key={item.id} coordinate={markerPosition(item)} allowOverlap allowOverlapWithPuck>
-          <Pressable accessibilityRole="button" accessibilityLabel={item.title} accessibilityState={{ selected: active }} onPress={() => onSelect(item.id)} hitSlop={4} style={{ padding: active ? 12 : 10, backgroundColor: active ? tint : colors.surface, borderRadius: radius.pill, borderWidth: 2, borderColor: tint }}>
-            <Icon size={active ? 26 : 22} color={active ? colors.surface : tint} />
+          <Pressable accessibilityRole="button" accessibilityLabel={item.title} accessibilityState={{ selected: active }} onPress={() => onSelect(item.id)} hitSlop={4} style={{ padding: active ? 12 : 10, backgroundColor: active ? colors.caution : colors.surface, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.caution }}>
+            <IconAlertTriangle size={active ? 26 : 22} color={active ? colors.surface : colors.caution} />
           </Pressable>
         </MarkerView>;
       })}
@@ -124,7 +151,7 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
     <Animated.View pointerEvents="box-none" style={[styles.controls, controlsStyle]}>
       <MapControls controls={[
         ...(onToggleMode ? [tilted ? { label: t('showFlatMap'), symbol: 'map' as const, icon: IconMap, onPress: onToggleMode } : { label: t('show3dMap'), symbol: 'view.3d' as const, icon: IconCube, onPress: onToggleMode }] : []),
-        { label: t('centerOnMe'), symbol: 'location' as const, icon: IconCurrentLocation, onPress: () => (userLocation ? recenter() : onLocate()) },
+        { label: t('centerOnMe'), symbol: 'location' as const, icon: IconCurrentLocation, onPress: () => (userLocation && !focus ? recenter() : onLocate()) },
       ]} />
     </Animated.View>
     {timedOut && !ready && <View style={[styles.notice, { top: topInset + 68 }]}><AppText accessibilityRole="alert" variant="small">{t('discoverMapUnavailable')}</AppText></View>}
@@ -132,6 +159,10 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
 }
 
 const styles = StyleSheet.create({
+  pin: { alignItems: 'center', paddingBottom: 8 },
+  pinTail: { position: 'absolute', bottom: 3.3, width: 16, height: 16, borderBottomRightRadius: 4, backgroundColor: colors.surface, boxShadow: `0 2px 6px ${colors.ink}40`, transform: [{ rotate: '45deg' }] },
+  pinShadow: { position: 'absolute', top: 0, borderRadius: radius.pill, backgroundColor: colors.surface, boxShadow: `0 2px 6px ${colors.ink}40` },
+  pinRing: { padding: 4, borderRadius: radius.pill, backgroundColor: colors.surface },
   controls: { position: 'absolute', top: 0, right: 16, height: MAP_CONTROLS_BOX },
   notice: { position: 'absolute', left: 16, right: 16, padding: 12, ...corner(radius.md), backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
 });

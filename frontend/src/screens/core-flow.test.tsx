@@ -1,26 +1,37 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
-import { RequestDraftProvider } from '@/features/requests/draft';
-import { RequestScreen, RequestReviewScreen } from './request';
-import { ContactScreen } from './buddy';
 import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
 
+let mockLanguage = 'en';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
-let mockContactId = 'raka';
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockContactId }) }));
-jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 0 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => jest.requireActual('../localization/en.json')[key] ?? key, i18n: { language: 'en' } }) }));
+// topAlert's own ranking is covered in discover-profile.test; here each level is pinned to test what Home renders.
+let mockTopLevel: string | null = null;
+jest.mock('@/features/content/samples', () => {
+  const actual = jest.requireActual('@/features/content/samples');
+  // __esModule keeps Babel's interop from copying topAlert once at import, so the getter is read on every render.
+  return Object.defineProperties({ ...actual }, {
+    __esModule: { value: true },
+    topAlert: { enumerable: true, get: () => (mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert) },
+  });
+});
+let mockShelters: { name: string; distanceM: number }[] | null = null;
+jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: mockShelters }) }));
+jest.mock('expo-router', () => {
+  const Toolbar = Object.assign(({ children }: { children: React.ReactNode }) => children, { View: ({ children }: { children: React.ReactNode }) => children });
+  return { useRouter: () => mockRouter, Stack: { Toolbar } };
+});
+jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 100 }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 
-beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockContactId = 'raka'; await AsyncStorage.clear(); });
+beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en'; await AsyncStorage.clear(); });
 
 test('preferences preview is local, cancel does not save, and failed saves remain retryable', async () => {
   const done = jest.fn();
@@ -39,56 +50,6 @@ test('preferences preview is local, cancel does not save, and failed saves remai
   fireEvent.press(view.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(done).toHaveBeenCalledTimes(2));
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: true });
-});
-
-test('request survives screen changes, rejects blank text, and cannot be sent', async () => {
-  const screen = (stage: 'contact' | 'request' | 'review') => <RequestDraftProvider>{stage === 'contact' ? <ContactScreen /> : stage === 'request' ? <RequestScreen /> : <RequestReviewScreen />}</RequestDraftProvider>;
-  const view = render(screen('contact'));
-  fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  view.rerender(screen('request'));
-  fireEvent.changeText(view.getByLabelText('What help do you need?'), '   ');
-  fireEvent.press(view.getByRole('button', { name: 'Review request' }));
-  expect(view.getByText('Write a message before reviewing your request.')).toBeTruthy();
-  fireEvent.changeText(view.getByLabelText('What help do you need?'), 'Please meet me at the entrance.');
-  fireEvent.press(view.getByRole('button', { name: 'Review request' }));
-  expect(mockRouter.push).toHaveBeenLastCalledWith('/request/review');
-  view.rerender(screen('review'));
-  expect(view.getByText('Please meet me at the entrance.')).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Send request' })).toBeDisabled();
-  fireEvent.press(view.getByRole('button', { name: 'Send request' }));
-  expect(view.getByText('Sending is not available yet')).toBeTruthy();
-  view.rerender(screen('request'));
-  expect(view.getByDisplayValue('Please meet me at the entrance.')).toBeTruthy();
-  view.unmount();
-  const fresh = render(screen('review'));
-  expect(fresh.getByText('Choose a contact and write a message first.')).toBeTruthy();
-});
-
-test('discarding or replacing an edited draft requires confirmation', () => {
-  const confirm = jest.spyOn(Alert, 'alert');
-  const screen = (contact: boolean) => <RequestDraftProvider>{contact ? <ContactScreen /> : <RequestScreen />}</RequestDraftProvider>;
-  const view = render(screen(true));
-  fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  view.rerender(screen(false));
-  fireEvent.changeText(view.getByLabelText('What help do you need?'), 'Please help.');
-  fireEvent.press(view.getByRole('button', { name: 'Discard draft' }));
-  expect(confirm).toHaveBeenCalled();
-  expect(view.getByDisplayValue('Please help.')).toBeTruthy();
-  mockContactId = 'sinta';
-  view.rerender(screen(true));
-  fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  expect(confirm).toHaveBeenLastCalledWith('Replace this draft?', expect.any(String), expect.any(Array));
-  act(() => confirm.mock.calls.at(-1)![2]![1].onPress!());
-  view.rerender(screen(false));
-  expect(view.getByText('Sinta Nuraini')).toBeTruthy();
-  expect(view.getByLabelText('What help do you need?')).toHaveProp('value', '');
-});
-
-test('missing sample contact leaves a readable unavailable state', () => {
-  mockContactId = 'missing';
-  const view = render(<ContactScreen />);
-  expect(view.getByText('This information is unavailable. Go back to choose another item.')).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'Request help' })).toBeNull();
 });
 
 test('welcome exposes language immediately and skipping setup enters Home without support changes', async () => {
@@ -149,7 +110,9 @@ test('finishing onboarding from the warning step returns Home', async () => {
 
 test('Home shows the sample alert level with its label and routes to a gathering point', () => {
   const view = render(<OverviewScreen />);
-  expect(view.getByRole('header', { name: 'Caution for heavy rain and strong winds, 08:30 to 11:30 WIB.' })).toBeTruthy();
+  expect(view.getByRole('header', { name: 'Caution for heavy rain and strong winds.' })).toBeTruthy();
+  expect(view.getByText('08:30 to 11:30 WIB')).toBeTruthy();
+  expect(view.getByText('Keep checking for updates and pack a go-bag.')).toBeTruthy();
   expect(view.getByLabelText('EvacuAid')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
@@ -157,23 +120,62 @@ test('Home shows the sample alert level with its label and routes to a gathering
   expect(view.queryByText(/safe route/i)).toBeNull();
 });
 
-test('Home opens the latest alert and the full list', () => {
-  const view = render(<OverviewScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'See all' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
-  expect(view.getByText('Open alert')).toBeTruthy();
-  fireEvent.press(view.getByRole('button', { name: 'Caution. Heavy rain and strong winds. Open alert' }));
-  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+test('Home escalates its words and route action with the top alert, and says all clear at Normal', () => {
+  try {
+    mockTopLevel = 'siaga';
+    const severe = render(<OverviewScreen />);
+    expect(severe.getByRole('header', { name: 'Alert for water on local roads.' })).toBeTruthy();
+    expect(severe.getByText('Get ready to leave. Check your route and tell your Buddy.')).toBeTruthy();
+    expect(severe.queryByText('Start route')).toBeNull();
+    severe.unmount();
+    mockTopLevel = 'awas';
+    const awas = render(<OverviewScreen />);
+    fireEvent.press(awas.getByRole('button', { name: 'Find gathering point. See gathering points on the map. Start route' }));
+    expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
+    awas.unmount();
+    mockTopLevel = 'normal';
+    const clear = render(<OverviewScreen />);
+    expect(clear.getByRole('header', { name: 'Conditions are normal. No active warnings.' })).toBeTruthy();
+    expect(clear.queryByText(/go-bag|Get ready|gathering point now/)).toBeNull();
+    expect(clear.queryByText(/Find gathering point|See gathering points on the map/)).toBeNull();
+    expect(clear.queryByText('Read the full alert')).toBeNull();
+    expect(clear.getByRole('header', { name: 'Recent alerts' })).toBeTruthy();
+    expect(clear.getByLabelText(/^Caution\. Heavy rain and strong winds\./)).toBeTruthy();
+  } finally {
+    mockTopLevel = null;
+  }
 });
 
-test('Home quick-access tiles open the map, help request, Buddy and alerts', () => {
+test('Home names the nearest gathering point and its distance once shelters load', () => {
+  mockShelters = [{ name: 'Example Point A', distanceM: 250 }];
+  try {
+    const view = render(<OverviewScreen />);
+    fireEvent.press(view.getByRole('button', { name: 'Example Point A. Nearest · 250 m' }));
+    expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
+  } finally { mockShelters = null; }
+});
+
+test('Home links the header alert and lists only the other alerts below', () => {
   const view = render(<OverviewScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Risk map' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
-  fireEvent.press(view.getByRole('button', { name: 'Get help' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
-  fireEvent.press(view.getByRole('button', { name: 'Buddy' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
-  fireEvent.press(view.getByRole('button', { name: 'Alerts' }));
+  fireEvent.press(view.getByRole('button', { name: 'Read the full alert' }));
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
+  expect(view.getByRole('header', { name: 'Other alerts' })).toBeTruthy();
+  expect(view.queryByLabelText(/^Caution\. Heavy rain and strong winds\./)).toBeNull();
+  fireEvent.press(view.getByLabelText(/^Normal\. Water on local roads\./));
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'water' } });
+  fireEvent.press(view.getByRole('button', { name: 'See all' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
 });
+
+test.each(['id', 'en'])('Home has two quick rows, help and the map, and no alerts tile (%s)', language => {
+  mockLanguage = language;
+  const view = render(<OverviewScreen />);
+  const [help, map, alerts] = language === 'id' ? ['Minta bantuan', 'Peta Risiko', 'Peringatan'] : ['Get help', 'Risk map', 'Alerts'];
+  fireEvent.press(view.getByRole('button', { name: help }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  fireEvent.press(view.getByRole('button', { name: map }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+  expect(view.queryByRole('button', { name: alerts })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Buddy' })).toBeNull();
+});
+

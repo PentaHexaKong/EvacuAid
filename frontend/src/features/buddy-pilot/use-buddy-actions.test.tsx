@@ -8,7 +8,7 @@ jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.f
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
-jest.mock('./copy', () => ({ useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
+jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
 jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: () => ({ speak: jest.fn(), error: null }) }));
 jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, location: null, obtainLocation: jest.fn(), enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
 

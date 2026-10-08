@@ -1,9 +1,9 @@
-import { Image, StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
 import { ActionButton, AppText, Field } from '@/components/ui';
 import { colors, corner, radius } from '@/theme';
 import radarArt from '../../../../assets/brand/buddy/radar.png';
 import type { BuddyActions } from '../use-buddy-actions';
-import { buddyStyles, Card } from './parts';
+import { buddyStyles, Card, EmptyCard } from './parts';
 import { IncomingRequestCard } from './incoming-request-card';
 
 const SWITCH_CENTER = { alignSelf: 'center' } as const;
@@ -21,17 +21,16 @@ export function NearbyView({ a, onSimulate }: { a: BuddyActions; onSimulate?: ()
       {state.availability?.enrolled
         ? <AppText variant="small" style={{ color: colors.primary, fontWeight: '600' }}>{c('enrolled')}</AppText>
         : <View style={{ gap: 10 }}>
-          <Field accessibilityLabel={c('pilotCode')} placeholder={c('pilotCode')} value={enrollment} onChangeText={setEnrollment} secureTextEntry />
-          <AppText variant="small" style={{ color: colors.muted }}>{c('enrollmentInfo')}</AppText>
+          <View style={styles.divider} />
+          <View style={{ gap: 6 }}>
+            <Field accessibilityLabel={c('pilotCode')} placeholder={c('pilotCode')} value={enrollment} onChangeText={setEnrollment} secureTextEntry />
+            <AppText variant="small" style={{ color: colors.muted }}>{c('enrollmentInfo')}</AppText>
+          </View>
           <ActionButton compact variant="secondary" label={c('enroll')} disabled={!enrollment.trim()} loading={state.busy} onPress={() => { void state.run('/enrollment', { code: enrollment }).then(result => { if (result) setEnrollment(''); }); }} />
         </View>}
     </Card>
 
-    {offer ? <IncomingRequestCard a={a} /> : <View style={styles.empty}>
-      <View style={styles.art}><Image source={radarArt} accessible={false} style={{ width: 92, height: 92 }} /></View>
-      <AppText variant="section" style={{ textAlign: 'center' }}>{c('noNearbyTitle')}</AppText>
-      <AppText style={{ color: colors.muted, textAlign: 'center' }}>{c('noNearbyBody')}</AppText>
-    </View>}
+    {offer ? <IncomingRequestCard a={a} /> : <EmptyCard title={c('noNearbyTitle')} body={state.availability?.optedIn ? c('noNearbyBody') : c('noNearbyOffBody', { label: c('available') })} art={radarArt} />}
 
     {onSimulate && <View style={styles.prototype}>
       <AppText variant="eyebrow" style={{ color: colors.muted }}>{c('prototype')}</AppText>
@@ -42,7 +41,6 @@ export function NearbyView({ a, onSimulate }: { a: BuddyActions; onSimulate?: ()
 }
 
 const styles = StyleSheet.create({
-  empty: { alignItems: 'center', gap: 10, paddingVertical: 24, paddingHorizontal: 12 },
-  art: { width: 112, height: 112, alignItems: 'center', justifyContent: 'center', ...corner(radius.xl), backgroundColor: colors.accentSoft, marginBottom: 6 },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: 4, backgroundColor: colors.borderStrong },
   prototype: { gap: 8, padding: 16, ...corner(radius.lg), borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.borderStrong },
 });

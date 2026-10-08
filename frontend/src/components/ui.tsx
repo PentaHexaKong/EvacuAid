@@ -1,14 +1,14 @@
 import { SheetHeaderContext, SheetScrollView } from './sheet-scroll-view';
 import { PageHeaderContext, PageScrollView, PageTitleContext } from './page-scroll-view';
+import { TabBarContext, TabScrollView } from './tab-shell';
 import { usePreferences } from '@/features/preferences/context';
 import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ImageSourcePropType, type PressableProps, type StyleProp, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { motion, usePressScale } from './press';
 import { LinearGradient } from 'expo-linear-gradient';
 import IconCheck from '@tabler/icons-react-native/IconCheck';
-import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
-import { colors, corner, radius, SystemReduceMotionContext, useTypography, type TextVariant } from '@/theme';
+import { colors, corner, gutter, radius, SystemReduceMotionContext, useTypography, type TextVariant } from '@/theme';
 import { duration, ease } from '@/theme/motion';
 import { useHaptics } from '@/features/feedback/haptics';
 
@@ -23,8 +23,9 @@ export function AppText({ variant = 'body', style, ...props }: TextProps & { var
 export function Page({ children, keyboard = false, transparent = false, fill = false, edgeInsets, contentStyle }: { children: ReactNode; keyboard?: boolean; transparent?: boolean; fill?: boolean; edgeInsets?: { top: number; bottom: number }; contentStyle?: StyleProp<ViewStyle> }) {
   const inSheet = useContext(SheetHeaderContext);
   const header = useContext(PageHeaderContext);
-  const Container = header ? PageScrollView : inSheet ? SheetScrollView : ScrollView;
-  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior={edgeInsets ? 'never' : 'automatic'} contentContainerStyle={[styles.content, fill && { flexGrow: 1 }, edgeInsets && { paddingTop: edgeInsets.top + 12, paddingBottom: edgeInsets.bottom + 12 }, contentStyle]}>{children}</Container>;
+  const inTab = useContext(TabBarContext);
+  const Container = header ? PageScrollView : inSheet ? SheetScrollView : inTab ? TabScrollView : ScrollView;
+  return <Container automaticallyAdjustKeyboardInsets={keyboard} keyboardDismissMode={keyboard ? 'interactive' : 'none'} style={[styles.page, transparent && { backgroundColor: 'transparent' }]} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior={edgeInsets ? 'never' : 'automatic'} contentContainerStyle={[styles.content, inTab && { paddingTop: 12 }, fill && { flexGrow: 1 }, edgeInsets && { paddingTop: edgeInsets.top + 12, paddingBottom: edgeInsets.bottom + 12 }, contentStyle]}>{children}</Container>;
 }
 export function Panel({ children }: { children: ReactNode }) {
   return <View style={styles.panel}>{children}</View>;
@@ -107,21 +108,6 @@ export function SupportTile({ icon, label, description, checked, disabled = fals
   </Pressable>;
 }
 
-export function QuickTile({ title, detail, image, onPress }: { title: string; detail: string; image: ImageSourcePropType; onPress: () => void }) {
-  const press = usePressScale(0.97);
-  const haptics = useHaptics();
-  return <Pressable {...press.handlers} style={{ flexGrow: 1 }} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={detail} onPress={() => { haptics.tap(); onPress(); }}>
-    <Animated.View style={[styles.quick, press.style]}>
-      <View style={styles.quickTitle}>
-        <AppText variant="section" style={{ flexShrink: 1 }}>{title}</AppText>
-        <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />
-      </View>
-      <AppText variant="small" style={{ color: colors.muted, marginBottom: 10 }}>{detail}</AppText>
-      <View style={styles.quickArt}><Image source={image} accessible={false} style={styles.quickImage} /></View>
-    </Animated.View>
-  </Pressable>;
-}
-
 export function StepList({ steps }: { steps: readonly string[] }) {
   return <View style={{ gap: 12 }}>{steps.map((step, index) => <View key={step} accessible accessibilityLabel={`${index + 1}. ${step}`} style={styles.step}>
     <View style={styles.stepBadge}><AppText variant="small" style={styles.stepNumber}>{index + 1}</AppText></View>
@@ -139,7 +125,7 @@ export function Enter({ index = 0, children, style }: { index?: number; children
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
-  content: { padding: 24, gap: 24, maxWidth: 680, width: '100%', alignSelf: 'center' },
+  content: { paddingVertical: 24, paddingHorizontal: gutter, gap: 24, maxWidth: 680, width: '100%', alignSelf: 'center' },
   panel: { backgroundColor: colors.surface, ...corner(radius.lg), padding: 20, borderWidth: 1, borderColor: colors.border, gap: 16 },
   field: { minHeight: 52, ...corner(radius.md), backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1 },
   tap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, ...corner(radius.md) },
@@ -156,10 +142,6 @@ const styles = StyleSheet.create({
   tileRow: { minHeight: 0, flexDirection: 'row', alignItems: 'center', gap: 14 },
   tileIcon: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   tileCheck: { position: 'absolute', top: 14, right: 14 },
-  quick: { flexGrow: 1, padding: 14, gap: 4, ...corner(radius.lg), borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  quickTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
-  quickArt: { marginTop: 'auto', height: 92, ...corner(radius.sm), backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' },
-  quickImage: { width: 96, height: 96, marginBottom: -6 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepBadge: { width: 26, height: 26, borderRadius: radius.pill, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   stepNumber: { color: colors.primary, fontWeight: '600', fontVariant: ['tabular-nums'] },

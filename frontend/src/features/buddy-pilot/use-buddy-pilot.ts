@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { buddyRequest, sharingStatuses, terminalStatuses, type Availability, type Contact, type InboxItem, type Invitation, type Message, type Session, type SharedPosition } from './api';
 
+const keep = <T,>(next: T) => (prev: T) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+
 export function useBuddyPilot(token: string | null) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [incomingContacts, setIncomingContacts] = useState<Contact[]>([]);
@@ -47,8 +49,8 @@ export function useBuddyPilot(token: string | null) {
         nextMessages = chat; nextLocations = positions.locations;
       }
       if (version !== generation.current) return;
-      setContacts(nextContacts); setIncomingContacts(nextIncoming); setInvitations(nextInvitations); setInbox(nextInbox); setAvailability(nextAvailability);
-      setSession(nextSession); setMessages(nextMessages); setLocations(nextLocations); setError(null);
+      setContacts(keep(nextContacts)); setIncomingContacts(keep(nextIncoming)); setInvitations(keep(nextInvitations)); setInbox(keep(nextInbox)); setAvailability(keep<Availability | null>(nextAvailability));
+      setSession(keep(nextSession)); setMessages(keep(nextMessages)); setLocations(keep(nextLocations)); setError(null);
     } catch (cause) {
       if (version !== generation.current || (cause as Error).name === 'AbortError') return;
       setError(cause instanceof Error ? cause.message : 'Connection unavailable');
@@ -63,10 +65,12 @@ export function useBuddyPilot(token: string | null) {
     selected.current = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
+    let running = false;
     const poll = async () => {
-      if (stopped || AppState.currentState !== 'active') return;
-      await refresh();
-      if (!stopped) timer = setTimeout(poll, currentSession.current && !terminalStatuses.has(currentSession.current.status) ? 2000 : 15000);
+      if (stopped || running || AppState.currentState !== 'active') return;
+      running = true;
+      try { await refresh(); } finally { running = false; }
+      if (!stopped && AppState.currentState === 'active') timer = setTimeout(poll, currentSession.current && !terminalStatuses.has(currentSession.current.status) ? 2000 : 15000);
     };
     void poll();
     const subscription = AppState.addEventListener('change', state => {

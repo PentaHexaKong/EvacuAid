@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { TabStack } from '@/components/tab-shell';
 export default function Layout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <TabStack name="buddy" />;
 }

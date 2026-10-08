@@ -30,8 +30,11 @@ test('repeated sheet opens keep one presentation; Back stays inside and Close re
   expect(view.getPathname()).toBe('/alerts');
   act(() => router.push('/alerts/rain'));
   const header = screen.UNSAFE_root.findAll(node => node.props.onPressHeaderBarButtonItem).at(-1)!;
-  const close = header.props.headerLeftBarButtonItems[0];
+  const close = header.props.headerRightBarButtonItems[0];
   expect(close.title).toBe('Close');
+  // The leading side is left to the native back button on a pushed page.
+  expect(header.props.headerLeftBarButtonItems).toBeUndefined();
+  expect(header.props.backButtonInCustomView).toBeFalsy();
   fireEvent(header, 'pressHeaderBarButtonItem', { nativeEvent: { buttonId: close.buttonId } });
   expect(view.getPathname()).toBe('/');
   expect(view.getRouterState()?.routes[0]?.state?.routes.some(route => route.name === 'alerts')).toBe(false);
@@ -48,14 +51,14 @@ test('onward navigation removes the complete notification stack and settings red
   expect(view.getPathname()).toBe('/profile');
 });
 
-test('Profile has a centered title and a leading native close button', () => {
+test('Profile has a centered title and a trailing native close button', () => {
   const view = renderRouter(routes);
   act(() => router.navigate('/profile'));
   const header = screen.UNSAFE_root.findAll(node => node.props.onPressHeaderBarButtonItem).at(-1)!;
   expect(header.props.title).toBe('profileTitle');
-  const close = header.props.headerLeftBarButtonItems[0];
+  const close = header.props.headerRightBarButtonItems[0];
   expect(close.title).toBe('Close');
-  expect(header.props.headerRightBarButtonItems).toBeUndefined();
+  expect(header.props.headerLeftBarButtonItems).toBeUndefined();
   fireEvent(header, 'pressHeaderBarButtonItem', { nativeEvent: { buttonId: close.buttonId } });
   expect(view.getPathname()).toBe('/');
 });
