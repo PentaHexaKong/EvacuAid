@@ -372,3 +372,14 @@ test('a helper who is nobody\'s Buddy yet sees how auto search turns on instead 
   expect(view.getByText('Become a Buddy first')).toBeTruthy();
   expect(view.queryByRole('switch', { name: 'I am available to help' })).toBeNull();
 });
+
+test('a person with support needs sees a helper\'s invitation and their own Buddy code', async () => {
+  mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }];
+  mockReceived = [{ id: 'offered', status: 'SENT', ownerName: 'Offerer', direction: 'OFFER_HELP', relation: 'TEMAN' }];
+  mockBuddyRequest.mockImplementation((_token: string, path: string) => Promise.resolve(path === '/me/code' ? { code: 'K7Q2-M9XD' } : {}));
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Offerer is offering to be your Buddy and will receive your help requests.')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Accept' }));
+  expect(mockRun).toHaveBeenCalledWith('/invitations/offered/accept', {});
+  await waitFor(() => expect(view.getByText('K7Q2-M9XD')).toBeTruthy());
+});

@@ -10,7 +10,7 @@ import { useProfile } from '@/features/profile/context';
 import { HelperContent, TAB_SHIFT, tabEnter } from '@/features/buddy-pilot/ui/helper-buddy';
 import { useGuestSession } from '@/features/profile/session';
 import { buddyRequest } from '@/features/buddy-pilot/api';
-import { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
+import { useBuddyCode, useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
 import { useBuddyActions } from '@/features/buddy-pilot/use-buddy-actions';
 import { useBuddyCopy } from '@/features/buddy-pilot/copy';
 import { useInboxNotifications } from '@/features/buddy-pilot/native';
@@ -38,6 +38,7 @@ type Tab = 'buddies' | 'nearby';
 function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
   const { soundFree } = useAccess();
   const a = useBuddyActions({ token, userId, state });
+  const buddyCode = useBuddyCode(token);
   const { c, session, requester, attempt, active, issue, voice, native, catchNative, setLocalError } = a;
   const [chosenTab, setTab] = useState<Tab>('buddies');
   const reduceMotion = useContext(SystemReduceMotionContext);
@@ -68,7 +69,7 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
     {inSession ? <SessionView a={a} token={token} userId={userId} /> : <>
       <Segmented<Tab> value={tab} onChange={next => { setSwitched(true); setTab(next); }} options={[{ value: 'buddies', label: c('myBuddies') }, { value: 'nearby', label: c('nearbyTab') }]} />
       <Animated.View key={tab} entering={switched ? tabEnter(reduceMotion ? 0 : tab === 'nearby' ? TAB_SHIFT : -TAB_SHIFT) : undefined}>
-        {tab === 'buddies' ? <BuddiesView a={a} userId={userId} /> : <NearbyView a={a} onSimulate={simulate} />}
+        {tab === 'buddies' ? <BuddiesView a={a} userId={userId} buddyCode={buddyCode} /> : <NearbyView a={a} onSimulate={simulate} />}
       </Animated.View>
     </>}
   </Page>;

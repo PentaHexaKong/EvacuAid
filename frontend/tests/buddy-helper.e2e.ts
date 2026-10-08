@@ -17,7 +17,8 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
   await agent.waitFor('the screen shows either a switch to be available to help, or a card explaining that auto search turns on once someone accepts you as their Buddy');
   await screen.getByText('Added friends').tap();
 
-  await screen.getByRole('button', 'Add Buddy').tap();
+  // With no friends yet the empty state offers Add Buddy too; either one opens the sheet.
+  await screen.getByRole('button', 'Add Buddy').first().tap();
   await expect(screen.getByText('Your Buddy code')).toBeVisible();
   await screen.getByRole('textbox', 'Invitation code').fill('ZZZZ-ZZZZ');
   // The keyboard covers the Send button in the sheet, so submit from the keyboard as a user would.
