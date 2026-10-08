@@ -1,12 +1,15 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import type { BuddyRoute, Position } from './api';
 import { distanceM, instructionText, routeProgress } from './navigation';
 
 const REROUTE_GAP_MS = 15000;
+// How far before a turn it is announced again, close enough to act on at walking pace.
+export const CUE_M = 40;
 
 // Follows the walker along a route: where they are on it, the current and next turn, and when to ask for a new route.
 // The session card and the navigation view both read from this one source.
-export function useRouteGuidance({ route, position, target, language, reroute, speak, voiceEnabled, onInstruction }: { route: BuddyRoute | null; position: Position | null; target: Position | null; language: 'id' | 'en'; reroute: () => void; speak: (text: string) => Promise<void>; voiceEnabled: boolean; onInstruction: (text: string | null) => void }) {
+export function useRouteGuidance({ route, position, target, language, reroute, speak, voiceEnabled, haptics, cue, onInstruction }: { route: BuddyRoute | null; position: Position | null; target: Position | null; language: 'id' | 'en'; reroute: () => void; speak: (text: string) => Promise<void>; voiceEnabled: boolean; haptics: boolean; cue: (text: string) => string; onInstruction: (text: string | null) => void }) {
   const [progress, setProgress] = useState<ReturnType<typeof routeProgress>>(null);
   const offRoute = useRef({ count: 0, lastFix: '', lastReroute: 0 });
   const spoken = useRef('');
@@ -44,10 +47,25 @@ export function useRouteGuidance({ route, position, target, language, reroute, s
     if (key && progress.offRouteM <= 30 && spoken.current !== key) { spoken.current = key; act('speak', instruction); }
   }, [route, progress, position, target, maneuver, instruction]);
 
+  // One more announcement shortly before each turn, and a tap on the wrist for people who navigate without sound.
+  const upcoming = next ? instructionText(next, language) : null;
+  const cued = useRef('');
+  const arrived = useRef<BuddyRoute | null>(null);
+  const nudge = useEffectEvent((kind: 'turn' | 'arrive') => {
+    if (kind === 'turn' && upcoming) act('speak', cue(upcoming));
+    if (haptics) void (kind === 'turn' ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)).catch(() => {});
+  });
+  useEffect(() => {
+    if (!progress || !route || progress.offRouteM > 30) return;
+    if (progress.nearDestination) { if (arrived.current !== route) { arrived.current = route; nudge('arrive'); } return; }
+    const key = next && `${route.leg}:${next.beginShapeIndex}`;
+    if (key && progress.nextManeuverM <= CUE_M && cued.current !== key) { cued.current = key; nudge('turn'); }
+  }, [route, progress, next]);
+
   const lengthM = useMemo(() => (path?.geometry.coordinates ?? []).reduce((total, point, index, points) => index ? total + distanceM({ longitude: points[index - 1][0], latitude: points[index - 1][1] }, { longitude: point[0], latitude: point[1] }) : 0, 0), [path]);
   const remainingM = progress ? progress.remainingM : path?.distanceM ?? 0;
   const minutes = path ? Math.max(1, Math.ceil(path.durationSec * (progress ? progress.remainingM / Math.max(1, path.distanceM) : 1) / 60)) : 0;
-  return { ready: Boolean(path), progress, maneuver, next, instruction, remainingM, minutes, nextManeuverM: progress?.nextManeuverM ?? 0, walked: progress && lengthM ? Math.min(1, Math.max(0, 1 - progress.remainingM / lengthM)) : 0 };
+  return { ready: Boolean(path), progress, maneuver, next, after: progress && path ? path.maneuvers[progress.maneuverIndex + 2] ?? null : null, instruction, upcoming, remainingM, minutes, nextManeuverM: progress?.nextManeuverM ?? 0, walked: progress && lengthM ? Math.min(1, Math.max(0, 1 - progress.remainingM / lengthM)) : 0 };
 }
 
 export type RouteGuidance = ReturnType<typeof useRouteGuidance>;

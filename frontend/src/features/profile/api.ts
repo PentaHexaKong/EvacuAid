@@ -41,8 +41,9 @@ export async function apiRequest<T>(path: string, token?: string, init: RequestI
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
-      const body = await response.json() as { detail?: string };
-      if (body.detail) message = body.detail;
+      const body = await response.json() as { detail?: unknown };
+      // FastAPI's validation errors arrive as a list of objects; only a plain sentence is fit to show.
+      if (typeof body.detail === 'string' && body.detail) message = body.detail;
     } catch {}
     const error = new Error(message) as ApiError;
     error.status = response.status;

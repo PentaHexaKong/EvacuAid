@@ -14,6 +14,10 @@ import { buddyRequest } from './api';
 const TASK = 'evacuaid.buddy-location.v1';
 const SESSION_KEY = 'evacuaid.buddy-location-session.v1';
 type SavedSession = { token: string; sessionId: string };
+// No distance filter: iOS only reports movement past it, so someone standing still would look like they lost GPS. Uploads stay at one per 5 s.
+const WATCH = { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 0 };
+const UPLOAD_GAP_MS = 5000;
+
 export type BuddyPosition = { latitude: number; longitude: number; accuracyM: number; observedAt: string };
 const position = (value: Location.LocationObject): BuddyPosition => ({ latitude: value.coords.latitude, longitude: value.coords.longitude, accuracyM: value.coords.accuracy ?? 10000, observedAt: new Date(value.timestamp).toISOString() });
 const path = (id: string) => `/requests/${id}/location`;
@@ -41,6 +45,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
   const [foregroundOnly, setForegroundOnly] = useState(false);
   const [location, setLocation] = useState<BuddyPosition | null>(null);
   const watch = useRef<Location.LocationSubscription | null>(null);
+  const sentAt = useRef(0);
   const generation = useRef(0);
   const starting = useRef(false);
   const refresh = useRef(onRefresh);
@@ -79,10 +84,12 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       await buddyRequest(token, path(sessionId), 'PUT', { ...current, sharingConsent: true, sharingVersion });
       if (generation.current !== run) { await buddyRequest(token, path(sessionId), 'DELETE'); ensureCurrent(); }
       watch.current?.remove();
-      watch.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 }, value => {
+      watch.current = await Location.watchPositionAsync(WATCH, value => {
         if (generation.current !== run) return;
         const next = position(value);
         setLocation(next);
+        if (Date.now() - sentAt.current < UPLOAD_GAP_MS) return;
+        sentAt.current = Date.now();
         void buddyRequest(token, path(sessionId), 'PUT', next).catch(cause => {
           fail(cause);
           if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) {
@@ -134,9 +141,11 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       const permission = await Location.getForegroundPermissionsAsync();
       if (cancelled || generation.current !== restoreGeneration) return;
       if (!permission.granted) { await stopBackground(); return; }
-      const subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 }, value => {
+      const subscription = await Location.watchPositionAsync(WATCH, value => {
         if (generation.current !== restoreGeneration) return;
         const next = position(value); setLocation(next);
+        if (Date.now() - sentAt.current < UPLOAD_GAP_MS) return;
+        sentAt.current = Date.now();
         void buddyRequest(token, path(sessionId), 'PUT', next).catch(cause => {
           fail(cause);
           if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) { watch.current?.remove(); watch.current = null; setTracking(false); void stopBackground().catch(fail); }

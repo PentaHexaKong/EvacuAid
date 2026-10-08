@@ -27,7 +27,8 @@ jest.mock('@rnmapbox/maps', () => {
     }),
     LocationPuck: () => <View testID="location-puck" />,
     ShapeSource: ({ id, shape, children }: { id: string; shape: object; children: React.ReactNode }) => <View testID={id} shape={shape}>{children}</View>,
-    LineLayer: ({ id }: { id: string }) => <View testID={id} />,
+    LineLayer: ({ id, style }: { id: string; style: object }) => <View testID={id} layerStyle={style} />,
+    UserTrackingMode: { Follow: 'normal', FollowWithHeading: 'compass' },
     FillLayer: ({ id }: { id: string }) => <View testID={id} />,
     CircleLayer: ({ id, ...props }: { id: string; style: object }) => <View testID={id} {...props} />,
     StyleImport: ({ config }: { config: object }) => <View testID="style-import" config={config} />,
@@ -312,4 +313,24 @@ test('a focus frames that place instead of the user, and the center button hands
   view.rerender(<DiscoverMap items={[rain]} selected={null} onSelect={jest.fn()} {...insets} onLocate={onLocate} userLocation={{ latitude: -6.3, longitude: 106.9 }} focus={null} />);
   settle();
   expect(mockCameraProps).toEqual(expect.objectContaining({ bounds: expectedBounds([[106.9, -6.3]]) }));
+});
+
+test('turn-by-turn follows the walker with a tilted heading-up camera and no framing bounds', () => {
+  const onFollowChange = jest.fn();
+  const map = (follow: boolean) => <SystemReduceMotionContext.Provider value={false}><DiscoverMap items={[]} selected={null} onSelect={jest.fn()} {...insets} userLocation={{ latitude: -6.26, longitude: 106.81 }} follow={follow} onFollowChange={onFollowChange} /></SystemReduceMotionContext.Provider>;
+  const view = render(map(true));
+  expect(mockCameraProps).toEqual(expect.objectContaining({ followUserLocation: true, followUserMode: 'compass', followPitch: 50, followZoomLevel: 17.5 }));
+  expect(mockCameraProps.bounds).toBeUndefined();
+  act(() => { (mockCameraProps.onUserTrackingModeChange as (event: object) => void)({ nativeEvent: { payload: { followUserLocation: false } } }); });
+  expect(onFollowChange).toHaveBeenCalledWith(false);
+  view.rerender(map(false));
+  expect(mockCameraProps.followUserLocation).toBe(false);
+  expect(mockCameraProps.bounds).toBeUndefined();
+});
+
+test('Reduce Motion keeps the follow camera flat and north-up, and the walked stretch of the route is hidden', () => {
+  const view = render(<SystemReduceMotionContext.Provider value><DiscoverMap items={[]} selected={null} onSelect={jest.fn()} {...insets} route={[[106.8, -6.2], [106.81, -6.21]]} follow walked={0.4} /></SystemReduceMotionContext.Provider>);
+  expect(mockCameraProps).toEqual(expect.objectContaining({ followUserMode: 'normal', followPitch: 0 }));
+  expect(view.getByTestId('evacuation-route-line')).toHaveProp('layerStyle', expect.objectContaining({ lineTrimOffset: [0, 0.4] }));
+  expect(view.getByTestId('evacuation-route-casing')).toHaveProp('layerStyle', expect.objectContaining({ lineTrimOffset: [0, 0.4] }));
 });

@@ -25,4 +25,11 @@ describe('API network errors', () => {
       originalCause,
     });
   });
+
+  test('never shows a validation error list as text', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 422, json: async () => ({ detail: [{ loc: ['body', 'observedAt'], msg: 'too old' }] }) } as unknown as Response);
+    const { apiRequest } = require('./api') as typeof import('./api');
+
+    await expect(apiRequest('/v1/me')).rejects.toMatchObject({ kind: 'http', status: 422, message: 'Request failed (422)' });
+  });
 });
