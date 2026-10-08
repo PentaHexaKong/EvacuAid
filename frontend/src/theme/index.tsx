@@ -7,6 +7,8 @@ export type AlertLevel = keyof typeof sky;
 // Rounding system (2026-10-02): xs 8 · sm 14 · md 20 · lg 24 · xl 32 · pill.
 // Nested corners: inner radius = outer radius - inset, never below 12. Circles use radius.pill without corner().
 // corner() adds iOS continuous ("squircle") curves so large radii read soft rather than clipped.
+// One side padding for every page; the navigation bar's left slot lines up with it.
+export const gutter = 20;
 export const corner = (value: number) => ({ borderRadius: value, borderCurve: 'continuous' as const });
 export const SystemReduceMotionContext = createContext(true);
 export type TextVariant = 'body' | 'small' | 'button' | 'section' | 'title' | 'eyebrow' | 'statement' | 'question' | 'lead' | 'status' | 'figure';

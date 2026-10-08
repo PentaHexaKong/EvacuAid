@@ -11,18 +11,19 @@ from app.models.shelter import ShelterCreate
 from app.models.user import LocationUpdate, UserCreate
 from app.routers.navigation import router as navigationRouter
 from app.routers.sessions import router as sessionsRouter
+from app.routers.users import router as usersRouter
 from app.services import navigationService, shelterService, user_service
 from app.services import valhallaProvider
 from app.services.valhallaProvider import RouteData, RoutingUnavailable, ValhallaRoutingProvider
 
 
 class WorkingProvider:
-    async def route(self, origin, destination):
+    async def route(self, origin, destination, profile='WALKING'):
         return RouteData(distanceM=1200, durationSec=900, geometry={'type': 'LineString', 'coordinates': [[origin[1], origin[0]], [destination[1], destination[0]] ]})
 
 
 class BrokenProvider:
-    async def route(self, origin, destination):
+    async def route(self, origin, destination, profile='WALKING'):
         raise RoutingUnavailable('offline')
 
 
@@ -129,9 +130,11 @@ async def testPreviewMarksScenarioHazardAndDestinationUnverified(dbSession, monk
 class RecordingProvider:
     def __init__(self):
         self.origins = []
+        self.profiles = []
 
-    async def route(self, origin, destination):
+    async def route(self, origin, destination, profile='WALKING'):
         self.origins.append(origin)
+        self.profiles.append(profile)
         return RouteData(distanceM=10, durationSec=5, geometry={'type': 'LineString', 'coordinates': [[origin[1], origin[0]], [destination[1], destination[0]]]})
 
 
@@ -142,6 +145,7 @@ def originAt(offset):
 def createApi(dbSession):
     api = FastAPI()
     api.include_router(sessionsRouter)
+    api.include_router(usersRouter)
     api.include_router(navigationRouter)
 
     async def getTestSession():
@@ -193,3 +197,124 @@ async def testStaleSavedLocationIsRejected(dbSession):
         await navigationService.navigationForUser(dbSession, NavigationCreate(userId=user.id), RecordingProvider())
     assert error.value.status_code == 409
     assert error.value.detail == 'user location is stale; update location'
+
+
+class RecordingAlternativesProvider(RecordingProvider):
+    async def routes(self, origin, destination, waypoints=None, maxCandidates=3, profile='WALKING'):
+        first = await self.route(origin, destination, profile=profile)
+        second = await self.route(origin, destination, profile=profile)
+        second.geometry['coordinates'].insert(1, [(origin[1] + destination[1]) / 2, (origin[0] + destination[0]) / 2 + 0.001])
+        return [first, second][:maxCandidates]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('profile,expectedProfile', [(None, 'PEDESTRIAN'), ('WHEELCHAIR', 'WHEELCHAIR')])
+@pytest.mark.parametrize('providerClass,candidateCount', [(RecordingProvider, 2), (RecordingAlternativesProvider, 4)])
+async def testNavigationRequestProfileReachesEveryCandidate(dbSession, monkeypatch, profile, expectedProfile, providerClass, candidateCount):
+    await shelter(dbSession, 'First', latitude=-6.201, longitude=106.801)
+    await shelter(dbSession, 'Second', latitude=-6.202, longitude=106.802)
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    provider = providerClass()
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', lambda: provider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        payload = {'userId': guest['user']['id'], 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}
+        if profile is not None:
+            payload['profile'] = profile
+        response = await client.post('/v1/navigation/routes', json=payload, headers={'Authorization': f"Bearer {guest['access_token']}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['route']['profile'] == expectedProfile
+    assert len(body['evaluatedCandidates']) == candidateCount
+    assert provider.profiles == [profile or 'WALKING'] * candidateCount
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('providerClass,candidateCount', [(RecordingProvider, 2), (RecordingAlternativesProvider, 4)])
+async def testSavedMobilityNeedUsesWheelchairProfileForEveryCandidate(dbSession, monkeypatch, providerClass, candidateCount):
+    await shelter(dbSession, 'First', wheelchairAccessible=True, latitude=-6.201, longitude=106.801)
+    await shelter(dbSession, 'Second', wheelchairAccessible=True, latitude=-6.202, longitude=106.802)
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    provider = providerClass()
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', lambda: provider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        headers = {'Authorization': f"Bearer {guest['access_token']}"}
+        saved = await client.patch(f"/v1/users/{guest['user']['id']}", json={'accessibility': [{'type': 'MOBILITY_LIMITATION'}]}, headers=headers)
+        assert saved.status_code == 200
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['route']['profile'] == 'WHEELCHAIR'
+    assert len(body['evaluatedCandidates']) == candidateCount
+    assert provider.profiles == ['WHEELCHAIR'] * candidateCount
+
+
+@pytest.mark.asyncio
+async def testExplicitWheelchairProfileRejectsInaccessibleShelterWithoutSavedNeed(dbSession, monkeypatch):
+    inaccessible = await shelter(dbSession, 'Inaccessible', wheelchairAccessible=False, latitude=-6.201, longitude=106.801)
+    accessible = await shelter(dbSession, 'Accessible', wheelchairAccessible=True, latitude=-6.202, longitude=106.802)
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    provider = RecordingProvider()
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', lambda: provider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        headers = {'Authorization': f"Bearer {guest['access_token']}"}
+        needs = await client.get(f"/v1/users/{guest['user']['id']}/accessibility", headers=headers)
+        assert needs.status_code == 200 and needs.json() == []
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'profile': 'WHEELCHAIR', 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['destination']['shelterId'] == str(accessible.id)
+    assert body['rejectedCandidates'] == [{'shelterId': str(inaccessible.id), 'reasonCodes': ['WHEELCHAIR_INACCESSIBLE']}]
+    assert body['route']['profile'] == 'WHEELCHAIR'
+    assert provider.profiles == ['WHEELCHAIR']
+
+
+@pytest.mark.asyncio
+async def testNavigationInvalidProfileReturns422(dbSession):
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'profile': 'CAR'}, headers={'Authorization': f"Bearer {guest['access_token']}"})
+    assert response.status_code == 422
+    assert any(error['loc'] == ['body', 'profile'] and error['type'] == 'literal_error' for error in response.json()['detail'])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('useAlternatives', [False, True])
+async def testWheelchairProfileReachesEveryDetourCall(monkeypatch, useAlternatives):
+    from app.services import routeCandidateService
+    from tests.test_hazards import SyntheticRoutingProvider, syntheticEvidence
+
+    provider = RecordingProvider()
+    if useAlternatives:
+        synthetic = SyntheticRoutingProvider()
+        async def routes(origin, destination, waypoints=None, maxCandidates=3, profile='WALKING'):
+            provider.profiles.append(profile)
+            return await synthetic.routes(origin, destination, waypoints=waypoints, maxCandidates=maxCandidates)
+        provider.routes = routes
+    waypoints = [[(0.002, 0.003), (0.002, 0.007)]]
+    monkeypatch.setattr(routeCandidateService, 'detourWaypoints', lambda *args: waypoints)
+    candidates = await routeCandidateService.evaluatedCandidates(provider, (0, 0), (0, 0.01), [syntheticEvidence()], False, 'TEST', profile='WHEELCHAIR')
+    assert not candidates[0].feasible
+    assert any(item.feasible and 'HAZARD_DETOUR_GENERATED' in item.reasons for item in candidates)
+    assert provider.profiles == ['WHEELCHAIR'] * (2 if useAlternatives else 4)

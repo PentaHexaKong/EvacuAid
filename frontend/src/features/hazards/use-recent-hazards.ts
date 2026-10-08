@@ -8,6 +8,10 @@ const STALE_MS = 5 * 60_000;
 
 type State = { status: 'loading' | 'ready' | 'error'; items: HazardItem[] };
 
+// ponytail: the detail page reads the tapped item from the last loaded feed instead of refetching; a cold deep link finds nothing and shows the empty state. Fetch by id if deep links to a hazard are ever needed.
+let lastItems: HazardItem[] = [];
+export const findHazard = (id: string | undefined) => lastItems.find(item => item.id === id);
+
 export function useRecentHazards() {
   const { token } = useGuestSession();
   const [state, setState] = useState<State>({ status: 'loading', items: [] });
@@ -21,6 +25,7 @@ export function useRecentHazards() {
     try {
       const response = await fetchRecentHazards(token);
       loadedAt.current = Date.now();
+      lastItems = response.items;
       const available = Object.values(response.sources).some(source => source.status === 'available');
       if (mounted.current) setState({ status: available ? 'ready' : 'error', items: response.items });
     } catch {

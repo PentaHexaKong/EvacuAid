@@ -4,7 +4,6 @@ import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import { ProfileProvider } from '@/features/profile/context';
-import { RequestDraftProvider } from '@/features/requests/draft';
 import * as SplashScreen from 'expo-splash-screen';
 import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
 import { SetupScreen } from '@/screens/setup';
@@ -59,7 +58,7 @@ function FirstRunGate() {
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (preferences.completed && session.status !== 'ready') {
-    if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
+    if (session.status === 'error') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
   return preferences.completed ? <Navigation /> : <SetupScreen onDone={target => setReturnTo(target ?? '/')} />;
@@ -80,20 +79,18 @@ function GuestSessionError() {
 }
 function Navigation() {
   const { t } = useTranslation();
-  return <RequestDraftProvider><Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
+  return <Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
-    <Stack.Screen name="contact/[id]" options={{ title: t('contactTitle') }} />
+    <Stack.Screen name="hazard/[id]" options={{ title: t('hazardDetailTitle') }} />
     <Stack.Screen name="destinations/index" options={{ headerShown: false }} />
     <Stack.Screen name="destinations/[id]" options={{ headerShown: false }} />
-    <Stack.Screen name="request/index" options={{ title: t('requestHelp') }} />
-    <Stack.Screen name="request/review" options={{ title: t('reviewRequest') }} />
-    {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: false, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
+    {(['alerts', 'profile'] as const).map(name => <Stack.Screen key={name} name={name} dangerouslySingular options={{ headerShown: false, presentation: Platform.OS === 'ios' ? 'formSheet' : 'modal', sheetGrabberVisible: true, sheetAllowedDetents: [1], sheetInitialDetentIndex: 0, sheetExpandsWhenScrolledToEdge: true, gestureEnabled: true }} />)}
     <Stack.Screen name="settings" options={{ headerShown: false, animation: 'none' }} />
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />
     <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
-  </Stack></RequestDraftProvider>;
+  </Stack>;
 }
 export default function RootLayout() {
   const [ready, setReady] = useState(false);

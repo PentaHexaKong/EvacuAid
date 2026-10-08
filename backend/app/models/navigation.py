@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -66,6 +67,7 @@ class NavigationCreate(BaseModel):
     userId: uuid.UUID
     origin: NavigationOrigin | None = None
     destinationShelterId: uuid.UUID | None = None
+    profile: Literal['WALKING', 'WHEELCHAIR'] = 'WALKING'
 
 
 class NavigationPreviewCreate(BaseModel):

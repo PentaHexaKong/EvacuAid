@@ -23,4 +23,9 @@ jest.mock('@expo/ui/swift-ui', () => {
     Picker: ({ children, onSelectionChange }) => React.createElement(View, null, React.Children.map(children, option => React.createElement(Pressable, { accessibilityRole: 'menuitem', accessibilityLabel: option.props.children, onPress: () => onSelectionChange(tagOf(option.props.modifiers)) }))),
   };
 });
-jest.mock('@expo/ui/swift-ui/modifiers', () => ({ accessibilityLabel: accessibilityLabel => ({ accessibilityLabel }), font: () => ({}), foregroundStyle: () => ({}), pickerStyle: () => ({}), tag: tag => ({ tag }), buttonStyle: () => ({}), contentShape: () => ({}), frame: () => ({}), glassEffect: () => ({}), shapes: { rectangle: () => ({}) } }));
+jest.mock('@expo/ui/swift-ui/modifiers', () => ({ accessibilityLabel: accessibilityLabel => ({ accessibilityLabel }), font: () => ({}), foregroundStyle: () => ({}), pickerStyle: () => ({}), tag: tag => ({ tag }), buttonStyle: () => ({}), contentShape: () => ({}), disabled: () => ({}), frame: () => ({}), glassEffect: () => ({}), padding: () => ({}), shapes: { rectangle: () => ({}), capsule: () => ({}) } }));
+// The speech recogniser is a native module; screens that can listen (Home, Buddy) import it, so every suite needs a stand-in.
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: { start: jest.fn(), stop: jest.fn(), abort: jest.fn(), requestPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })) },
+  useSpeechRecognitionEvent: jest.fn(),
+}));

@@ -1,24 +1,29 @@
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
-import type { ComponentType } from 'react';
-import { Button, Host, Image as SwiftImage, Menu, Picker, Text as SwiftText, VStack } from '@expo/ui/swift-ui';
-import { accessibilityLabel, buttonStyle, contentShape, font, foregroundStyle, frame, glassEffect, pickerStyle, shapes, tag } from '@expo/ui/swift-ui/modifiers';
+import { useContext, useState, type ComponentType } from 'react';
+import Animated from 'react-native-reanimated';
+import { Button, HStack, Host, Image as SwiftImage, Menu, Picker, Text as SwiftText, VStack } from '@expo/ui/swift-ui';
+import { accessibilityLabel, buttonStyle, contentShape, disabled as disabledModifier, font, foregroundStyle, frame, glassEffect, padding, shapes, tag } from '@expo/ui/swift-ui/modifiers';
 import IconDots from '@tabler/icons-react-native/IconDots';
+import IconWorld from '@tabler/icons-react-native/IconWorld';
+import { LANGUAGES, languageName, type Language } from '@/localization/language';
 import { AppText } from '@/components/ui';
-import { colors, radius } from '@/theme';
+import { colors, radius, SystemReduceMotionContext } from '@/theme';
+import { duration, easeCss } from '@/theme/motion';
 
 type Option<T extends string> = { value: T; label: string };
+const TRACK_PADDING = 4;
 
-// iOS: the system segmented control (SwiftUI Picker). Elsewhere: a token-styled two-up switcher.
+// Token-styled rather than the system segmented control: SwiftUI's segmented Picker ignores font, so its labels stay at 13pt.
 export function Segmented<T extends string>({ options, value, onChange }: { options: Option<T>[]; value: T; onChange: (value: T) => void }) {
-  if (Platform.OS === 'ios') return <Host matchContents={{ vertical: true }} style={{ alignSelf: 'stretch' }}>
-    <Picker modifiers={[pickerStyle('segmented')]} selection={value} onSelectionChange={selection => onChange(String(selection) as T)}>
-      {options.map(option => <SwiftText key={option.value} modifiers={[tag(option.value)]}>{option.label}</SwiftText>)}
-    </Picker>
-  </Host>;
-  return <View accessibilityRole="tablist" style={styles.track}>
+  const reduceMotion = useContext(SystemReduceMotionContext);
+  // The selection is one pill that slides between segments. Until the track is measured the selected segment carries the fill itself, so the first frame is already right.
+  const [segment, setSegment] = useState(0);
+  const index = options.findIndex(option => option.value === value);
+  return <View accessibilityRole="tablist" style={styles.track} onLayout={event => setSegment((event.nativeEvent.layout.width - TRACK_PADDING * 2) / options.length)}>
+    {segment > 0 && index >= 0 && <Animated.View pointerEvents="none" style={[styles.pill, styles.segmentOn, { width: segment, transform: [{ translateX: index * segment }], transitionProperty: 'transform', transitionDuration: reduceMotion ? 0 : duration.state, transitionTimingFunction: easeCss.out }]} />}
     {options.map(option => {
       const selected = option.value === value;
-      return <Pressable key={option.value} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onChange(option.value)} style={[styles.segment, selected && styles.segmentOn]}>
+      return <Pressable key={option.value} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onChange(option.value)} style={[styles.segment, selected && !segment && styles.segmentOn]}>
         <AppText variant="button" style={{ color: selected ? colors.ink : colors.muted }}>{option.label}</AppText>
       </Pressable>;
     })}
@@ -29,13 +34,34 @@ export type MenuItem = { label: string; onPress: () => void; destructive?: boole
 
 // A ⋯ button that opens the iOS pull-down menu; Android falls back to an alert list.
 export function MoreMenu({ label, items }: { label: string; items: MenuItem[] }) {
-  if (Platform.OS === 'ios') return <Host matchContents>
-    <Menu modifiers={[accessibilityLabel(label)]} label={<SwiftImage systemName="ellipsis.circle" modifiers={[font({ size: 26, weight: 'regular' }), foregroundStyle(colors.ink)]} />}>
+  if (Platform.OS === 'ios') return <Host matchContents style={styles.more}>
+    <Menu modifiers={[accessibilityLabel(label)]} label={<SwiftImage systemName="ellipsis.circle" modifiers={[font({ size: 26, weight: 'regular' }), foregroundStyle(colors.ink), frame({ width: 44, height: 44 }), contentShape(shapes.rectangle())]} />}>
       {items.map(item => <Button key={item.label} label={item.label} role={item.destructive ? 'destructive' : 'default'} onPress={item.onPress} />)}
     </Menu>
   </Host>;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={8} style={styles.dots} onPress={() => Alert.alert(label, undefined, [...items.map(item => ({ text: item.label, style: item.destructive ? 'destructive' as const : 'default' as const, onPress: item.onPress })), { text: '×', style: 'cancel' as const }])}>
     <IconDots size={20} color={colors.ink} />
+  </Pressable>;
+}
+
+// The current language as a light glass pill on a brand surface. iOS opens the pull-down menu with a checkmark on the current language; Android lists them in an alert.
+export function LanguageMenu({ label, value, disabled = false, onChange }: { label: string; value: string; disabled?: boolean; onChange: (language: Language) => void }) {
+  const name = languageName(value);
+  if (Platform.OS === 'ios') return <Host matchContents>
+    <Menu modifiers={[accessibilityLabel(`${label}, ${name}`), disabledModifier(disabled), glassEffect({ glass: { variant: 'clear', interactive: true }, shape: 'capsule' })]} label={<HStack spacing={7} modifiers={[padding({ horizontal: 14 }), frame({ minHeight: 44 }), contentShape(shapes.capsule())]}>
+      <SwiftImage systemName="globe" modifiers={[font({ size: 15, weight: 'semibold' }), foregroundStyle(colors.surface)]} />
+      <SwiftText modifiers={[font({ size: 15, weight: 'semibold' }), foregroundStyle(colors.surface)]}>{name}</SwiftText>
+      <SwiftImage systemName="chevron.up.chevron.down" modifiers={[font({ size: 11, weight: 'bold' }), foregroundStyle(colors.surface)]} />
+    </HStack>}>
+      <Picker selection={value} onSelectionChange={selection => onChange(selection as Language)}>
+        {LANGUAGES.map(option => <SwiftText key={option.value} modifiers={[tag(option.value)]}>{option.label}</SwiftText>)}
+      </Picker>
+    </Menu>
+  </Host>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${name}`} accessibilityState={{ disabled }} disabled={disabled} style={({ pressed }) => [styles.language, pressed && { opacity: 0.7 }]}
+    onPress={() => Alert.alert(label, undefined, [...LANGUAGES.map(option => ({ text: option.label, onPress: () => onChange(option.value) })), { text: '×', style: 'cancel' as const }])}>
+    <IconWorld size={18} strokeWidth={2.25} color={colors.surface} />
+    <AppText variant="small" style={{ color: colors.surface, fontWeight: '600' }}>{name}</AppText>
   </Pressable>;
 }
 
@@ -60,8 +86,12 @@ export function MapControls({ controls }: { controls: MapControl[] }) {
 const styles = StyleSheet.create({
   mapStack: { borderRadius: radius.pill, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: '0 2px 8px rgba(18, 40, 75, 0.16)' },
   mapButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  track: { flexDirection: 'row', padding: 3, borderRadius: radius.md, backgroundColor: colors.chip },
-  segment: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md - 3 },
-  segmentOn: { backgroundColor: colors.surface },
+  track: { flexDirection: 'row', padding: TRACK_PADDING, borderRadius: radius.pill, backgroundColor: colors.chip },
+  segment: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderRadius: radius.pill },
+  pill: { position: 'absolute', top: TRACK_PADDING, bottom: TRACK_PADDING, left: TRACK_PADDING, borderRadius: radius.pill },
+  segmentOn: { backgroundColor: colors.surface, boxShadow: '0 1px 3px rgba(11, 31, 82, 0.12)' },
+  // The 44pt target is wider than the glyph; pull it back so the glyph keeps the row's edge.
+  more: { marginRight: -7 },
+  language: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.18)' },
   dots: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.surface },
 });

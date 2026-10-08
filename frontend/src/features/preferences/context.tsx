@@ -15,7 +15,7 @@ type ApiPreferences = {
 };
 const PREFERENCES_SYNCED_USER_KEY = 'evacuaid.preferences.synced-user.v1';
 
-const Context = createContext({ preferences: defaults, ready: false, error: null as string | null, retry: async (): Promise<void> => {}, save: async (_value: Preferences): Promise<void> => {}, resetOnboarding: async (): Promise<void> => {} });
+const Context = createContext({ preferences: defaults, ready: false, error: null as string | null, retry: async (): Promise<void> => {}, save: async (_value: Preferences): Promise<void> => {}, resetOnboarding: async (): Promise<() => Promise<void>> => async () => {} });
 export const usePreferences = () => useContext(Context);
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
@@ -87,8 +87,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   };
 
   const resetOnboarding = async () => {
+    const previous = preferences;
+    const saved = await AsyncStorage.getItem(PREFERENCES_KEY);
     await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify({ completed: false }));
     setPreferences(current => ({ ...current, completed: false }));
+    return async () => {
+      if (saved === null) await AsyncStorage.removeItem(PREFERENCES_KEY);
+      else await AsyncStorage.setItem(PREFERENCES_KEY, saved);
+      setPreferences(previous);
+    };
   };
 
   return <Context.Provider value={{ preferences, ready, error, retry: sync, save, resetOnboarding }}>{children}</Context.Provider>;

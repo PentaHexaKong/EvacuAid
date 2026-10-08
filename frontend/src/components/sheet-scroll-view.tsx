@@ -4,6 +4,7 @@ import { useNavigation } from 'expo-router';
 
 export const SheetHeaderContext = createContext(false);
 
+// Same bar as the tabs (see TabScrollView): clear at the top, frosted and bordered once content scrolls under it.
 export function SheetScrollView(props: ScrollViewProps) {
   const navigation = useNavigation();
   const scrolled = useRef(false);
@@ -12,7 +13,7 @@ export function SheetScrollView(props: ScrollViewProps) {
     const next = contentOffset.y + contentInset.top > 1;
     if (next !== scrolled.current) {
       scrolled.current = next;
-      navigation.setOptions({ headerBlurEffect: next ? 'systemThinMaterialLight' : undefined, headerStyle: { backgroundColor: next ? 'rgba(235, 245, 255, 0.15)' : 'transparent' } });
+      navigation.setOptions({ scrollEdgeEffects: { top: next ? 'hard' : 'soft' } });
     }
     props.onScroll?.(event);
   }} />;

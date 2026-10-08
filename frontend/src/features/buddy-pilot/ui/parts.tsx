@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { type ReactNode } from 'react';
+import { Image, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
 import { AppText } from '@/components/ui';
 import { colors, corner, radius } from '@/theme';
 
@@ -9,7 +9,7 @@ export function initials(name: string | null | undefined) {
 
 export function PersonAvatar({ name, size = 48 }: { name: string | null | undefined; size?: number }) {
   return <View accessible={false} style={[styles.avatar, { width: size, height: size, ...corner(Math.round(size * 0.32)) }]}>
-    <AppText variant="button" style={{ color: colors.surface, fontSize: size * 0.36, lineHeight: size * 0.44 }}>{initials(name)}</AppText>
+    <AppText variant="button" style={{ color: colors.primary, fontSize: size * 0.36, lineHeight: size * 0.44 }}>{initials(name)}</AppText>
   </View>;
 }
 
@@ -42,6 +42,21 @@ export function Card({ children, tint, style }: { children: ReactNode; tint?: 'c
   return <View style={[styles.card, tint === 'caution' && styles.cardCaution, tint === 'info' && styles.cardInfo, style]}>{children}</View>;
 }
 
+export function EmptyCard({ title, body, art, children }: { title: string; body: string; art: ImageSourcePropType; children?: ReactNode }) {
+  return <Card>
+    <View style={[buddyStyles.row, { gap: 16 }]}>
+      <View style={[buddyStyles.grow, { gap: 4 }]}>
+        <AppText variant="section" accessibilityRole="header">{title}</AppText>
+        <AppText style={{ color: colors.muted }}>{body}</AppText>
+      </View>
+      <View style={styles.art}><Image source={art} accessible={false} style={{ width: 68, height: 68 }} /></View>
+    </View>
+    {children}
+  </Card>;
+}
+
+export { Group, Row } from '@/components/grouped-list';
+
 export const buddyStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   actions: { flexDirection: 'row', gap: 10 },
@@ -49,13 +64,17 @@ export const buddyStyles = StyleSheet.create({
   quote: { padding: 12, ...corner(radius.sm), backgroundColor: colors.surface },
 });
 
+const ELEVATION = '0 1px 2px rgba(11, 31, 82, 0.06), 0 2px 8px rgba(11, 31, 82, 0.05)';
+
 const styles = StyleSheet.create({
-  avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
+  art: { width: 84, height: 84, alignItems: 'center', justifyContent: 'center', ...corner(radius.md), backgroundColor: colors.accentSoft },
   chip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill },
   dot: { width: 7, height: 7, borderRadius: radius.pill },
   strip: { flexDirection: 'row', gap: 8 },
   stat: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, ...corner(radius.sm), backgroundColor: colors.surface },
-  card: { gap: 14, padding: 16, ...corner(radius.lg), borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  cardCaution: { backgroundColor: colors.cautionSoft, borderColor: colors.cautionBorder },
-  cardInfo: { backgroundColor: colors.accentSoft, borderColor: colors.borderStrong },
+  card: { gap: 14, padding: 16, ...corner(radius.lg), backgroundColor: colors.surface, boxShadow: ELEVATION },
+  // Tinted cards mark state, so they keep a border and drop the elevation.
+  cardCaution: { backgroundColor: colors.cautionSoft, borderWidth: 1, borderColor: colors.cautionBorder, boxShadow: undefined },
+  cardInfo: { backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.borderStrong, boxShadow: undefined },
 });

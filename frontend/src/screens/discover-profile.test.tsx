@@ -1,28 +1,34 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Linking, View } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type BottomSheet from '@gorhom/bottom-sheet';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppText } from '@/components/ui';
 import { DiscoverScreen } from './discover';
 import { EditNameScreen, ProfileScreen } from './profile';
 import { AlertsScreen, AlertScreen } from './alerts';
 import { ProfileProvider, PROFILE_KEY, useProfile } from '@/features/profile/context';
-import { PreferencesProvider } from '@/features/preferences/context';
-import { PREFERENCES_KEY } from '@/features/preferences/storage';
+import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
+import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
-import { SystemReduceMotionContext } from '@/theme';
+import { colors, sky, SystemReduceMotionContext } from '@/theme';
+import { topAlert } from '@/features/content/samples';
 import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
 let mockMapProps: DiscoverMapProps;
+let mockSheetProps: React.ComponentProps<typeof BottomSheet>;
 let mockEvac: EvacuationState & { findRoute: jest.Mock; locate: jest.Mock; clearRoute: jest.Mock };
 const mockSnapToIndex = jest.fn();
 const mockEnsureGuest = jest.fn();
+const mockDeleteGuest = jest.fn();
 let mockId = 'rain';
 let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
 let mockPreferences: Record<string, unknown>;
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId }) }));
+let mockFocus: string | undefined;
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { name: string }) => {
   const text = (mockLanguage === 'en' ? jest.requireActual('../localization/en.json') : jest.requireActual('../localization/id.json'))[key] ?? key;
   return params?.name ? text.replace('{{name}}', params.name) : text;
@@ -36,22 +42,25 @@ jest.mock('@gorhom/bottom-sheet', () => {
   const { View, ScrollView } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: React.forwardRef(function MockSheet({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) {
+    default: React.forwardRef(function MockSheet(props: React.ComponentProps<typeof BottomSheet>, ref: React.Ref<unknown>) {
+      React.useEffect(() => { mockSheetProps = props; });
       React.useImperativeHandle(ref, () => ({ snapToIndex: mockSnapToIndex }));
-      return <View>{children}</View>;
+      const Background = props.backgroundComponent;
+      return <View testID="discover-sheet">{Background && <Background style={{}} animatedIndex={props.animatedPosition!} animatedPosition={props.animatedPosition!} />}{props.children}</View>;
     }),
     BottomSheetScrollView: ScrollView,
     useBottomSheetSpringConfigs: (config: object) => config,
   };
 });
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => mockEvac }));
-jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: jest.fn(), startNewGuest: jest.fn() }) }));
+jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: mockDeleteGuest, startNewGuest: jest.fn() }) }));
 jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/profile/api'), apiRequest: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 
 beforeEach(async () => {
   jest.restoreAllMocks(); jest.clearAllMocks(); mockId = 'rain'; mockLanguage = 'en'; await AsyncStorage.clear();
   mockEnsureGuest.mockResolvedValue(undefined);
+  mockDeleteGuest.mockReset().mockResolvedValue(undefined);
   mockEvac = { phase: 'needsLocation', origin: null, shelters: null, route: null, reason: null, errorKind: null, findRoute: jest.fn(), locate: jest.fn(), clearRoute: jest.fn() };
   mockProfile = { id: 'user-1', name: null, phone: null, latitude: null, longitude: null, location_observed_at: null, location_accuracy_m: null, share_location_with_buddies: false, needs_assistance: false };
   mockPreferences = { voice_enabled: true, vibration_enabled: true, text_enabled: true, language: 'en', larger_text: false, stronger_contrast: false };
@@ -101,6 +110,53 @@ test('the alert chip in the sheet header opens the current alert', () => {
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
 });
 
+test('the highest sample alert drives the unboxed sheet banner and wash', () => {
+  expect(topAlert).toMatchObject({ level: 'waspada', title: 'rainTitle' });
+  const view = render(<DiscoverScreen />);
+  const banner = view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` });
+  expect(banner).toHaveStyle({ minHeight: 52, paddingVertical: 10 });
+  expect(banner).not.toHaveStyle({ backgroundColor: colors.cautionSoft });
+  expect(banner).not.toHaveStyle({ borderWidth: 1 });
+  expect(view.getAllByText(en.rainTitle)[0]).toHaveStyle({ color: sky.waspada.ink });
+  expect(mockSheetProps.handleIndicatorStyle).toEqual({ backgroundColor: sky.waspada.ink, opacity: 0.25, width: 40 });
+  const gradient = view.UNSAFE_getAllByType(LinearGradient).find(item => item.props.locations?.join(',') === '0,0.5,1')!;
+  expect(gradient.props.colors).toEqual([sky.waspada.stops[1], sky.waspada.stops[2], colors.surface]);
+  expect(gradient.props.style).toEqual(expect.objectContaining({ top: 0, height: 168 }));
+  expect(gradient.parent).toHaveStyle({ backgroundColor: colors.surface, overflow: 'hidden' });
+});
+
+test('topAlert is independent of the sample order', () => {
+  const spy = jest.spyOn(Array.prototype, 'reduce');
+  try {
+    jest.isolateModules(() => {
+      spy.mockImplementationOnce(function (this: unknown[], callback) { return [...this].reverse().reduce(callback); });
+      expect(jest.requireActual('@/features/content/samples').topAlert).toEqual(topAlert);
+    });
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test('sheet credits ride peek and middle, stay at middle when expanded and resync after layout', () => {
+  const view = render(<DiscoverScreen />);
+  const middle = mockMapProps.bottomInset;
+  expect(mockMapProps.creditsInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(1, 0, 0, 0));
+  expect(mockMapProps.creditsInset).toBe((mockSheetProps.snapPoints as number[])[0]);
+  const beforeLayout = mockMapProps.creditsInset;
+  const primary = view.UNSAFE_getAllByType(View).find(item => item.props.onLayout)!;
+  fireEvent(primary, 'layout', { nativeEvent: { layout: { height: 260 } } });
+  expect(mockMapProps.creditsInset).toBe((mockSheetProps.snapPoints as number[])[0]);
+  expect(mockMapProps.creditsInset).not.toBe(beforeLayout);
+  expect(mockMapProps.bottomInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(0, 1, 0, 0));
+  expect(mockMapProps.creditsInset).toBe(middle);
+  act(() => mockSheetProps.onAnimate!(1, 2, 0, 0));
+  expect(mockMapProps.creditsInset).toBe(middle);
+  fireEvent(primary, 'layout', { nativeEvent: { layout: { height: 280 } } });
+  expect(mockMapProps.creditsInset).toBe(middle);
+});
+
 test('nearby reported hazards become estimated map zones, each named in the sheet', async () => {
   const quake = { id: 'q1', type: 'earthquake', occurredAt: '2026-10-03T01:00:00Z', source: 'BMKG', latitude: -6.5, longitude: 106.9, magnitude: 5.2, depthKm: 10, region: null, felt: null, reportCount: null };
   const far = { ...quake, id: 'q2', latitude: 2.5, longitude: 128.4 };
@@ -110,6 +166,29 @@ test('nearby reported hazards become estimated map zones, each named in the shee
   expect(await view.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
   expect(view.getByLabelText(`${en.impactEstimate}: ${en.hazard_earthquake} M5.2. ${en.impactEstimateNote}`)).toBeTruthy();
   expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1']);
+});
+
+test('a map focus is honoured only for a hazard in the feed and never hides the hazards near the user', async () => {
+  const quake = { id: 'q1', type: 'earthquake', occurredAt: '2026-10-03T01:00:00Z', source: 'BMKG', latitude: -6.5, longitude: 106.9, magnitude: 5.2, depthKm: 10, region: null, felt: null, reportCount: null };
+  const far = { ...quake, id: 'q2', latitude: 2.5, longitude: 128.4, magnitude: 6.1 };
+  const fallback = (apiRequest as jest.Mock).getMockImplementation()!;
+  (apiRequest as jest.Mock).mockImplementation(async (path: string, ...rest: unknown[]) => (path === '/v1/hazards/recent' ? { items: [quake, far], sources: { bmkg: { status: 'available', error: null } } } : fallback(path, ...rest)));
+  try {
+    // Coordinates that match no hazard, as a crafted deep link could carry: ignored.
+    mockFocus = '10,20';
+    const stray = render(<DiscoverScreen />);
+    expect(await stray.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
+    expect(mockMapProps.focus).toBeNull();
+    expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1']);
+    stray.unmount();
+    // A hazard from the feed: the map frames it and adds its rings, while the nearby hazard stays on the map and in the legend.
+    mockFocus = '2.5,128.4';
+    const view = render(<DiscoverScreen />);
+    expect(await view.findByText(`${en.hazard_earthquake} M5.2`)).toBeTruthy();
+    expect(mockMapProps.focus).toEqual(expect.objectContaining({ latitude: 2.5, longitude: 128.4 }));
+    expect(mockMapProps.zones!.features.map(zone => zone.id)).toEqual(['q1-0', 'q1-1', 'q2-0', 'q2-1']);
+    expect(view.getByText(`${en.hazard_earthquake} M6.1`)).toBeTruthy();
+  } finally { mockFocus = undefined; }
 });
 
 test('the map opens in 3D, flips to flat and back from its control, and starts flat under Reduce Motion', () => {
@@ -264,18 +343,85 @@ test('resetting first-time guide keeps server profile and support preferences', 
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ completed: false });
 });
 
+function ProfileDeleteGate() {
+  const { preferences, ready } = usePreferences();
+  return <View><AppText testID="preferences">{JSON.stringify(preferences)}</AppText>{ready && preferences.completed ? <ProfileScreen /> : <AppText>Setup</AppText>}</View>;
+}
+
+test('a failed profile delete restores completed onboarding and all preferences without changing saved storage', async () => {
+  const value = { ...defaults, completed: true, largerText: true, strongerContrast: true, voiceEnabled: false, vibrationEnabled: false, textEnabled: false, language: 'en' as const };
+  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(value));
+  mockProfile.name = 'Billy';
+  mockDeleteGuest.mockRejectedValueOnce(new Error('network'));
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
+  const saved = await AsyncStorage.getItem(PREFERENCES_KEY);
+  expect(saved).toBe('{"completed":true}');
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe(saved);
+  expect(view.getByText('Billy')).toBeTruthy();
+  expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy();
+  expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
+});
+
+test('a successful profile delete resets onboarding before deleting the guest', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  mockDeleteGuest.mockImplementationOnce(async () => {
+    expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  });
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(mockDeleteGuest).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual({ ...defaults, completed: false, language: 'en' });
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  expect(view.getByText('Setup')).toBeTruthy();
+  expect(alert).not.toHaveBeenCalledWith(en.deleteProfileError);
+});
+
+test('a failed onboarding restore still shows the profile deletion error', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
+  mockDeleteGuest.mockImplementationOnce(async () => {
+    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage'));
+    throw new Error('network');
+  });
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
+});
+
+test('Larger Text grows the settings row labels', async () => {
+  await AsyncStorage.setItem(PROFILE_KEY, '{"name":"Billy"}');
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true,"largerText":true}');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByText('Billy')).toBeTruthy());
+  expect(view.getByText('Replay guide')).toHaveStyle({ fontSize: 26.4 });
+});
+
 test('new copy has Indonesian parity and Profile uses the localized fallback', async () => {
   expect(Object.keys(en).sort()).toEqual(Object.keys(id).sort());
   mockLanguage = 'id';
   const view = render(<ProfileProvider><ProfileScreen /></ProfileProvider>);
-  await waitFor(() => expect(view.getByText('Profil Anda')).toBeTruthy());
-  expect(view.getByText('Profil tamu · perangkat ini')).toBeTruthy();
+  await waitFor(() => expect(view.getByText('Profil tamu')).toBeTruthy());
+  expect(view.queryByText('Profil tamu · perangkat ini')).toBeNull();
 });
 
 test('settings toggles save immediately, without a Save button', async () => {
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByText('Your profile')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Guest profile')).toBeTruthy());
   expect(view.queryByRole('button', { name: 'Save changes' })).toBeNull();
   fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
   await waitFor(() => expect(mockPreferences.larger_text).toBe(true));
@@ -299,6 +445,34 @@ test('the status card asks to save a location, then offers an update once one is
 test('the language row opens a native menu whose choice saves the language', async () => {
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
   await waitFor(() => expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy());
-  fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
+  fireEvent.press(view.getByRole('menuitem', { name: 'Bahasa Indonesia' }));
   await waitFor(() => expect(mockPreferences.language).toBe('id'));
+});
+
+let mockListFirst = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: false, autoRead: false, listFirst: mockListFirst, stepFree: mockStepFree }) }));
+beforeEach(() => { mockListFirst = false; });
+
+test.each([false, true])('Discover starts on the tall list only with listFirst (%s)', async listFirst => {
+  mockListFirst = listFirst;
+  render(<DiscoverScreen />);
+  await act(async () => {});
+  expect(mockSheetProps.index).toBe(listFirst ? 2 : 1);
+  expect(mockMapProps).toBeDefined();
+});
+
+
+let mockStepFree = false;
+beforeEach(() => { mockStepFree = false; });
+test.each([false, true])('other shelters keep stable accessibility groups only with stepFree (%s)', async stepFree => {
+  mockStepFree = stepFree;
+  mockEvac.phase = 'located';
+  mockEvac.origin = { latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() };
+  const values = [null, false, null, true, false, true, null];
+  mockEvac.shelters = values.map((wheelchairAccessible, index) => ({ id: String(index), name: `Point ${index}`, latitude: -6.2, longitude: 106.8, wheelchairAccessible, distanceM: index * 100, status: 'OPEN', capacity: null, currentOccupancy: null, source: null }));
+  const view = render(<DiscoverScreen />);
+  await act(async () => {});
+  const labels = view.getAllByRole('button').map(row => row.props.accessibilityLabel ?? row.findAllByType(AppText).map(text => text.props.children).join(' ')).filter(label => String(label).startsWith('Point'));
+  expect(labels.map(label => String(label).slice(0, 7))).toEqual((stepFree ? [3, 5, 2, 6, 1, 4] : [1, 2, 3, 4, 5, 6]).map(index => `Point ${index}`));
+  expect(view.getByText('Point 0')).toBeTruthy();
 });

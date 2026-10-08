@@ -1,6 +1,6 @@
 export type Direction = 'n' | 's' | 'e' | 'w' | 'ne' | 'se' | 'sw' | 'nw';
 export type QuakeRegion = { distanceKm: string; direction: Direction; place: string; area: string | null; setting: 'sea' | 'land' | null };
-export type FeltIntensity = { text: string; from: number; to: number | null };
+export type FeltIntensity = { text: string; from: number; to: number | null; place: string | null };
 
 const DIRECTIONS: Record<string, Direction> = { utara: 'n', selatan: 's', timur: 'e', barat: 'w', timurlaut: 'ne', tenggara: 'se', baratdaya: 'sw', baratlaut: 'nw' };
 // BMKG writes the region either as a sentence ("Pusat gempa berada di laut 82 km Timur Laut RUTENG-MANGGARAI-NTT")
@@ -41,10 +41,10 @@ function fromRoman(value: string) {
   return total;
 }
 
-// "Dirasakan" leads with the Modified Mercalli range ("II - III Kab. Gorontalo Utara"); keep the whole range.
+// "Dirasakan" leads with the Modified Mercalli range ("II - III Kab. Gorontalo Utara"); keep the whole range and the first place, which BMKG lists at the highest intensity.
 export function parseFeltIntensity(raw: string | null): FeltIntensity | null {
   const match = raw?.match(/^([IVX]+)(?:\s*-\s*([IVX]+))?\b/);
   if (!match) return null;
   const [, from, to] = match;
-  return { text: to ? `${from}-${to}` : from, from: fromRoman(from), to: to ? fromRoman(to) : null };
+  return { text: to ? `${from}-${to}` : from, from: fromRoman(from), to: to ? fromRoman(to) : null, place: raw!.slice(match[0].length).split(',')[0].trim() || null };
 }

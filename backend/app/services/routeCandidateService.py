@@ -87,7 +87,8 @@ def equivalent(route, others) -> bool:
     return False
 
 
-async def evaluatedCandidates(provider, origin, destination, evidence, mobilityRequired, prefix, session=None):
+async def evaluatedCandidates(provider, origin, destination, evidence, mobilityRequired, prefix, session=None, profile=None):
+    routingOptions = {'profile': profile} if profile is not None else {}
     async def loadEvidence(routes):
         nonlocal evidence
         if session is None or not routes:
@@ -138,7 +139,7 @@ async def evaluatedCandidates(provider, origin, destination, evidence, mobilityR
             result.reasons.append('HARD_OPERATIONAL_LIMIT_EXCEEDED')
         return result
 
-    routes = await provider.routes(origin, destination, maxCandidates=ROUTE_MAX_ALTERNATIVES) if hasattr(provider, 'routes') else [await provider.route(origin, destination)]
+    routes = await provider.routes(origin, destination, maxCandidates=ROUTE_MAX_ALTERNATIVES, **routingOptions) if hasattr(provider, 'routes') else [await provider.route(origin, destination, **routingOptions)]
     await loadEvidence(routes)
     evaluated = []
     for index, route in enumerate(routes[:ROUTE_MAX_ALTERNATIVES]):
@@ -152,12 +153,12 @@ async def evaluatedCandidates(provider, origin, destination, evidence, mobilityR
     for index, waypoints in enumerate(attempts):
         try:
             if hasattr(provider, 'routes'):
-                detours = await provider.routes(origin, destination, waypoints=waypoints, maxCandidates=1)
+                detours = await provider.routes(origin, destination, waypoints=waypoints, maxCandidates=1, **routingOptions)
             else:
                 legs = []
                 points = [origin, *waypoints, destination]
                 for first, second in zip(points, points[1:]):
-                    legs.append(await provider.route(first, second))
+                    legs.append(await provider.route(first, second, **routingOptions))
                 coordinates = []
                 for leg in legs:
                     points = leg.geometry.get('coordinates', [])

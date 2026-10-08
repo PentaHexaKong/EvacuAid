@@ -1,0 +1,13 @@
+# Hazard banner photos
+
+All from Wikimedia Commons, cropped to 3:2 and resized to 1200×800. The CC BY photos require visible attribution: the disaster detail page prints the credit under the photo note (`src/features/hazards/hazard-banner.tsx`).
+
+| File | Author | Licence | Source |
+| --- | --- | --- | --- |
+| `earthquake.jpg` | U.S. Geological Survey | Public domain | [Cracked Road (28167097890).jpg](https://commons.wikimedia.org/wiki/File:Cracked_Road_(28167097890).jpg) |
+| `flood.jpg` | Sandy Syafrudin Nina | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) | [Akses jalan kampung yang terendam banjir Gorontalo 2024.jpg](https://commons.wikimedia.org/wiki/File:Akses_jalan_kampung_yang_terendam_banjir_Gorontalo_2024.jpg) |
+| `volcano.jpg` | Yosh Ginsu yoshginsu | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) | [Mount Sinabung, Indonesia (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Mount_Sinabung%2C_Indonesia_%28Unsplash%29.jpg) |
+| `haze.jpg` | OttaEl | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) | [Kabut Asap di Teluk Batang Kota, Kayong Utara.jpg](https://commons.wikimedia.org/wiki/File:Kabut_Asap_di_Teluk_Batang_Kota%2C_Kayong_Utara.jpg) |
+| `fire.jpg` | MWul | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) | [Kalimantan Forest Fires.jpg](https://commons.wikimedia.org/wiki/File:Kalimantan_Forest_Fires.jpg) |
+| `wind.jpg` | Peter Shanks from Hobart, Australia | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) | [Coconut palm in the wind (4300042716).jpg](https://commons.wikimedia.org/wiki/File:Coconut_palm_in_the_wind_%284300042716%29.jpg) |
+| `fallback.jpg` | SATELITBM | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) | [Awan Mendung Di Karangsari Kebumen Jateng Indonesia.jpg](https://commons.wikimedia.org/wiki/File:Awan_Mendung_Di_Karangsari_Kebumen_Jateng_Indonesia.jpg) |

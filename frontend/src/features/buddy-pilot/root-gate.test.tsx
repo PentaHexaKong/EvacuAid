@@ -18,7 +18,6 @@ jest.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: ({ ch
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children, SafeAreaView: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 jest.mock('@/features/profile/context', () => ({ ProfileProvider: ({ children }: { children: React.ReactNode }) => children }));
-jest.mock('@/features/requests/draft', () => ({ RequestDraftProvider: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('@/features/preferences/context', () => ({ PreferencesProvider: ({ children }: { children: React.ReactNode }) => children, usePreferences: () => ({ ready: true, preferences: { completed: mockCompleted } }) }));
 jest.mock('@/features/profile/session', () => ({ GuestSessionProvider: ({ children }: { children: React.ReactNode }) => children, useGuestSession: () => ({ status: 'ready', ensureGuest: jest.fn() }) }));
 jest.mock('@/screens/setup', () => ({ SetupScreen: () => null }));

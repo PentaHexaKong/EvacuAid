@@ -47,3 +47,18 @@ test('logging out restores setup on the next launch without clearing support pre
   await waitFor(() => expect(next.result.current.ready).toBe(true));
   expect(next.result.current.preferences).toEqual({ ...defaults, completed: false, largerText: true, strongerContrast: true });
 });
+
+test('resetting onboarding can restore every preference and the exact saved value', async () => {
+  const value = { ...defaults, completed: true, largerText: true, strongerContrast: true, voiceEnabled: false, vibrationEnabled: false, textEnabled: false, language: 'en' as const };
+  const saved = JSON.stringify(value);
+  await AsyncStorage.setItem(PREFERENCES_KEY, saved);
+  const { result } = renderHook(usePreferences, { wrapper: PreferencesProvider });
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  let restore!: () => Promise<void>;
+  await act(async () => { restore = await result.current.resetOnboarding(); });
+  expect(result.current.preferences).toEqual({ ...value, completed: false });
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  await act(async () => restore());
+  expect(result.current.preferences).toEqual(value);
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe(saved);
+});

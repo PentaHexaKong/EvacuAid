@@ -217,3 +217,33 @@ declare module '@tabler/icons-react-native/IconMap' {
   const Icon: typeof import('@tabler/icons-react-native').IconMap;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconUsersGroup' {
+  const Icon: typeof import('@tabler/icons-react-native').IconUsersGroup;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconPlayerStop' {
+  const Icon: typeof import('@tabler/icons-react-native').IconPlayerStop;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconChevronUp' {
+  const Icon: typeof import('@tabler/icons-react-native').IconChevronUp;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconWorld' {
+  const Icon: typeof import('@tabler/icons-react-native').IconWorld;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconMicrophone' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMicrophone;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconLifebuoy' {
+  const Icon: typeof import('@tabler/icons-react-native').IconLifebuoy;
+  export default Icon;
+}

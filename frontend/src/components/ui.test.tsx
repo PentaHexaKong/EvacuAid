@@ -1,5 +1,5 @@
-import { fireEvent, render } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { fireEvent, render, renderHook } from '@testing-library/react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { ActionButton, CheckOption } from './ui';
 import { SystemReduceMotionContext } from '@/theme';
 
@@ -30,4 +30,24 @@ test('check options are checkboxes that report their state', () => {
   expect(box).toHaveProp('accessibilityState', expect.objectContaining({ checked: false }));
   fireEvent.press(box);
   expect(onToggle).toHaveBeenCalledWith(true);
+});
+
+
+let mockLargeTargets = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ largeTargets: mockLargeTargets }) }));
+beforeEach(() => { mockLargeTargets = false; });
+test.each([false, true])('button heights follow largeTargets (%s)', largeTargets => {
+  mockLargeTargets = largeTargets;
+  const view = render(<><ActionButton label="Full" /><ActionButton compact label="Compact" /></>);
+  const full = view.getByRole('button', { name: 'Full' }).children[0] as unknown as { props: { style: StyleProp<ViewStyle> } };
+  const compact = view.getByRole('button', { name: 'Compact' }).children[0] as unknown as { props: { style: StyleProp<ViewStyle> } };
+  expect(StyleSheet.flatten(full.props.style).minHeight).toBe(largeTargets ? 60 : 52);
+  expect(StyleSheet.flatten(compact.props.style).minHeight).toBe(largeTargets ? 52 : 44);
+});
+
+test('access capabilities are safe without providers', () => {
+  const useAccess = jest.requireActual('@/features/access/use-access').useAccess as typeof import('@/features/access/use-access').useAccess;
+  const { result } = renderHook(() => useAccess());
+  expect(result.current.largeTargets).toBe(false);
+  expect(result.current.soundFree).toBe(false);
 });
