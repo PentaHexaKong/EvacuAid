@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: command_test
+      POSTGRES_PASSWORD: isolated-test-only
+      POSTGRES_DB: evacuaid_command_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U command_test -d evacuaid_command_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    build:
+      context: ../backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://command_test:isolated-test-only@postgres:5432/evacuaid_command_test
+      PYTHONPATH: /workspace/backend:/workspace/testocando
+    working_dir: /workspace/backend
+    volumes:
+      - ..:/workspace:ro
+    tmpfs:
+      - /workspace/backend/data
+    command: ['sh', '-c', 'alembic -c ../testocando/alembic.ini upgrade head && pytest -p no:cacheprovider tests ../testocando/tests -q']
+    depends_on:
+      postgres:
+        condition: service_healthy

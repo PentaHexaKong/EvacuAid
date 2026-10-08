@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EvacuAid · Command Center</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/command-center/styles.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/command-center/" aria-label="EvacuAid command center"><span class="brand-icon">E</span><span>EvacuAid<small>GOVERNMENT OPERATIONS</small></span></a>
+    <div class="header-right"><span class="live-dot"></span><span id="connection">Loading dashboard</span></div>
+  </header>
+  <main>
+    <div class="page-heading"><div><p class="eyebrow">REGIONAL SITUATION ROOM</p><h1>Command Center</h1><p>Shared awareness. Coordinated response.</p></div><div class="controls"><label>Data environment<select id="dataMode"><option value="REFERENCE">Reference / operational</option><option value="SIMULATION">SIMULATION / DEMO</option></select></label><button id="refresh">↻ Refresh</button></div></div>
+    <div id="notice" class="notice" role="status">Loading regional projections. Missing data remains UNKNOWN.</div>
+    <section id="kpis" class="kpis" aria-label="Regional key indicators"></section>
+    <section class="workspace">
+      <article class="panel map-panel">
+        <div class="panel-heading"><div><h2>Regional operational map</h2><p>Administrative boundaries · click a region to inspect</p></div><span class="tag">KELURAHAN / DESA</span></div>
+        <div class="map-filters"><label>Level<select id="level"><option value="VILLAGE">Kelurahan / Desa</option><option value="DISTRICT">Kecamatan</option><option value="CITY_REGENCY">City / Regency</option><option value="PROVINCE">Province</option></select></label><label>Parent region<select id="parent"><option value="">All parents</option></select></label><label>Hazard<select id="hazard"><option value="">All types</option><option>FLOOD</option><option>EARTHQUAKE</option><option>TSUNAMI</option><option>WILDFIRE</option><option>LANDSLIDE</option><option>EXTREME_WEATHER</option></select></label><label>Signal<select id="signal"><option value="">All signals</option><option>CRITICAL</option><option>ELEVATED</option><option>WATCH</option><option>NORMAL</option><option>UNKNOWN</option></select></label></div>
+        <div class="map-tools"><label class="check-label"><input id="mock-mode" type="checkbox" role="switch">Mock mode</label><button id="add-disaster" disabled>Add mock disaster</button><button id="add-safe-house">Add safe house</button><button id="cancel-map-placement" hidden>Cancel placement</button><button id="reset-mocks" hidden>Clear mock items</button></div>
+        <p id="map-action-status" class="map-caption" role="status">Pan, zoom, or select a region. Add a safe house by choosing a point on the map.</p>
+        <div id="mock-banner" class="notice simulation" hidden>MOCK MODE ? Disasters and safe houses are saved only in this browser. Operational statistics and the live backend are unchanged.</div>
+        <div id="map" aria-label="Operational region map"></div>
+        <div id="mock-items" class="mock-items" hidden></div>
+        <div class="legend"><span><i style="background:#dc4c53"></i>Critical</span><span><i style="background:#e68b35"></i>Elevated</span><span><i style="background:#d2b747"></i>Watch</span><span><i style="background:#39a987"></i>Normal</span><span><i style="background:#82929e"></i>Unknown</span></div>
+        <div class="layer-controls" id="layers"><label><input type="checkbox" data-layer="regions" checked>Regional status</label><label><input type="checkbox" data-layer="active" checked>Official active</label><label><input type="checkbox" data-layer="baseline">Baseline susceptibility</label><label><input type="checkbox" data-layer="community">Community observations</label><label><input type="checkbox" data-layer="satellite">Satellite observations</label><label><input type="checkbox" data-layer="shelters" checked>Shelters</label><label><input type="checkbox" data-layer="routes" disabled>Evacuation routes · UNKNOWN</label></div>
+        <p class="map-caption">Hazard and shelter overlays show the selected region. Baseline outlines indicate susceptibility, not an active warning.</p>
+      </article>
+      <aside class="panel priority"><div class="panel-heading"><div><h2>Priority regions</h2><p>Explainable operational ordering</p></div><span id="region-count" class="tag">—</span></div><div id="priorities" class="priority-list"><p class="empty">No regional data loaded.</p></div><details><summary>How regions are ordered</summary><p>Signal → official critical evidence → estimated exposed population → active assistance → maximum known shelter occupancy ratio → uncertainty → region code. UNKNOWN follows WATCH and precedes NORMAL. Known higher counts rank first; missing counts remain unknown.</p></details></aside>
+    </section>
+    <section class="detail-grid">
+      <article class="panel"><div class="panel-heading"><div><p class="eyebrow">SELECTED REGION</p><h2 id="selected-name">Choose a region</h2><p id="hierarchy">Select a polygon or a priority region.</p></div><span id="selected-signal" class="tag">UNKNOWN</span></div><div id="region-metrics" class="metric-grid"></div><div id="population-note" class="footnote"></div><div id="hazard-list" class="evidence-list"></div></article>
+      <article class="panel"><div class="panel-heading"><div><h2>Shelter status</h2><p>Verified capacity and occupancy</p></div></div><div id="shelter-summary" class="metric-grid"></div><div id="shelter-list" class="evidence-list"><p class="empty">Select a region to inspect shelters.</p></div></article>
+      <article class="panel"><div class="panel-heading"><div><h2>Reported Assistance Needs</h2><p>Reported categories may overlap.</p></div></div><div id="needs" class="needs"></div><p class="footnote">These are reported needs among recently located EvacuAid profiles. Categories must not be summed as unique people or interpreted as demographic prevalence.</p></article>
+      <article class="panel"><div class="panel-heading"><div><h2>Data sources &amp; freshness</h2><p>Evidence, provenance and coverage</p></div></div><div id="sources" class="evidence-list"><p class="empty">No evidence loaded. Provider connections are not inferred.</p></div><div id="routing" class="footnote">Responder inventory and regional routing status: UNKNOWN.</div></article>
+    </section>
+    <footer>EvacuAid Command Center <span>Regional aggregates · No individual citizen records</span></footer>
+  </main>
+  <dialog id="placement-dialog"><form id="placement-form">
+    <p id="placement-environment" class="eyebrow"></p><h2 id="placement-title"></h2>
+    <p id="placement-coordinates"></p>
+    <label>Name<input id="placement-name" required maxlength="200"></label>
+    <div id="disaster-fields" class="form-grid"><label>Disaster type<select id="mock-hazard"><option>FLOOD</option><option>EARTHQUAKE</option><option>TSUNAMI</option><option>WILDFIRE</option><option>LANDSLIDE</option><option>EXTREME_WEATHER</option></select></label><label>Radius (metres)<input id="mock-radius" type="number" min="50" max="50000" value="1000" required></label><label>Mock severity<select id="mock-severity"><option>WATCH</option><option selected>ELEVATED</option><option>CRITICAL</option></select></label></div>
+    <div id="safe-house-fields"><label>Address<input id="safe-address" maxlength="500"></label><div class="form-grid"><label>Status<select id="safe-status"><option>UNKNOWN</option><option>OPEN</option><option>FULL</option><option>CLOSED</option></select></label><label>Capacity<input id="safe-capacity" type="number" min="0" max="1000000" placeholder="Unknown"></label><label>Current occupancy<input id="safe-occupancy" type="number" min="0" max="1000000" placeholder="Unknown"></label><label>Wheelchair access<select id="safe-access"><option value="">Unknown</option><option value="true">Yes</option><option value="false">No</option></select></label></div><label class="check-label"><input id="safe-verified" type="checkbox">Status and occupancy verified now</label><p>Saving a location does not certify hazard safety or evacuation access.</p></div>
+    <p id="placement-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancel-placement">Cancel</button><button id="save-placement" type="submit">Save</button></div>
+  </form></dialog>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="/command-center/dashboard.js"></script>
+</body>
+</html>

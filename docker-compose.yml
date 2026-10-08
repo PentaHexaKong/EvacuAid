@@ -1,16 +1,41 @@
 services:
+  dashboard:
+    build:
+      context: ./testocando/mapshit
+    environment:
+      BACKEND_URL: http://backend:8000
+      VALHALLA_URL: http://valhalla:8002
+      DASHBOARD_HOME: 'true'
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 10s
+
   backend:
     build:
       context: ./backend
-    env_file: ./backend/.env
+    env_file:
+      - path: ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-evacuaid}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-evacuaid}
       REDIS_URL: redis://redis:6379/0
       VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
+      PYTHONPATH: /app:/app/testocando
+    command: ['sh', '-c', 'alembic -c /app/testocando/alembic.ini upgrade head && exec uvicorn command.main:app --host 0.0.0.0 --port 8000']
     ports:
       - "8000:8000"
     volumes:
       - ./backend/data:/app/data
+      - ./testocando:/app/testocando:ro
+      - ./backend/alembic:/app/backend/alembic:ro
     depends_on:
       postgres:
         condition: service_healthy

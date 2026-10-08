@@ -1,0 +1,292 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.76,
+              -6.25
+            ],
+            [
+              106.9,
+              -6.25
+            ],
+            [
+              106.9,
+              -6.1
+            ],
+            [
+              106.76,
+              -6.1
+            ],
+            [
+              106.76,
+              -6.25
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-P",
+        "name": "SIMULATION Province",
+        "administrativeLevel": "PROVINCE",
+        "parentCode": null,
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": null,
+        "populationReferenceYear": null,
+        "populationSource": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.78,
+              -6.23
+            ],
+            [
+              106.88,
+              -6.23
+            ],
+            [
+              106.88,
+              -6.12
+            ],
+            [
+              106.78,
+              -6.12
+            ],
+            [
+              106.78,
+              -6.23
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-C",
+        "name": "SIMULATION City",
+        "administrativeLevel": "CITY_REGENCY",
+        "parentCode": "DEMO-P",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": null,
+        "populationReferenceYear": null,
+        "populationSource": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8,
+              -6.21
+            ],
+            [
+              106.86,
+              -6.21
+            ],
+            [
+              106.86,
+              -6.14
+            ],
+            [
+              106.8,
+              -6.14
+            ],
+            [
+              106.8,
+              -6.21
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-D",
+        "name": "SIMULATION District",
+        "administrativeLevel": "DISTRICT",
+        "parentCode": "DEMO-C",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": null,
+        "populationReferenceYear": null,
+        "populationSource": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8,
+              -6.175
+            ],
+            [
+              106.83,
+              -6.175
+            ],
+            [
+              106.83,
+              -6.14
+            ],
+            [
+              106.8,
+              -6.14
+            ],
+            [
+              106.8,
+              -6.175
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-A",
+        "name": "SIMULATION Sector A",
+        "administrativeLevel": "VILLAGE",
+        "parentCode": "DEMO-D",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": 18000,
+        "populationReferenceYear": 2025,
+        "populationSource": "SIMULATION / DEMO - synthetic population"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.83,
+              -6.175
+            ],
+            [
+              106.86,
+              -6.175
+            ],
+            [
+              106.86,
+              -6.14
+            ],
+            [
+              106.83,
+              -6.14
+            ],
+            [
+              106.83,
+              -6.175
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-B",
+        "name": "SIMULATION Sector B",
+        "administrativeLevel": "VILLAGE",
+        "parentCode": "DEMO-D",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": null,
+        "populationReferenceYear": null,
+        "populationSource": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.8,
+              -6.21
+            ],
+            [
+              106.83,
+              -6.21
+            ],
+            [
+              106.83,
+              -6.175
+            ],
+            [
+              106.8,
+              -6.175
+            ],
+            [
+              106.8,
+              -6.21
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-CV",
+        "name": "SIMULATION Sector C",
+        "administrativeLevel": "VILLAGE",
+        "parentCode": "DEMO-D",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": 12000,
+        "populationReferenceYear": 2025,
+        "populationSource": "SIMULATION / DEMO - synthetic population"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              106.83,
+              -6.21
+            ],
+            [
+              106.86,
+              -6.21
+            ],
+            [
+              106.86,
+              -6.175
+            ],
+            [
+              106.83,
+              -6.175
+            ],
+            [
+              106.83,
+              -6.21
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "code": "DEMO-DV",
+        "name": "SIMULATION Sector D",
+        "administrativeLevel": "VILLAGE",
+        "parentCode": "DEMO-D",
+        "dataMode": "SIMULATION",
+        "boundarySource": "SIMULATION / DEMO - synthetic rectangular boundaries, not official administration",
+        "population": 23000,
+        "populationReferenceYear": 2025,
+        "populationSource": "SIMULATION / DEMO - synthetic population"
+      }
+    }
+  ]
+}

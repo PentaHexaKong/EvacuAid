@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+.playwright-cli/
+output/
+.env
+!README.md
