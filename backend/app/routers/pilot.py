@@ -4,7 +4,7 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.utils.geo import calculate_distance_meters
 
 router = APIRouter(prefix='/v1/buddy-pilot', tags=['Buddy pilot'])
 BUDDY_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+DIRECT_INVITATIONS_PER_DAY = 20
 
 
 async def user_needs(db, ids):
@@ -90,6 +91,8 @@ async def direct_invitation(payload: InviteDirect, db: AsyncSession = Depends(ge
     pending = (await db.execute(select(PilotInvitation.id).where(PilotInvitation.owner_id == actor.id, PilotInvitation.redeemer_id == target, PilotInvitation.direction == payload.direction, PilotInvitation.status == 'SENT', PilotInvitation.expires_at > service.now()))).first()
     if relationship or pending:
         raise HTTPException(409, 'relationship or invitation already exists')
+    if await db.scalar(select(func.count()).select_from(PilotInvitation).where(PilotInvitation.owner_id == actor.id, PilotInvitation.code_hash.is_(None), PilotInvitation.created_at > service.now() - timedelta(days=1))) >= DIRECT_INVITATIONS_PER_DAY:
+        raise HTTPException(429, 'too many invitations today')
     row = PilotInvitation(owner_id=actor.id, redeemer_id=target, status='SENT', direction=payload.direction, relation=payload.relation, code_hash=None, expires_at=service.now() + timedelta(days=7))
     db.add(row)
     await db.flush()

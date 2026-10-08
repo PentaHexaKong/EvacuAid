@@ -4,10 +4,10 @@ import uuid
 import httpx
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.session import get_session
-from app.db.models.pilot import PilotAttempt, PilotLocation, PilotRequest
+from app.db.models.pilot import PilotAttempt, PilotInvitation, PilotLocation, PilotRequest
 from app.routers.pilot import router
 from app.routers.sessions import router as sessions
 from app.routers.assistance import router as assistance
@@ -522,6 +522,22 @@ async def test_direct_invitation_validation_decline_and_revoke(dbSession):
         assert (await client.delete(fresh_path, headers=sender)).json()['status'] == 'REVOKED'
         assert (await client.post(fresh_path + '/accept', headers=target)).status_code == 409
         assert (await client.post(fresh_path + '/decline', headers=target)).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_direct_invitations_are_capped_per_day(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        sender_id, sender = await guest(client)
+        target_id, target = await guest(client)
+        code = (await client.get('/v1/buddy-pilot/me/code', headers=target)).json()['code']
+        payload = {'code': code, 'relation': 'TEMAN', 'direction': 'OFFER_HELP'}
+        dbSession.add_all([PilotInvitation(owner_id=uuid.UUID(sender_id), redeemer_id=uuid.UUID(target_id), status='DECLINED', direction='OFFER_HELP', expires_at=datetime.now(timezone.utc) + timedelta(days=7)) for _ in range(20)])
+        await dbSession.commit()
+        capped = await client.post('/v1/buddy-pilot/invitations/direct', headers=sender, json=payload)
+        assert capped.status_code == 429 and capped.json()['detail'] == 'too many invitations today'
+        await dbSession.execute(update(PilotInvitation).values(created_at=datetime.now(timezone.utc) - timedelta(days=2)))
+        await dbSession.commit()
+        assert (await client.post('/v1/buddy-pilot/invitations/direct', headers=sender, json=payload)).status_code == 201
 
 
 @pytest.mark.asyncio
