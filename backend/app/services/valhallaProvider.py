@@ -75,7 +75,7 @@ def parseManeuvers(leg: dict, coordinateCount: int, offset: int = 0) -> list:
         maneuver_time = float(maneuver.get('time', 0))
         if not isFiniteNumber(maneuver_distance) or not isFiniteNumber(maneuver_time) or maneuver_distance < 0 or maneuver_time < 0:
             raise ValueError('invalid maneuver summary')
-        maneuvers.append({'instruction': str(maneuver['instruction']), 'beginShapeIndex': begin + offset, 'endShapeIndex': end + offset, 'distanceM': maneuver_distance, 'durationSec': maneuver_time, 'type': int(maneuver.get('type', 0))})
+        maneuvers.append({'instruction': str(maneuver['instruction']), 'beginShapeIndex': begin + offset, 'endShapeIndex': end + offset, 'distanceM': maneuver_distance, 'durationSec': maneuver_time, 'type': int(maneuver.get('type', 0)), 'streetNames': [str(name) for name in maneuver.get('street_names', [])][:2]})
     return maneuvers
 
 

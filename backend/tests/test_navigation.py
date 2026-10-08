@@ -318,3 +318,12 @@ async def testWheelchairProfileReachesEveryDetourCall(monkeypatch, useAlternativ
     assert not candidates[0].feasible
     assert any(item.feasible and 'HAZARD_DETOUR_GENERATED' in item.reasons for item in candidates)
     assert provider.profiles == ['WHEELCHAIR'] * (2 if useAlternatives else 4)
+
+
+def test_maneuvers_carry_up_to_two_street_names():
+    from app.services.valhallaProvider import parseManeuvers
+
+    step = {'instruction': 'Turn right.', 'begin_shape_index': 0, 'end_shape_index': 1, 'length': 0.1, 'time': 60, 'type': 10}
+    named, unnamed = parseManeuvers({'maneuvers': [{**step, 'street_names': ['Jalan Melati', 'Jalan Mawar', 'Jalan Anggrek']}, step]}, 2)
+    assert named['streetNames'] == ['Jalan Melati', 'Jalan Mawar']
+    assert unnamed['streetNames'] == []

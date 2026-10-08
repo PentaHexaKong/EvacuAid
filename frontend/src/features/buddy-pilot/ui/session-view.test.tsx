@@ -134,3 +134,10 @@ test('the helper respects sound-free status controls', () => {
   const view = render(<Harness />);
   expect(view.queryByRole('button', { name: 'Read status aloud' })).toBeNull();
 });
+
+test('a stale location replaces the live note in the same line', () => {
+  mockLocations = [{ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString(), userId: 'requester', stale: true } as SharedPosition];
+  const view = render(<Harness />);
+  expect(view.getByRole('alert')).toHaveTextContent('Last location is old, not the current position.');
+  expect(view.queryByText('Live location is on during this session')).toBeNull();
+});

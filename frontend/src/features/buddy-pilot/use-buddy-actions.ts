@@ -12,6 +12,7 @@ import { useBuddyNative, useBuddySpeech } from '@/features/buddy-pilot/native';
 import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
 import type { Shelter } from '@/features/navigation/api';
 import { distanceM } from '@/features/buddy-pilot/navigation';
+import { useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
 
 export function useBuddyActions({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
   const { c, status, language, support, event } = useBuddyCopy();
@@ -171,10 +172,10 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   };
   const attempt = session?.attempts.find(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > now && session?.status === 'WAITING');
   const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
-  const setCurrentInstruction = (instruction: string) => { currentInstruction.current = instruction; };
+  const guidance = useRouteGuidance({ route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
   const resetIdempotency = () => { idempotency.current = null; };
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, setCurrentInstruction, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;
