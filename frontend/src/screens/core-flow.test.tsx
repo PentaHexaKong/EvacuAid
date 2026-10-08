@@ -29,6 +29,7 @@ jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-r
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
+const { selectLanguage } = jest.requireMock('@/localization') as { selectLanguage: jest.Mock };
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 
@@ -56,7 +57,10 @@ test('preferences preview is local, cancel does not save, and failed saves remai
 test('welcome exposes language immediately and skipping setup enters Home without support changes', async () => {
   const view = render(<PreferencesProvider><SetupScreen /></PreferencesProvider>);
   await act(async () => {});
-  expect(view.getByRole('button', { name: 'Bahasa: Indonesia' })).toBeTruthy();
+  // The menu names the current language; each option is written in its own language.
+  expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy();
+  await act(async () => fireEvent.press(view.getByRole('menuitem', { name: 'Bahasa Indonesia' })));
+  expect(selectLanguage).toHaveBeenCalledWith('id');
   expect(view.queryByRole('switch')).toBeNull();
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Skip setup' })));
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true });

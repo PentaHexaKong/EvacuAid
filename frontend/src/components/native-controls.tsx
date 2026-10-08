@@ -1,9 +1,11 @@
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useContext, useState, type ComponentType } from 'react';
 import Animated from 'react-native-reanimated';
-import { Button, Host, Image as SwiftImage, Menu, VStack } from '@expo/ui/swift-ui';
-import { accessibilityLabel, buttonStyle, contentShape, font, foregroundStyle, frame, glassEffect, shapes } from '@expo/ui/swift-ui/modifiers';
+import { Button, HStack, Host, Image as SwiftImage, Menu, Picker, Text as SwiftText, VStack } from '@expo/ui/swift-ui';
+import { accessibilityLabel, buttonStyle, contentShape, disabled as disabledModifier, font, foregroundStyle, frame, glassEffect, padding, shapes, tag } from '@expo/ui/swift-ui/modifiers';
 import IconDots from '@tabler/icons-react-native/IconDots';
+import IconWorld from '@tabler/icons-react-native/IconWorld';
+import { LANGUAGES, languageName, type Language } from '@/localization/language';
 import { AppText } from '@/components/ui';
 import { colors, radius, SystemReduceMotionContext } from '@/theme';
 import { duration, easeCss } from '@/theme/motion';
@@ -42,6 +44,27 @@ export function MoreMenu({ label, items }: { label: string; items: MenuItem[] })
   </Pressable>;
 }
 
+// The current language as a light glass pill on a brand surface. iOS opens the pull-down menu with a checkmark on the current language; Android lists them in an alert.
+export function LanguageMenu({ label, value, disabled = false, onChange }: { label: string; value: string; disabled?: boolean; onChange: (language: Language) => void }) {
+  const name = languageName(value);
+  if (Platform.OS === 'ios') return <Host matchContents>
+    <Menu modifiers={[accessibilityLabel(`${label}, ${name}`), disabledModifier(disabled), glassEffect({ glass: { variant: 'clear', interactive: true }, shape: 'capsule' })]} label={<HStack spacing={7} modifiers={[padding({ horizontal: 14 }), frame({ minHeight: 44 }), contentShape(shapes.capsule())]}>
+      <SwiftImage systemName="globe" modifiers={[font({ size: 15, weight: 'semibold' }), foregroundStyle(colors.surface)]} />
+      <SwiftText modifiers={[font({ size: 15, weight: 'semibold' }), foregroundStyle(colors.surface)]}>{name}</SwiftText>
+      <SwiftImage systemName="chevron.up.chevron.down" modifiers={[font({ size: 11, weight: 'bold' }), foregroundStyle(colors.surface)]} />
+    </HStack>}>
+      <Picker selection={value} onSelectionChange={selection => onChange(selection as Language)}>
+        {LANGUAGES.map(option => <SwiftText key={option.value} modifiers={[tag(option.value)]}>{option.label}</SwiftText>)}
+      </Picker>
+    </Menu>
+  </Host>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${name}`} accessibilityState={{ disabled }} disabled={disabled} style={({ pressed }) => [styles.language, pressed && { opacity: 0.7 }]}
+    onPress={() => Alert.alert(label, undefined, [...LANGUAGES.map(option => ({ text: option.label, onPress: () => onChange(option.value) })), { text: '×', style: 'cancel' as const }])}>
+    <IconWorld size={18} strokeWidth={2.25} color={colors.surface} />
+    <AppText variant="small" style={{ color: colors.surface, fontWeight: '600' }}>{name}</AppText>
+  </Pressable>;
+}
+
 export type MapControl = { label: string; symbol: NonNullable<Parameters<typeof SwiftImage>[0]['systemName']>; icon: ComponentType<{ size?: number; color?: string }>; onPress: () => void };
 
 // A vertical stack of map buttons. iOS: one Liquid Glass capsule, like Maps. Elsewhere: a token-styled surface pill.
@@ -69,5 +92,6 @@ const styles = StyleSheet.create({
   segmentOn: { backgroundColor: colors.surface, boxShadow: '0 1px 3px rgba(11, 31, 82, 0.12)' },
   // The 44pt target is wider than the glyph; pull it back so the glyph keeps the row's edge.
   more: { marginRight: -7 },
+  language: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.18)' },
   dots: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.surface },
 });

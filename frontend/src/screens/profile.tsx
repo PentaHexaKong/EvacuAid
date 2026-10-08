@@ -32,7 +32,7 @@ import type { Preferences } from '@/features/preferences/storage';
 import { useGuestSession } from '@/features/profile/session';
 import { relativeTime } from '@/features/hazards/time';
 import { selectLanguage } from '@/localization';
-import type { Language } from '@/localization/language';
+import { LANGUAGES, languageName, type Language } from '@/localization/language';
 import { colors, corner, radius } from '@/theme';
 
 const GUTTER = 18;
@@ -99,10 +99,15 @@ export function ProfileScreen() {
       if (pending.current) return;
       pending.current = true;
       setBusy(true);
+      let restore: (() => Promise<void>) | undefined;
       try {
+        // Onboarding first, so the gate shows setup rather than a missing session while the delete runs.
+        restore = await resetOnboarding();
         await session.deleteGuest();
-        await resetOnboarding();
-      } catch { Alert.alert(t('deleteProfileError')); }
+      } catch {
+        if (restore) await restore().catch(() => {});
+        Alert.alert(t('deleteProfileError'));
+      }
       finally { pending.current = false; setBusy(false); }
     })() },
   ]);
@@ -144,7 +149,7 @@ export function ProfileScreen() {
     </View>
     <View style={styles.groupDivider} />
     <View>
-      <SettingsRow first Icon={IconLanguage} label={t('language')} value={i18n.language === 'id' ? 'Indonesia' : 'English'} accessory="picker" onPress={pickLanguage} menu={{ selection: i18n.language, options: [{ value: 'id', label: 'Indonesia' }, { value: 'en', label: 'English' }], onSelect: value => void changeLanguage(value as Language) }} />
+      <SettingsRow first Icon={IconLanguage} label={t('language')} value={languageName(i18n.language)} accessory="picker" onPress={pickLanguage} menu={{ selection: i18n.language, options: LANGUAGES, onSelect: value => void changeLanguage(value as Language) }} />
       <SettingsRow Icon={IconAccessible} label={t('supportNeeds')} value={accessibility.length ? t('needsSelected', { count: accessibility.length }) : t('needsNone')} onPress={() => router.push('/profile/name')} />
       <SettingsRow Icon={IconIdBadge} label={t('rowProfileDetails')} value={t('valueEdit')} onPress={() => router.push('/profile/name')} />
       <SettingsRow Icon={IconUsers} label={t('rowBuddy')} value={t('valueManage')} onPress={() => router.dismissTo('/buddy')} />

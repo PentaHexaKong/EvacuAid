@@ -40,6 +40,7 @@ const config: ExpoConfig = {
     ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to share your location during an accepted Buddy session.', locationAlwaysAndWhenInUsePermission: 'Allow EvacuAid to continue Buddy location sharing while your phone is locked.', isIosBackgroundLocationEnabled: true, isAndroidBackgroundLocationEnabled: true, isAndroidForegroundServiceEnabled: true }],
     'expo-notifications',
     ['expo-speech-recognition', { microphonePermission: 'Allow EvacuAid to hear a command when you tap the microphone.', speechRecognitionPermission: 'Allow EvacuAid to transcribe your spoken Buddy commands.' }],
+    ['./plugins/with-splash-gradient', { image: './assets/brand/splash-gradient.png' }],
     ['expo-splash-screen', { backgroundColor: '#3A60F4', image: './assets/brand/logo-lockup-white.png', imageWidth: 220 }],
     ['expo-font', { android: { fonts: [{ fontFamily: 'Inter', fontDefinitions: [
       { path: './node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf', weight: 400 },

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Linking, View } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,8 +8,8 @@ import { DiscoverScreen } from './discover';
 import { EditNameScreen, ProfileScreen } from './profile';
 import { AlertsScreen, AlertScreen } from './alerts';
 import { ProfileProvider, PROFILE_KEY, useProfile } from '@/features/profile/context';
-import { PreferencesProvider } from '@/features/preferences/context';
-import { PREFERENCES_KEY } from '@/features/preferences/storage';
+import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
+import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
 import { colors, sky, SystemReduceMotionContext } from '@/theme';
@@ -22,6 +22,7 @@ let mockSheetProps: React.ComponentProps<typeof BottomSheet>;
 let mockEvac: EvacuationState & { findRoute: jest.Mock; locate: jest.Mock; clearRoute: jest.Mock };
 const mockSnapToIndex = jest.fn();
 const mockEnsureGuest = jest.fn();
+const mockDeleteGuest = jest.fn();
 let mockId = 'rain';
 let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
@@ -52,13 +53,14 @@ jest.mock('@gorhom/bottom-sheet', () => {
   };
 });
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => mockEvac }));
-jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: jest.fn(), startNewGuest: jest.fn() }) }));
+jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: mockDeleteGuest, startNewGuest: jest.fn() }) }));
 jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/profile/api'), apiRequest: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 
 beforeEach(async () => {
   jest.restoreAllMocks(); jest.clearAllMocks(); mockId = 'rain'; mockLanguage = 'en'; await AsyncStorage.clear();
   mockEnsureGuest.mockResolvedValue(undefined);
+  mockDeleteGuest.mockReset().mockResolvedValue(undefined);
   mockEvac = { phase: 'needsLocation', origin: null, shelters: null, route: null, reason: null, errorKind: null, findRoute: jest.fn(), locate: jest.fn(), clearRoute: jest.fn() };
   mockProfile = { id: 'user-1', name: null, phone: null, latitude: null, longitude: null, location_observed_at: null, location_accuracy_m: null, share_location_with_buddies: false, needs_assistance: false };
   mockPreferences = { voice_enabled: true, vibration_enabled: true, text_enabled: true, language: 'en', larger_text: false, stronger_contrast: false };
@@ -341,6 +343,65 @@ test('resetting first-time guide keeps server profile and support preferences', 
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ completed: false });
 });
 
+function ProfileDeleteGate() {
+  const { preferences, ready } = usePreferences();
+  return <View><AppText testID="preferences">{JSON.stringify(preferences)}</AppText>{ready && preferences.completed ? <ProfileScreen /> : <AppText>Setup</AppText>}</View>;
+}
+
+test('a failed profile delete restores completed onboarding and all preferences without changing saved storage', async () => {
+  const value = { ...defaults, completed: true, largerText: true, strongerContrast: true, voiceEnabled: false, vibrationEnabled: false, textEnabled: false, language: 'en' as const };
+  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(value));
+  mockProfile.name = 'Billy';
+  mockDeleteGuest.mockRejectedValueOnce(new Error('network'));
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
+  const saved = await AsyncStorage.getItem(PREFERENCES_KEY);
+  expect(saved).toBe('{"completed":true}');
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe(saved);
+  expect(view.getByText('Billy')).toBeTruthy();
+  expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy();
+  expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
+});
+
+test('a successful profile delete resets onboarding before deleting the guest', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  mockDeleteGuest.mockImplementationOnce(async () => {
+    expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  });
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(mockDeleteGuest).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual({ ...defaults, completed: false, language: 'en' });
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  expect(view.getByText('Setup')).toBeTruthy();
+  expect(alert).not.toHaveBeenCalledWith(en.deleteProfileError);
+});
+
+test('a failed onboarding restore still shows the profile deletion error', async () => {
+  await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
+  mockDeleteGuest.mockImplementationOnce(async () => {
+    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage'));
+    throw new Error('network');
+  });
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await act(async () => alert.mock.calls[0][2]![1].onPress!());
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
+});
+
 test('Larger Text grows the settings row labels', async () => {
   await AsyncStorage.setItem(PROFILE_KEY, '{"name":"Billy"}');
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true,"largerText":true}');
@@ -384,7 +445,7 @@ test('the status card asks to save a location, then offers an update once one is
 test('the language row opens a native menu whose choice saves the language', async () => {
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
   await waitFor(() => expect(view.getByRole('button', { name: 'Language, English' })).toBeTruthy());
-  fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
+  fireEvent.press(view.getByRole('menuitem', { name: 'Bahasa Indonesia' }));
   await waitFor(() => expect(mockPreferences.language).toBe('id'));
 });
 
