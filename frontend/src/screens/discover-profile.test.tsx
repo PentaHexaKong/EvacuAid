@@ -387,3 +387,31 @@ test('the language row opens a native menu whose choice saves the language', asy
   fireEvent.press(view.getByRole('menuitem', { name: 'Indonesia' }));
   await waitFor(() => expect(mockPreferences.language).toBe('id'));
 });
+
+let mockListFirst = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: false, autoRead: false, listFirst: mockListFirst, stepFree: mockStepFree }) }));
+beforeEach(() => { mockListFirst = false; });
+
+test.each([false, true])('Discover starts on the tall list only with listFirst (%s)', async listFirst => {
+  mockListFirst = listFirst;
+  render(<DiscoverScreen />);
+  await act(async () => {});
+  expect(mockSheetProps.index).toBe(listFirst ? 2 : 1);
+  expect(mockMapProps).toBeDefined();
+});
+
+
+let mockStepFree = false;
+beforeEach(() => { mockStepFree = false; });
+test.each([false, true])('other shelters keep stable accessibility groups only with stepFree (%s)', async stepFree => {
+  mockStepFree = stepFree;
+  mockEvac.phase = 'located';
+  mockEvac.origin = { latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() };
+  const values = [null, false, null, true, false, true, null];
+  mockEvac.shelters = values.map((wheelchairAccessible, index) => ({ id: String(index), name: `Point ${index}`, latitude: -6.2, longitude: 106.8, wheelchairAccessible, distanceM: index * 100, status: 'OPEN', capacity: null, currentOccupancy: null, source: null }));
+  const view = render(<DiscoverScreen />);
+  await act(async () => {});
+  const labels = view.getAllByRole('button').map(row => row.props.accessibilityLabel ?? row.findAllByType(AppText).map(text => text.props.children).join(' ')).filter(label => String(label).startsWith('Point'));
+  expect(labels.map(label => String(label).slice(0, 7))).toEqual((stepFree ? [3, 5, 2, 6, 1, 4] : [1, 2, 3, 4, 5, 6]).map(index => `Point ${index}`));
+  expect(view.getByText('Point 0')).toBeTruthy();
+});

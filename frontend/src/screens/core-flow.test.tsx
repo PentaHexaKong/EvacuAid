@@ -1,3 +1,4 @@
+import { speak } from '@/features/feedback/speech';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PreferencesProvider } from '@/features/preferences/context';
@@ -15,7 +16,7 @@ jest.mock('@/features/content/samples', () => {
   // __esModule keeps Babel's interop from copying topAlert once at import, so the getter is read on every render.
   return Object.defineProperties({ ...actual }, {
     __esModule: { value: true },
-    topAlert: { enumerable: true, get: () => (mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert) },
+    topAlert: { enumerable: true, get: () => ({ ...(mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert), ...(mockAlertId ? { id: mockAlertId } : {}) }) },
   });
 });
 let mockShelters: { name: string; distanceM: number }[] | null = null;
@@ -179,3 +180,78 @@ test.each(['id', 'en'])('Home has two quick rows, help and the map, and no alert
   expect(view.queryByRole('button', { name: 'Buddy' })).toBeNull();
 });
 
+
+let mockAutoRead = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead, simpleHome: mockSimpleHome }) }));
+jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn(() => Promise.resolve()) }));
+beforeEach(() => { mockAutoRead = false; });
+
+test('Home reads an alert once across re-renders and remounts', () => {
+  mockAutoRead = true;
+  const view = render(<OverviewScreen />);
+  view.rerender(<OverviewScreen />);
+  view.unmount();
+  render(<OverviewScreen />);
+  expect(speak).toHaveBeenCalledTimes(1);
+  expect(speak).toHaveBeenCalledWith(expect.stringContaining('Heavy rain and strong winds'), 'en');
+  expect(jest.mocked(speak).mock.calls[0][0]).toContain('08:30 to 11:30 WIB');
+  expect(jest.mocked(speak).mock.calls[0][0]).toContain('Keep checking for updates and pack a go-bag.');
+  mockTopLevel = 'siaga';
+  try {
+    const second = render(<OverviewScreen />);
+    expect(speak).toHaveBeenCalledTimes(2);
+    expect(speak).toHaveBeenLastCalledWith(expect.stringContaining('Water on local roads'), 'en');
+    second.unmount();
+  } finally { mockTopLevel = null; }
+  render(<OverviewScreen />);
+  expect(speak).toHaveBeenCalledTimes(2);
+});
+
+test('Home stays silent at Normal even with autoRead', () => {
+  mockAutoRead = true;
+  mockTopLevel = 'normal';
+  try { render(<OverviewScreen />); expect(speak).not.toHaveBeenCalled(); }
+  finally { mockTopLevel = null; }
+});
+
+
+let mockSimpleHome = false;
+let mockAlertId: string | null = null;
+const mockAlertHaptic = jest.fn();
+jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: mockAlertHaptic, tap: jest.fn(), selection: jest.fn() }) }));
+beforeEach(() => { mockSimpleHome = false; mockAlertId = null; });
+
+test('Home vibrates once per alert id across rerenders and tab remounts', () => {
+  mockAlertId = 'haptic-first';
+  const view = render(<OverviewScreen />);
+  view.rerender(<OverviewScreen />);
+  view.unmount();
+  const second = render(<OverviewScreen />);
+  expect(mockAlertHaptic).toHaveBeenCalledTimes(1);
+  mockAlertId = 'haptic-second';
+  second.rerender(<OverviewScreen />);
+  expect(mockAlertHaptic).toHaveBeenCalledTimes(2);
+});
+
+test('Home never vibrates for Normal', () => {
+  mockAlertId = 'haptic-normal';
+  mockTopLevel = 'normal';
+  try { render(<OverviewScreen />); expect(mockAlertHaptic).not.toHaveBeenCalled(); }
+  finally { mockTopLevel = null; }
+});
+
+test('simple Home reveals other alerts and disasters from its expanded disclosure', async () => {
+  mockSimpleHome = true;
+  const view = render(<OverviewScreen />);
+  const row = view.getByRole('button', { name: /More information/ });
+  expect(row).toHaveProp('accessibilityState', { expanded: false });
+  expect(view.queryByText('Other alerts')).toBeNull();
+  expect(view.queryByText('Discover disaster')).toBeNull();
+  await act(async () => fireEvent.press(row));
+  expect(view.getByRole('button', { name: /More information/ })).toHaveProp('accessibilityState', { expanded: true });
+  expect(view.getByText('Other alerts')).toBeTruthy();
+  expect(view.getByText('Discover disaster')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: /More information/ }));
+  expect(view.queryByText('Other alerts')).toBeNull();
+  expect(view.queryByText('Discover disaster')).toBeNull();
+});

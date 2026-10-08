@@ -1,4 +1,6 @@
 {
+  "listen": "Dengarkan",
+  "stopListening": "Berhenti",
   "overview": "Beranda",
   "components": "Komponen",
   "map": "Peta buddy",
@@ -254,7 +256,7 @@
   "needHearing": "Pendengaran terbatas",
   "needHearingDescription": "Getaran dan petunjuk teks",
   "needMobility": "Mobilitas terbatas",
-  "needMobilityDescription": "Rute tanpa tangga belum tersedia",
+  "needMobilityDescription": "Rute dan langkah aman tanpa tangga",
   "needElderly": "Lansia",
   "needElderlyDescription": "Teks lebih besar, kontras lebih kuat",
   "needStandard": "Tampilan standar",
@@ -394,5 +396,11 @@
   "hazardStep_wind_4": "Jika sedang berkendara, berhenti di tempat aman yang jauh dari pohon.",
   "shakingFelt": "Guncangan terasa di {{place}}",
   "factShaking": "Guncangan terasa di",
-  "mmiLevel": "intensitas {{level}} (MMI)"
+  "mmiLevel": "intensitas {{level}} (MMI)",
+  "homeMore": "Informasi lainnya",
+  "homeMoreDetail": "Peringatan lain dan bencana terbaru",
+  "hazardStep_earthquake_1_mobility": "Saat guncangan, kunci roda atau duduk, membungkuk ke depan, dan lindungi kepala serta leher dengan lengan.",
+  "hazardStep_earthquake_3_mobility": "Setelah guncangan berhenti, menuju area terbuka lewat jalur tanpa tangga. Jangan gunakan lift; minta bantuan jika ada tangga.",
+  "hazardStep_flood_1_mobility": "Berangkat lebih awal ke tempat yang lebih tinggi selagi jalur masih bisa dilalui, dan beri tahu Buddy bahwa Anda bergerak.",
+  "hazardStep_fire_1_mobility": "Segera keluar lewat pintu tanpa tangga terdekat dan tetap serendah mungkin di bawah asap."
 }

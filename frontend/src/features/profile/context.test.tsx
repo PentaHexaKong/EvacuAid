@@ -3,13 +3,15 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { apiRequest } from './api';
 import { ONBOARDING_NEEDS_KEY, parseNeeds, parseProfile, PROFILE_KEY, ProfileProvider, useProfile } from './context';
 
-jest.mock('./session', () => ({ useGuestSession: () => ({ token: 'guest-token', user: { id: 'user-1' } }) }));
+let mockSession: { token: string | null; user: { id: string } | null } = { token: 'guest-token', user: { id: 'user-1' } };
+jest.mock('./session', () => ({ useGuestSession: () => mockSession }));
 jest.mock('./api', () => ({ apiRequest: jest.fn() }));
 
 const request = apiRequest as jest.Mock;
 let profile: Record<string, unknown>;
 
 beforeEach(async () => {
+  mockSession = { token: 'guest-token', user: { id: 'user-1' } };
   jest.restoreAllMocks();
   request.mockReset();
   await AsyncStorage.clear();
@@ -72,4 +74,27 @@ test('onboarding support needs are sent once when the profile has none, then cle
   expect(request).toHaveBeenCalledWith('/v1/users/user-1', 'guest-token', { method: 'PATCH', body: JSON.stringify({ accessibility: needs }) });
   expect(view.result.current.accessibility).toEqual(needs);
   expect(await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY)).toBeNull();
+});
+
+test('ending the session clears the profile and needs, and a load still in flight cannot restore them', async () => {
+  request.mockImplementation(async (path: string) => (path === '/v1/me' ? profile : path.endsWith('/accessibility') ? [{ type: 'VISUAL_IMPAIRMENT', severity: null }] : profile));
+  const view = renderHook(useProfile, { wrapper: ProfileProvider });
+  await waitFor(() => expect(view.result.current.accessibility).toHaveLength(1));
+  let release!: (value: unknown) => void;
+  request.mockImplementation((path: string) => (path === '/v1/me' ? new Promise(resolve => { release = resolve; }) : Promise.resolve([{ type: 'VISUAL_IMPAIRMENT', severity: null }])));
+  let pending!: Promise<void>;
+  act(() => { pending = view.result.current.retry(); });
+  mockSession = { token: null, user: null };
+  view.rerender({});
+  await waitFor(() => expect(view.result.current.accessibility).toEqual([]));
+  expect(view.result.current.profile).toBeNull();
+  await act(async () => { release(profile); await pending; });
+  expect(view.result.current.profile).toBeNull();
+  expect(view.result.current.accessibility).toEqual([]);
+});
+
+test('needs left on the phone by an unreleased build are removed', async () => {
+  await AsyncStorage.setItem('evacuaid.needs.v1', JSON.stringify(['VISUAL_IMPAIRMENT']));
+  renderHook(useProfile, { wrapper: ProfileProvider });
+  await waitFor(async () => expect(await AsyncStorage.getItem('evacuaid.needs.v1')).toBeNull());
 });

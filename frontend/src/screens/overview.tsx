@@ -1,9 +1,12 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import IconArrowRight from '@tabler/icons-react-native/IconArrowRight';
 import IconMapPin from '@tabler/icons-react-native/IconMapPin';
+import IconChevronDown from '@tabler/icons-react-native/IconChevronDown';
+import IconChevronUp from '@tabler/icons-react-native/IconChevronUp';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import IconMap from '@tabler/icons-react-native/IconMap';
 import IconUsers from '@tabler/icons-react-native/IconUsers';
@@ -16,10 +19,14 @@ import { AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { formatDistance } from '@/features/navigation/distance';
 import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
+import { useAccess } from '@/features/access/use-access';
+import { speak } from '@/features/feedback/speech';
 import { useHaptics } from '@/features/feedback/haptics';
 import { levelLabels, sampleAlerts, topAlert } from '@/features/content/samples';
 import { colors, corner, gutter, radius, sky, type AlertLevel } from '@/theme';
 
+const vibratedAlerts = new Set<string>();
+const spokenAlerts = new Set<string>();
 const SKY_OVERSCROLL = 600;
 // One plain next step per warning level; Normal has nothing to act on.
 const GUIDANCE = { waspada: 'guidanceWaspada', siaga: 'guidanceSiaga', awas: 'guidanceAwas' } as const;
@@ -59,15 +66,28 @@ function RouteAction({ level, ink, tint, onRoute }: { level: AlertLevel; ink: st
 }
 
 export function OverviewScreen() {
-  const { t } = useTranslation();
+  const access = useAccess();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   // The hero follows the most severe alert, so a newer Normal notice never hides an active warning.
   const alert = topAlert;
   const level = alert.level;
+  const summary = level === 'normal' ? '' : [t(levelLabels[level]), t(alert.title), alert.window ? t(alert.window) : '', t(GUIDANCE[level])].filter(Boolean).join(', ');
+  useEffect(() => {
+    if (!access.autoRead || level === 'normal' || spokenAlerts.has(alert.id)) return;
+    spokenAlerts.add(alert.id);
+    void speak(summary, i18n.language).catch(() => {});
+  }, [access.autoRead, alert.id, level, summary, i18n.language]);
   const { stops, ink } = sky[level];
   // The header already shows the top alert, so the list below only repeats it at Normal, where the header shows none.
   const listed = level === 'normal' ? sampleAlerts : sampleAlerts.filter(item => item.id !== alert.id);
   const haptics = useHaptics();
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (level === 'normal' || vibratedAlerts.has(alert.id)) return;
+    vibratedAlerts.add(alert.id);
+    haptics.alert(level);
+  }, [alert.id, level, haptics.alert]);
   const openAlert = (id: string) => router.push({ pathname: '/alert/[id]', params: { id } });
   const chevron = <IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />;
   return <TabScrollView contentContainerStyle={{ paddingBottom: 32 }}>
@@ -95,6 +115,8 @@ export function OverviewScreen() {
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMap size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickMap')} detail={t('quickMapDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/discover'); }} />
         </Group>
+        {access.simpleHome && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}
+        {(!access.simpleHome || expanded) && <>
         <View style={{ gap: 12 }}>
           <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
           {listed.length
@@ -102,6 +124,7 @@ export function OverviewScreen() {
             : <AppText style={{ color: colors.muted }}>{t('homeNoOtherAlerts')}</AppText>}
         </View>
         <DiscoverDisaster />
+        </>}
       </View>
   </TabScrollView>;
 }

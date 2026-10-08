@@ -1,3 +1,4 @@
+import { useAccess } from '@/features/access/use-access';
 import { useContext, useState } from 'react';
 import { Stack } from 'expo-router';
 import { TabHeader } from '@/components/tab-shell';
@@ -38,6 +39,7 @@ const tabEnter = (from: number) => () => {
 };
 
 function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
+  const { soundFree } = useAccess();
   const a = useBuddyActions({ token, userId, state });
   const { c, session, requester, attempt, active, issue, voice, native, catchNative, setLocalError } = a;
   const [chosenTab, setTab] = useState<Tab>('buddies');
@@ -54,7 +56,7 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
     <TabHeader><AppText variant="title" accessibilityRole="header">{c('title')}</AppText></TabHeader>
     <Stack.Toolbar placement="right"><Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={c('more')}>
       <Stack.Toolbar.MenuAction onPress={() => catchNative(native.enableNotifications)}>{c('notifications')}</Stack.Toolbar.MenuAction>
-      <Stack.Toolbar.MenuAction onPress={() => { if (voice.listening) voice.stopListening(); else void voice.startListening(); }}>{voice.listening ? c('listening') : c('listen')}</Stack.Toolbar.MenuAction>
+      {!soundFree && <Stack.Toolbar.MenuAction onPress={() => { if (voice.listening) voice.stopListening(); else void voice.startListening(); }}>{voice.listening ? c('listening') : c('listen')}</Stack.Toolbar.MenuAction>}
     </Stack.Toolbar.Menu></Stack.Toolbar>
   </>;
   const banner = issue && <Card tint="caution">

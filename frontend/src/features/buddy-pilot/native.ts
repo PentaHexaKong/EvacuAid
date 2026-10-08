@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, AppState, Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
@@ -7,6 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as TaskManager from 'expo-task-manager';
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { speak as speakAloud } from '../feedback/speech';
 import type { ApiError } from '../profile/api';
 import { buddyRequest } from './api';
 
@@ -178,10 +179,7 @@ export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en';
       ExpoSpeechRecognitionModule.start({ lang: language === 'id' ? 'id-ID' : 'en-US', interimResults: false, continuous: false });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Speech recognition unavailable.'); }
   };
-  const speak = async (text: string) => {
-    if (await AccessibilityInfo.isScreenReaderEnabled()) AccessibilityInfo.announceForAccessibility(text);
-    else { await Speech.stop(); Speech.speak(text, { language: language === 'id' ? 'id-ID' : 'en-US' }); }
-  };
+  const speak = (text: string) => speakAloud(text, language);
   useEffect(() => () => { ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
   return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), speak };
 }

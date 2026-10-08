@@ -1,4 +1,6 @@
 {
+  "listen": "Listen",
+  "stopListening": "Stop",
   "overview": "Home",
   "components": "Components",
   "map": "Buddy map",
@@ -254,7 +256,7 @@
   "needHearing": "Deaf or hard of hearing",
   "needHearingDescription": "Vibration and text cues",
   "needMobility": "Limited mobility",
-  "needMobilityDescription": "Step-free routes aren't available yet",
+  "needMobilityDescription": "Step-free routes and safety steps",
   "needElderly": "Older adult",
   "needElderlyDescription": "Larger text, stronger contrast",
   "needStandard": "Standard",
@@ -394,5 +396,11 @@
   "hazardStep_wind_4": "If you are driving, stop somewhere safe, away from trees.",
   "shakingFelt": "Shaking felt in {{place}}",
   "factShaking": "Shaking felt in",
-  "mmiLevel": "intensity {{level}} (MMI)"
+  "mmiLevel": "intensity {{level}} (MMI)",
+  "homeMore": "More information",
+  "homeMoreDetail": "Other alerts and recent disasters",
+  "hazardStep_earthquake_1_mobility": "During shaking, lock your wheels or sit down, bend forward, and cover your head and neck with your arms.",
+  "hazardStep_earthquake_3_mobility": "When the shaking stops, move to an open area by a step-free route. Do not use the lift; ask for help with stairs.",
+  "hazardStep_flood_1_mobility": "Leave early for higher ground while routes are still passable, and tell your Buddy you are moving.",
+  "hazardStep_fire_1_mobility": "Leave straight away by the nearest step-free exit and keep as low as you can under the smoke."
 }

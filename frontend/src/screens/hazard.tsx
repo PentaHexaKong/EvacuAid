@@ -9,10 +9,13 @@ import { ActionButton, AppText, Page, StepList } from '@/components/ui';
 import { HazardBanner, hazardPhotoCredit } from '@/features/hazards/hazard-banner';
 import { hazardFacts } from '@/features/hazards/hazard-facts';
 import { findHazard } from '@/features/hazards/use-recent-hazards';
+import { ListenButton } from '@/components/listen-button';
+import { useAccess } from '@/features/access/use-access';
 import { colors, corner, gutter, radius } from '@/theme';
 
 const BANNER = 300;
 const STEPS = [1, 2, 3, 4];
+const MOBILITY_STEPS = new Set(['hazardStep_earthquake_1_mobility', 'hazardStep_earthquake_3_mobility', 'hazardStep_flood_1_mobility', 'hazardStep_fire_1_mobility']);
 
 export function HazardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,7 +23,12 @@ export function HazardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const item = findHazard(id);
+  const access = useAccess();
   if (!item) return <Page><EmptyContent /></Page>;
+  const stepText = (step: number) => {
+    const key = `hazardStep_${item.type}_${step}`;
+    return t(access.stepFree && MOBILITY_STEPS.has(`${key}_mobility`) ? `${key}_mobility` : key);
+  };
   const facts = hazardFacts(item, t, i18n.language);
   const located = item.latitude != null && item.longitude != null;
   // The photo runs under the transparent navigation bar; the bar's title appears once the heading scrolls beneath it.
@@ -32,6 +40,7 @@ export function HazardScreen() {
         <AppText variant="title" accessibilityRole="header">{facts.title}</AppText>
         <AppText style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{facts.footer}</AppText>
       </View>
+      {access.listen && <ListenButton text={[facts.typeName, facts.title, ...facts.facts.map(fact => `${fact.label}: ${fact.value}`), ...STEPS.map(step => `${step}. ${stepText(step)}`), t(item.source === 'BMKG' ? 'hazardSourceBmkg' : 'hazardSourceReports')].join('. ')} auto={access.autoRead} />}
       <View style={{ gap: 12 }}>
         <SectionTitle>{t('hazardKeyFacts')}</SectionTitle>
         <View style={styles.facts}>
@@ -43,7 +52,7 @@ export function HazardScreen() {
       </View>
       <View style={{ gap: 14 }}>
         <SectionTitle>{t('hazardWhatToDo')}</SectionTitle>
-        <StepList steps={STEPS.map(step => t(`hazardStep_${item.type}_${step}`))} />
+        <StepList steps={STEPS.map(step => stepText(step))} />
       </View>
       <ActionButton variant="gradient" label={t(located ? 'hazardShowOnMap' : 'hazardOpenMap')} icon={<IconMap size={20} color={colors.surface} />} onPress={() => router.navigate({ pathname: '/discover', params: located ? { focus: `${item.latitude},${item.longitude}` } : {} })} />
       <View style={{ gap: 6 }}>

@@ -1,6 +1,7 @@
 import { SheetHeaderContext, SheetScrollView } from './sheet-scroll-view';
 import { PageHeaderContext, PageScrollView, PageTitleContext } from './page-scroll-view';
 import { TabBarContext, TabScrollView } from './tab-shell';
+import { useAccess } from '@/features/access/use-access';
 import { usePreferences } from '@/features/preferences/context';
 import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
@@ -59,10 +60,11 @@ function buttonPalette(variant: ButtonVariant, pressed: boolean, focused: boolea
 export function ActionButton({ label, onPress, icon, variant = 'primary', disabled = false, loading = false, compact = false }: { label: string; onPress?: () => void; icon?: ReactNode; variant?: ButtonVariant; disabled?: boolean; loading?: boolean; compact?: boolean }) {
   const [focused, setFocused] = useState(false);
   const press = usePressScale(0.96);
+  const { largeTargets } = useAccess();
   const palette = buttonPalette(variant, press.pressed, focused);
   const showGradient = variant === 'gradient' && !press.pressed;
   return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || loading, busy: loading }} disabled={disabled || loading} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
-    <Animated.View style={[styles.button, compact && styles.buttonCompact, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: palette.borderWidth }, disabled && styles.disabled, press.style]}>
+    <Animated.View style={[styles.button, compact && styles.buttonCompact, largeTargets && { minHeight: compact ? 52 : 60 }, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: palette.borderWidth }, disabled && styles.disabled, press.style]}>
       {showGradient && <LinearGradient pointerEvents="none" colors={[colors.gradientTop, colors.primary]} style={StyleSheet.absoluteFill} />}
       <View style={[styles.buttonContent, compact && styles.buttonContentCompact]}>{loading ? <ActivityIndicator color={palette.spinner} /> : icon}<AppText variant="button" style={{ color: palette.text, flexShrink: 1, textAlign: 'center' }}>{label}</AppText></View>
     </Animated.View>

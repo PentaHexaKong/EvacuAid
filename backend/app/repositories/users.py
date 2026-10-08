@@ -22,6 +22,8 @@ async def create_user(session: AsyncSession, user: User) -> User:
 
 async def replace_accessibility(session: AsyncSession, user: User, items: list[tuple[str, str | None]]) -> list[UserAccessibility]:
     user.accessibility.clear()
+    # A single flush inserts before it deletes orphans, so keeping a need already saved would hit uq_user_accessibility_type.
+    await session.flush()
     user.accessibility.extend(UserAccessibility(type=item_type, severity=severity) for item_type, severity in items)
     await session.flush()
     return user.accessibility

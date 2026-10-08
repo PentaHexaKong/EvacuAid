@@ -1,5 +1,8 @@
-import { Alert, AppState } from 'react-native';
-import { act, fireEvent, render, within } from '@testing-library/react-native';
+import { Children } from 'react';
+import { buddyStyles } from '@/features/buddy-pilot/ui/parts';
+import { Alert, AppState, View } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { RouteView } from '@/features/buddy-pilot/ui/route-view';
 import { BuddyPilotScreen } from './buddy-pilot';
 
 const mockRun = jest.fn();
@@ -14,7 +17,7 @@ let mockContacts: unknown[] = [];
 let mockInvitations: unknown[] = [];
 let mockParams: { code?: string } = {};
 let mockAvailability = { optedIn: false };
-let mockLocation: { latitude: number; longitude: number } | null = null;
+let mockLocation: { latitude: number; longitude: number; accuracyM?: number; observedAt?: string } | null = null;
 const mockBuddyRequest = jest.fn();
 let mockCommand: (command: string) => void;
 jest.mock('expo-router', () => {
@@ -216,4 +219,41 @@ test('an active session with a known position becomes a full-screen map with the
   const map = render(<BuddyPilotScreen />);
   expect(map.getByTestId('session-map')).toBeTruthy();
   expect(within(map.getByTestId('session-sheet')).getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+});
+
+
+let mockSoundFree = false;
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ soundFree: mockSoundFree }) }));
+beforeEach(() => { mockSoundFree = false; });
+test.each([false, true])('voice controls and status speech follow soundFree (%s)', soundFree => {
+  mockSoundFree = soundFree;
+  mockSession = { id: 'voice', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina', status: 'ACCEPTED', supportNeeds: [], attempts: [] };
+  const view = render(<BuddyPilotScreen />);
+  expect(Boolean(view.queryByRole('menuitem', { name: 'Speak a command' }))).toBe(!soundFree);
+  expect(Boolean(view.queryByRole('button', { name: 'Read status aloud' }))).toBe(!soundFree);
+  if (soundFree) expect(mockSpeak).not.toHaveBeenCalled();
+  else expect(mockSpeak).toHaveBeenCalled();
+});
+
+test.each([false, true])('repeat guidance is hidden without a gap for soundFree (%s)', soundFree => {
+  mockSoundFree = soundFree;
+  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} position={null} target={null} onInstruction={jest.fn()} speak={mockSpeak} reroute={jest.fn()} voiceEnabled={false} />);
+  expect(view.getByText('Last location is stale. Do not treat it as the current position.')).toBeTruthy();
+  expect(Boolean(view.queryByRole('button', { name: 'Repeat instruction' }))).toBe(!soundFree);
+  expect(view.getByRole('button', { name: 'Recalculate route' })).toBeTruthy();
+  const actions = view.UNSAFE_getAllByType(View).find(node => node.props.style === buddyStyles.actions);
+  expect(Children.toArray(actions?.props.children)).toHaveLength(soundFree ? 1 : 2);
+});
+
+
+test.each([false, true])('automatic maneuver speech follows soundFree with voice enabled (%s)', async soundFree => {
+  mockSoundFree = soundFree;
+  mockSession = { id: 'guidance', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina', status: 'EVACUATING', meetingConfirmed: true, supportNeeds: [], attempts: [] };
+  mockLocation = { latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() };
+  mockBuddyRequest.mockResolvedValue({ routeStatus: 'READY', leg: 'TO_SHELTER', destination: { name: 'Shelter', latitude: -6.201, longitude: 106.801 }, route: { geometry: { type: 'LineString', coordinates: [[106.8, -6.2], [106.801, -6.201]] }, distanceM: 150, durationSec: 120, profile: 'PEDESTRIAN', maneuvers: [{ instruction: 'Continue to the shelter', beginShapeIndex: 0, endShapeIndex: 1, distanceM: 150, durationSec: 120, type: 1 }] }, evaluation: null, selectionReasonCodes: [] });
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Route to gathering point' }));
+  await waitFor(() => expect(view.getByText('Continue to the shelter')).toBeTruthy());
+  if (soundFree) expect(mockSpeak).not.toHaveBeenCalled();
+  else expect(mockSpeak).toHaveBeenCalledWith('Continue to the shelter');
 });

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest, type UserProfile } from './api';
 import { useGuestSession } from './session';
@@ -51,6 +51,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [accessibility, setAccessibility] = useState<AccessibilityItem[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentToken = useRef(token);
+
+  // One guest's profile and needs must never carry over to the next guest on the same phone.
+  useEffect(() => {
+    currentToken.current = token;
+    if (!token) { setProfile(null); setAccessibility([]); setReady(false); }
+  }, [token]);
+  // An unreleased build cached the needs here; make sure nothing is left behind.
+  useEffect(() => { void AsyncStorage.removeItem('evacuaid.needs.v1').catch(() => {}); }, []);
 
   const retry = useCallback(async () => {
     if (!token) return;
@@ -66,14 +75,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
       await AsyncStorage.removeItem(ONBOARDING_NEEDS_KEY);
       const localName = await AsyncStorage.getItem(PROFILE_KEY);
+      let loaded = current;
       if (localName !== null) {
         const migratedName = parseProfile(localName);
-        const saved = migratedName ? await apiRequest<UserProfile>(`/v1/users/${current.id}`, token, {
+        if (migratedName) loaded = await apiRequest<UserProfile>(`/v1/users/${current.id}`, token, {
           method: 'PATCH', body: JSON.stringify({ name: migratedName }),
-        }) : current;
+        });
         await AsyncStorage.removeItem(PROFILE_KEY);
-        setProfile(saved);
-      } else setProfile(current);
+      }
+      // The session can end while this load is in flight; a late answer must not bring the old profile back.
+      if (currentToken.current !== token) return;
+      setProfile(loaded);
       setAccessibility(items);
       setReady(true);
     } catch (cause) {
