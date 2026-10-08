@@ -243,8 +243,8 @@ test.each([false, true])('voice controls and status speech follow soundFree (%s)
 
 test.each([false, true])('repeat guidance is hidden without a gap for soundFree (%s)', soundFree => {
   mockSoundFree = soundFree;
-  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} position={null} target={null} onInstruction={jest.fn()} speak={mockSpeak} reroute={jest.fn()} voiceEnabled={false} />);
-  expect(view.getByText('Last location is stale. Do not treat it as the current position.')).toBeTruthy();
+  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} guidance={{ ready: false, progress: null, maneuver: null, next: null, instruction: null, remainingM: 0, minutes: 0, nextManeuverM: 0, walked: 0 }} speak={mockSpeak} reroute={jest.fn()} />);
+  expect(view.getByText('Last location is old, not the current position.')).toBeTruthy();
   expect(Boolean(view.queryByRole('button', { name: 'Repeat instruction' }))).toBe(!soundFree);
   expect(view.getByRole('button', { name: 'Recalculate route' })).toBeTruthy();
   const actions = view.UNSAFE_getAllByType(View).find(node => node.props.style === buddyStyles.actions);
@@ -259,9 +259,9 @@ test.each([false, true])('automatic maneuver speech follows soundFree with voice
   mockBuddyRequest.mockResolvedValue({ routeStatus: 'READY', leg: 'TO_SHELTER', destination: { name: 'Shelter', latitude: -6.201, longitude: 106.801 }, route: { geometry: { type: 'LineString', coordinates: [[106.8, -6.2], [106.801, -6.201]] }, distanceM: 150, durationSec: 120, profile: 'PEDESTRIAN', maneuvers: [{ instruction: 'Continue to the shelter', beginShapeIndex: 0, endShapeIndex: 1, distanceM: 150, durationSec: 120, type: 1 }] }, evaluation: null, selectionReasonCodes: [] });
   const view = render(<BuddyPilotScreen />);
   fireEvent.press(view.getByRole('button', { name: 'Route to gathering point' }));
-  await waitFor(() => expect(view.getByText('Continue to the shelter')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Start walking')).toBeTruthy());
   if (soundFree) expect(mockSpeak).not.toHaveBeenCalled();
-  else expect(mockSpeak).toHaveBeenCalledWith('Continue to the shelter');
+  else expect(mockSpeak).toHaveBeenCalledWith('Start walking');
 });
 
 const helperOffer = (nearby = false) => ({ id: 'helper-session', requesterUserId: 'friend', helperUserId: null, requesterName: 'Test friend', helperName: null, status: 'WAITING', nearby, message: '', supportNeeds: ['HEARING_IMPAIRMENT'], createdAt: new Date().toISOString(), attempts: [{ id: 'helper-offer', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] });
@@ -293,6 +293,18 @@ test('helper friend acceptance confirms location sharing and submits the offer i
   alert.mockRestore();
 });
 
+test('a friend who is asking for help is the card at the top and is not repeated in the list', () => {
+  mockAccessibility = [];
+  mockIncomingContacts = [{ id: 'c1', userId: 'friend', buddyUserId: 'helper', name: 'Test friend', level: 'PRIMARY', status: 'ACTIVE' }, { id: 'c2', userId: 'other', buddyUserId: 'helper', name: 'Other friend', level: 'PRIMARY', status: 'ACTIVE' }];
+  mockSession = helperOffer();
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getAllByText('Test friend')).toHaveLength(1);
+  expect(view.getByText('Other friend')).toBeTruthy();
+  mockIncomingContacts = [mockIncomingContacts[0]];
+  view.rerender(<BuddyPilotScreen />);
+  expect(view.queryByText('People you help')).toBeNull();
+});
+
 test('helper received invite acceptance posts to its invitation endpoint', async () => {
   mockAccessibility = [];
   mockReceived = [{ id: 'received-1', status: 'SENT', ownerName: 'Test friend', ownerNeeds: ['VISUAL_IMPAIRMENT'], relation: 'TEMAN' }];
@@ -312,11 +324,12 @@ test('a received invitation says which way the help goes', async () => {
 
 test('helper GPS offers force Auto search and use Skip and confirmed Help this person', async () => {
   mockAccessibility = [];
-  mockSession = helperOffer(true);
+  mockSession = { ...helperOffer(true), message: 'Please hurry' };
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const view = render(<BuddyPilotScreen />);
   expect(view.getByRole('tab', { name: 'Auto search' })).toHaveProp('accessibilityState', { selected: true });
   expect(view.getByText('The system found Test friend in an emergency area with no Buddy helping yet.')).toBeTruthy();
+  expect(view.getByText('“Please hurry”')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Help this person' }));
   expect(mockRun).not.toHaveBeenCalled();
   await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });

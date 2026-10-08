@@ -15,6 +15,8 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
   const router = useRouter();
   const sent = state.invitations.filter(item => item.status === 'SENT' && item.direction === 'OFFER_HELP');
   const offer = attempt && session && !session.nearby;
+  // A friend who is asking for help is the card at the top, so they are not repeated in the list.
+  const listed = state.incomingContacts.filter(contact => !offer || contact.userId !== session.requesterUserId);
   const empty = !state.incomingContacts.length && !state.received.length && !sent.length && !offer;
   const share = () => { if (code) catchNative(() => Share.share({ message: c('shareMessage', { code }) })); };
   const details = (needs?: string[], relation?: Parameters<typeof relationLabel>[0]) => [...(needs ?? []).map(support), relationLabel(relation, c)].filter(Boolean).join(' · ');
@@ -33,14 +35,12 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
         </View>
       </Card></FriendMotion>;
     })}
-    {state.incomingContacts.length > 0 && <View style={styles.section}>
+    {listed.length > 0 && <View style={styles.section}>
       <AppText variant="section" accessibilityRole="header">{c('friendsHeading')}</AppText>
-      <Group>{state.incomingContacts.map(contact => {
-        const pending = offer && session.requesterUserId === contact.userId;
+      <Group>{listed.map(contact => {
         const helping = active && session?.requesterUserId === contact.userId;
-        const tone = pending ? colors.critical : colors.primary;
         return <Row key={contact.id} leading={<PersonAvatar name={contact.name} size={44} />} title={contact.name ?? c('name')}
-          detail={pending || helping ? <View style={[buddyStyles.row, { gap: 6 }]}><View style={[styles.dot, { backgroundColor: tone }]} /><AppText style={{ color: tone }}>{pending ? c('needsHelpChip') : c('inSession')}</AppText></View> : <AppText style={{ color: colors.muted }}>{details(contact.needs, contact.relation)}</AppText>}
+          detail={helping ? <View style={[buddyStyles.row, { gap: 6 }]}><View style={styles.dot} /><AppText style={{ color: colors.primary }}>{c('inSession')}</AppText></View> : <AppText style={{ color: colors.muted }}>{details(contact.needs, contact.relation)}</AppText>}
           onPress={helping ? () => { void state.refresh(session.id); } : undefined}
           trailing={<MoreMenu label={`${c('more')}: ${contact.name ?? c('name')}`} items={[{ label: c('remove'), destructive: true, onPress: () => confirm(c('remove'), () => { void state.run(`/contacts/${contact.id}`, undefined, 'DELETE'); }) }]} />}
         />;
@@ -67,7 +67,7 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
 const styles = StyleSheet.create({
   content: { gap: 16 },
   section: { gap: 10 },
-  dot: { width: 8, height: 8, borderRadius: radius.pill },
+  dot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.primary },
   codeBlock: { backgroundColor: colors.canvas, alignItems: 'center' },
   code: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), letterSpacing: 0, fontVariant: ['tabular-nums'] },
   codeValue: { fontSize: 17, lineHeight: 22, color: colors.muted },

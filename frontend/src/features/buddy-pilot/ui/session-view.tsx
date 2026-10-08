@@ -16,7 +16,7 @@ import { duration, spring } from '@/theme/motion';
 import { relativeTime } from '@/features/hazards/time';
 import { nearbyShelters } from '@/features/navigation/api';
 import { buddyRequest, terminalStatuses } from '../api';
-import { distanceM } from '../navigation';
+import { distanceM, formatDistance } from '../navigation';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, initials, StatStrip, StatusChip } from './parts';
 import { RouteView } from './route-view';
@@ -59,8 +59,9 @@ export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; toke
 
 export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatFocus }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode; onPrimaryLayout?: (height: number) => void; onChatFocus?: () => void }) {
   const { soundFree } = useAccess();
-  const { state, c, status, support, preferences, session, active, requester, partner, native, route, helperRoute, requesterPoint, routeBusy, wheelchair, setWheelchair, consent, setConsent, voice, statusText, confirm, catchNative, transition, startNearby, requestRoute, setCurrentInstruction } = a;
-  const { t } = useTranslation();
+  const { state, c, status, support, session, active, requester, partner, native, route, helperRoute, routeBusy, wheelchair, setWheelchair, consent, setConsent, voice, statusText, confirm, catchNative, transition, startNearby, requestRoute, guidance } = a;
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language.startsWith('id') ? 'id' : 'en';
   if (!session) return null;
   const terminal = terminalStatuses.has(session.status);
   const partnerLocation = state.locations.find(item => item.userId !== userId);
@@ -69,8 +70,9 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
   const eta = (requester ? helperRoute : route)?.route;
   const headline = requester && helperRoute ? c(session.status === 'EN_ROUTE' ? 'onTheWay' : 'gettingReady') : status(session.status);
   const stats = [
-    { label: c('statEta'), value: eta ? `${Math.max(1, Math.ceil(eta.durationSec / 60))} ${c('minShort')}` : '—' },
-    { label: c('statDistance'), value: requester && helperRoute?.route ? `${Math.round(helperRoute.route.distanceM)} m` : native.location && partnerLocation ? `${Math.round(distanceM(native.location, partnerLocation))} m` : '—' },
+    { label: c('statEta'), value: !requester && guidance.ready ? `${guidance.minutes} ${c('minShort')}` : eta ? `${Math.max(1, Math.ceil(eta.durationSec / 60))} ${c('minShort')}` : '—' },
+    // With a route, distance and time both follow the route; a straight line is only the fallback before one exists.
+    { label: c('statDistance'), value: !requester && guidance.ready ? formatDistance(guidance.remainingM, lang) : requester && helperRoute?.route ? formatDistance(helperRoute.route.distanceM, lang) : native.location && partnerLocation ? formatDistance(distanceM(native.location, partnerLocation), lang) : '—' },
     { label: c('statGps'), value: gps ? (gps.key === 'timeJustNow' ? c('now') : t(gps.key, { count: gps.count })) : '—' },
   ];
 
@@ -125,7 +127,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
     {active && session.meetingConfirmed && <ShelterCard a={a} />}
     {active && !session.meetingConfirmed && !requester && <CheckOption label={c('wheelchair')} checked={wheelchair} onToggle={setWheelchair} />}
 
-    {active && route?.route && <RouteView key={`${session.id}:${route.route.geometry.coordinates[0]?.join(',')}:${route.destination?.shelterId ?? route.leg}`} route={route} position={native.location} target={requesterPoint} onInstruction={setCurrentInstruction} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} voiceEnabled={preferences.voiceEnabled && !soundFree} />}
+    {active && route?.route && <RouteView route={route} guidance={guidance} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} />}
 
     {active && <SessionCards a={a} token={token} userId={userId} onChatFocus={onChatFocus} />}
 
@@ -138,10 +140,11 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
 function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus, stats }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode; onPrimaryLayout?: (height: number) => void; onChatFocus?: () => void; stats: { label: string; value: string }[] }) {
   const { soundFree } = useAccess();
   const reduceMotion = useContext(SystemReduceMotionContext);
-  const { state, c, status, support, preferences, session, active, partner, native, route, requesterPoint, routeBusy, wheelchair, setWheelchair, voice, statusText, confirm, catchNative, transition, requestRoute, setCurrentInstruction } = a;
+  const { state, c, status, support, session, active, partner, route, routeBusy, wheelchair, setWheelchair, voice, statusText, confirm, catchNative, transition, requestRoute, guidance } = a;
   if (!session) return null;
   const terminal = terminalStatuses.has(session.status);
   const name = partner ?? c('name');
+  const stale = state.locations.some(item => item.stale);
   const toRequester = session.status === 'ACCEPTED' || session.status === 'EN_ROUTE';
   const headline = session.status === 'ACCEPTED' ? c('stepReady', { name }) : session.status === 'EN_ROUTE' ? c('stepEnRoute', { name }) : session.status === 'ARRIVED' ? session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting') : session.status === 'EVACUATING' ? c('stepEvacuating') : status(session.status);
   const step = session.status === 'ACCEPTED' ? { label: c('depart'), action: 'depart' } : session.status === 'EN_ROUTE' ? { label: c('arrive'), action: 'arrive' } : session.status === 'ARRIVED' ? { label: c('pickup'), action: 'evacuating' } : session.status === 'EVACUATING' ? { label: c('complete'), action: 'report-complete' } : null;
@@ -156,10 +159,12 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
       <AppText variant="title" accessibilityRole="header">{terminal ? headline : c('needsHelpTitle', { name })}</AppText>
       <View style={{ gap: 4 }}>
         <AppText variant="section" accessibilityLiveRegion="polite">{terminal ? name : headline}</AppText>
-        {active && <AppText variant="small" style={{ color: colors.muted }}>{c('liveNote')}</AppText>}
+        {/* One line either way, so a location going stale never moves the buttons below. */}
+        {active && (stale
+          ? <AppText accessibilityRole="alert" variant="small" numberOfLines={1} style={{ color: colors.caution }}>{c('stale')}</AppText>
+          : <AppText variant="small" numberOfLines={1} style={{ color: colors.muted }}>{c('liveNote')}</AppText>)}
       </View>
       {!terminal && <StatStrip items={stats} />}
-      {state.locations.some(item => item.stale) && <AppText accessibilityRole="alert" variant="small" style={{ color: colors.caution }}>{c('stale')}</AppText>}
       {active && step && <Animated.View key={session.status} entering={reduceMotion ? undefined : FadeIn.duration(duration.state)}>
         <ActionButton label={step.label} disabled={session.status === 'ARRIVED' && !session.meetingConfirmed} loading={state.busy} onPress={() => { if (session.status === 'ACCEPTED') void transition(step.action); else confirm(step.label, () => { void transition(step.action); }); }} />
       </Animated.View>}
@@ -175,7 +180,7 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
       {!!session.message && <AppText selectable style={[buddyStyles.quote, { color: colors.muted }]}>“{session.message}”</AppText>}
     </View>}
 
-    {active && route?.route && <RouteView key={`${session.id}:${route.route.geometry.coordinates[0]?.join(',')}:${route.destination?.shelterId ?? route.leg}`} route={route} title={route.leg === 'TO_REQUESTER' ? name : undefined} position={native.location} target={requesterPoint} onInstruction={setCurrentInstruction} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} voiceEnabled={preferences.voiceEnabled && !soundFree} />}
+    {active && route?.route && <RouteView route={route} title={route.leg === 'TO_REQUESTER' ? name : undefined} guidance={guidance} speak={voice.speak} reroute={() => { void requestRoute(route.leg); }} />}
 
     {active && session.meetingConfirmed && <ShelterCard a={a} />}
     {active && !session.meetingConfirmed && <CheckOption label={c('wheelchair')} checked={wheelchair} onToggle={setWheelchair} />}

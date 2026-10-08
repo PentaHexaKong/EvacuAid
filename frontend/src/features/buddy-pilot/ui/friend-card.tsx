@@ -38,7 +38,8 @@ export function FriendCard({ a }: { a: BuddyActions }) {
       <PersonAvatar name={name} size={48} />
       <View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{name}</AppText>{!!detail && <AppText style={{ color: colors.muted }}>{detail}</AppText>}</View>
     </View>
-    {(session.message || session.nearby) && <View style={buddyStyles.quote}><AppText selectable>{session.message ? `“${session.message}”` : c('gpsSystemLine', { name })}</AppText></View>}
+    {session.nearby && <AppText variant="small" style={{ color: colors.muted }}>{c('gpsSystemLine', { name })}</AppText>}
+    {!!session.message && <View style={buddyStyles.quote}><AppText selectable>“{session.message}”</AppText></View>}
     <View style={buddyStyles.actions}>
       <View style={buddyStyles.grow}><ActionButton variant="secondary" label={session.nearby ? c('skip') : c('declineShort')} loading={state.busy} onPress={() => {
         const decline = () => { void transition('decline', { attemptId: attempt.id }); };
