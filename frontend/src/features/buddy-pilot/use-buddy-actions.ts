@@ -12,7 +12,8 @@ import { useBuddyNative, useBuddySpeech } from '@/features/buddy-pilot/native';
 import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
 import type { Shelter } from '@/features/navigation/api';
 import { distanceM } from '@/features/buddy-pilot/navigation';
-import { useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
+import { usesMapbox } from '@/components/map-engine';
+import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
 
 export function useBuddyActions({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
   const { c, status, language, support, event } = useBuddyCopy();
@@ -72,11 +73,12 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   }, [approaching, sessionId, token]);
   const helperRoute = approaching && approach && approach.sessionId === sessionId ? approach.value : null;
   const transition = async (action: string, body: unknown = {}) => {
-    if (!session) return;
+    if (!session) return false;
     const result = await state.run<Session>(`/requests/${session.id}/${action}`, body);
-    if (!result) return;
+    if (!result) return false;
     if (action === 'accept') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     if (action === 'decline') state.dismissSession(); else await state.refresh(result.id);
+    return true;
   };
   // One path for "help me" from voice and from Home: confirm out loud, then ask the chosen or primary Buddy.
   // Without a Buddy it says so and offers 112; it never dials on its own.
@@ -165,6 +167,16 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     } catch (cause) { setLocalError(cause instanceof Error ? cause.message : c('noRoute')); }
     finally { setRouteBusy(false); }
   };
+  // Turn-by-turn is a state of the session map, on for the helper's two walking legs and only where the map can follow them.
+  const [navigatingFor, setNavigatingFor] = useState<string | null>(null);
+  const walkingLeg = requester || !session ? null : session.status === 'EN_ROUTE' ? 'TO_REQUESTER' as const : session.status === 'EVACUATING' ? 'TO_SHELTER' as const : null;
+  const navigating = Boolean(usesMapbox() && active && session && navigatingFor === session.id && walkingLeg && route?.route && route.leg === walkingLeg);
+  const startNavigation = async (leg: 'TO_REQUESTER' | 'TO_SHELTER') => {
+    if (!session) return;
+    setNavigatingFor(session.id);
+    if (!route?.route || route.leg !== leg) await requestRoute(leg);
+  };
+  const stopNavigation = () => setNavigatingFor(null);
   const sendMessage = async (text: string) => {
     if (!session || !text.trim()) return;
     if (chatKey.current?.text !== text.trim()) chatKey.current = { text: text.trim(), key: `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}` };
@@ -172,10 +184,10 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   };
   const attempt = session?.attempts.find(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > now && session?.status === 'WAITING');
   const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
-  const guidance = useRouteGuidance({ route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
+  const guidance = useRouteGuidance({ route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, haptics: preferences.vibrationEnabled, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
   const resetIdempotency = () => { idempotency.current = null; };
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;

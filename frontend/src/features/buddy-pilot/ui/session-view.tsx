@@ -1,10 +1,11 @@
 import { useAccess } from '@/features/access/use-access';
-import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Animated, { FadeIn, useAnimatedStyle } from 'react-native-reanimated';
 import IconPhone from '@tabler/icons-react-native/IconPhone';
 import IconRoute from '@tabler/icons-react-native/IconRoute';
@@ -20,15 +21,19 @@ import { distanceM, formatDistance } from '../navigation';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, initials, StatStrip, StatusChip } from './parts';
 import { RouteView } from './route-view';
+import { ManeuverBanner, RecenterPill, TripBar } from './navigation-view';
 
 const MIN_PEEK = 176;
+const KEEP_AWAKE = 'buddy-navigation';
 // Same floating sheet as Discover: inset from the screen edges, corners concentric with the display's.
 const SHEET_INSET = 10;
 const SHEET_RADIUS = 54 - SHEET_INSET;
+// The floating tab bar sits above the home indicator; the peek ends above it so no button hides half under it.
+const TAB_BAR = 58;
 
 // An active session with a known position: the map takes the screen and the session rides in a sheet over it.
 export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode }) {
-  const { state, c, requester, partner, native, route, helperRoute, requesterPoint, catchNative } = a;
+  const { state, c, requester, partner, native, route, helperRoute, requesterPoint, catchNative, navigating, guidance, routeBusy } = a;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { height } = useWindowDimensions();
@@ -36,19 +41,34 @@ export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; toke
   const sheetSpring = useBottomSheetSpringConfigs(spring.sheet);
   const [primaryHeight, setPrimaryHeight] = useState(MIN_PEEK);
   const snapPoints = useMemo(() => {
-    const peek = Math.min(Math.max(MIN_PEEK, primaryHeight + 40) + insets.bottom, height * 0.62);
+    const peek = Math.min(Math.max(MIN_PEEK, primaryHeight + 40) + insets.bottom + TAB_BAR, height * 0.66);
     const middle = Math.max(height * 0.55, peek + 72);
     return [peek, middle, Math.max(height * 0.92, middle + 48)];
   }, [primaryHeight, insets.bottom, height]);
   const [sheetIndex, setSheetIndex] = useState(0);
-  const controlsStyle = useAnimatedStyle(() => ({ transform: [{ translateY: headerHeight + 8 }] }));
+  // Dragging the map pauses following until the walker asks for it back; every new navigation starts following again.
+  const [paused, setPaused] = useState(false);
+  if (!navigating && paused) setPaused(false);
+  const [bannerHeight, setBannerHeight] = useState(112);
+  const bannerTop = insets.top + 8;
+  const mapTop = navigating ? bannerTop + bannerHeight : headerHeight;
+  const controlsStyle = useAnimatedStyle(() => ({ transform: [{ translateY: mapTop + 8 }] }), [mapTop]);
+  // A phone that locks mid-walk stops guiding, so the screen stays on for as long as navigation does.
+  useEffect(() => {
+    if (!navigating) return;
+    void activateKeepAwakeAsync(KEEP_AWAKE).catch(() => {});
+    return () => { void deactivateKeepAwake(KEEP_AWAKE).catch(() => {}); };
+  }, [navigating]);
   return <View style={styles.screen}>
-    <DiscoverMap items={state.locations.filter(item => item.userId !== userId && !item.stale).map(item => ({ id: item.userId, title: partner ?? c('helper'), kind: 'person' as const, initials: initials(partner), coordinate: item }))} selected={null} onSelect={() => {}} route={requester ? helperRoute?.route?.geometry.coordinates : route?.leg === 'TO_REQUESTER' && !requesterPoint ? undefined : route?.route?.geometry.coordinates} userLocation={native.location} onLocate={() => catchNative(native.obtainLocation)} topInset={headerHeight} bottomInset={snapPoints[0]} creditsInset={snapPoints[Math.min(sheetIndex, 1)]} controlsStyle={controlsStyle} />
+    <DiscoverMap items={state.locations.filter(item => item.userId !== userId && !item.stale).map(item => ({ id: item.userId, title: partner ?? c('helper'), kind: 'person' as const, initials: initials(partner), coordinate: item }))} selected={null} onSelect={() => {}} route={requester ? helperRoute?.route?.geometry.coordinates : route?.leg === 'TO_REQUESTER' && !requesterPoint ? undefined : route?.route?.geometry.coordinates} userLocation={native.location} onLocate={() => catchNative(native.obtainLocation)} topInset={mapTop} bottomInset={snapPoints[0]} creditsInset={snapPoints[Math.min(sheetIndex, 1)]} controlsStyle={controlsStyle} follow={navigating ? !paused : undefined} onFollowChange={following => setPaused(!following)} walked={guidance.walked} />
     {/* Keeps the bar's title readable over map labels. */}
-    <LinearGradient pointerEvents="none" colors={[colors.canvas, `${colors.canvas}00`]} locations={[0.45, 1]} style={[styles.scrim, { height: headerHeight + 32 }]} />
+    {navigating
+      ? <ManeuverBanner guidance={guidance} busy={routeBusy} name={route?.leg === 'TO_REQUESTER' ? (partner ?? c('name')).split(' ')[0] : null} top={bannerTop} onLayout={event => setBannerHeight(Math.round(event.nativeEvent.layout.height))} />
+      : <LinearGradient pointerEvents="none" colors={[colors.canvas, `${colors.canvas}00`]} locations={[0.45, 1]} style={[styles.scrim, { height: headerHeight + 32 }]} />}
+    {navigating && paused && <RecenterPill bottom={snapPoints[Math.min(sheetIndex, 1)] + 16} onPress={() => setPaused(false)} />}
     {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
     <View pointerEvents="box-none" style={styles.sheetFrame}>
-      <BottomSheet ref={sheet} index={0} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={headerHeight} backgroundStyle={styles.sheet} handleIndicatorStyle={styles.handle} accessible={false}>
+      <BottomSheet ref={sheet} index={0} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={mapTop} backgroundStyle={styles.sheet} handleIndicatorStyle={styles.handle} accessible={false}>
         <BottomSheetScrollView automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: gutter - SHEET_INSET, paddingTop: 4, paddingBottom: 32 + insets.bottom, gap: 16 }}>
           <SessionView a={a} token={token} userId={userId} banner={banner} onPrimaryLayout={setPrimaryHeight} onChatFocus={() => sheet.current?.snapToIndex(2)} />
         </BottomSheetScrollView>
@@ -140,17 +160,38 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
 function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus, stats }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode; onPrimaryLayout?: (height: number) => void; onChatFocus?: () => void; stats: { label: string; value: string }[] }) {
   const { soundFree } = useAccess();
   const reduceMotion = useContext(SystemReduceMotionContext);
-  const { state, c, status, support, session, active, partner, route, routeBusy, wheelchair, setWheelchair, voice, statusText, confirm, catchNative, transition, requestRoute, guidance } = a;
+  const { state, c, status, support, session, active, partner, route, routeBusy, wheelchair, setWheelchair, voice, statusText, confirm, catchNative, transition, requestRoute, guidance, navigating, startNavigation, stopNavigation } = a;
   if (!session) return null;
   const terminal = terminalStatuses.has(session.status);
   const name = partner ?? c('name');
-  const stale = state.locations.some(item => item.stale);
+  const stale = state.locations.some(item => item.userId !== userId && item.stale);
   const toRequester = session.status === 'ACCEPTED' || session.status === 'EN_ROUTE';
   const headline = session.status === 'ACCEPTED' ? c('stepReady', { name }) : session.status === 'EN_ROUTE' ? c('stepEnRoute', { name }) : session.status === 'ARRIVED' ? session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting') : session.status === 'EVACUATING' ? c('stepEvacuating') : status(session.status);
   const step = session.status === 'ACCEPTED' ? { label: c('depart'), action: 'depart' } : session.status === 'EN_ROUTE' ? { label: c('arrive'), action: 'arrive' } : session.status === 'ARRIVED' ? { label: c('pickup'), action: 'evacuating' } : session.status === 'EVACUATING' ? { label: c('complete'), action: 'report-complete' } : null;
 
+  // Leaving for the friend, and leaving with them for the gathering point, are the two moments the walk starts: guidance opens with them.
+  const advance = () => { void transition(step!.action).then(done => { if (done && step!.action === 'depart') void startNavigation('TO_REQUESTER'); else if (done && step!.action === 'evacuating') void startNavigation('TO_SHELTER'); }); };
+  const stepButton = active && step && <Animated.View key={session.status} entering={reduceMotion ? undefined : FadeIn.duration(duration.state)}>
+    <ActionButton label={step.label} disabled={session.status === 'ARRIVED' && !session.meetingConfirmed} loading={state.busy} onPress={() => { if (session.status === 'ACCEPTED') advance(); else confirm(step.label, advance); }} />
+  </Animated.View>;
+  // One line either way, so a location going stale never moves the buttons below.
+  const liveLine = active && (stale
+    ? <AppText accessibilityRole="alert" variant="small" numberOfLines={1} style={{ color: colors.caution }}>{c('stale')}</AppText>
+    : <AppText variant="small" numberOfLines={1} style={{ color: colors.muted }}>{c('liveNote')}</AppText>);
+  const walking = session.status === 'EN_ROUTE' || session.status === 'EVACUATING';
+  const actions = active && <View style={buddyStyles.actions}>
+    <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={c('callShort')} icon={<IconPhone size={18} color={colors.primary} />} onPress={() => catchNative(async () => { const contact = await buddyRequest<{ phone: string | null }>(token, `/requests/${session.id}/contact`); if (!contact.phone) throw new Error(c('noPhone')); await Linking.openURL(`tel:${encodeURIComponent(contact.phone)}`); })} /></View>
+    {!navigating && <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={!toRequester ? c('toShelter') : partner ? c('routeTo', { name: partner.split(' ')[0] }) : c('toRequester')} icon={<IconRoute size={18} color={colors.primary} />} loading={routeBusy} onPress={() => { const leg = toRequester ? 'TO_REQUESTER' : 'TO_SHELTER'; void (walking ? startNavigation(leg) : requestRoute(leg)); }} /></View>}
+  </View>;
+
   return <View style={{ gap: 16 }}>
-    <View onLayout={event => onPrimaryLayout?.(Math.round(event.nativeEvent.layout.height))} style={{ gap: 14 }}>
+    {navigating ? <View onLayout={event => onPrimaryLayout?.(Math.round(event.nativeEvent.layout.height))} style={{ gap: 14 }}>
+      {banner}
+      <TripBar guidance={guidance} onOverview={stopNavigation} />
+      {liveLine}
+      {/* Always within reach: a GPS fix can lag behind someone who is already standing at the door. */}
+      {stepButton}
+    </View> : <View onLayout={event => onPrimaryLayout?.(Math.round(event.nativeEvent.layout.height))} style={{ gap: 14 }}>
       {banner}
       <View style={[buddyStyles.row, { justifyContent: 'space-between' }]}>
         <AppText variant="eyebrow" style={{ color: colors.muted }}>{session.nearby ? c('gpsAssist') : c('buddyAssist')}</AppText>
@@ -159,21 +200,14 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
       <AppText variant="title" accessibilityRole="header">{terminal ? headline : c('needsHelpTitle', { name })}</AppText>
       <View style={{ gap: 4 }}>
         <AppText variant="section" accessibilityLiveRegion="polite">{terminal ? name : headline}</AppText>
-        {/* One line either way, so a location going stale never moves the buttons below. */}
-        {active && (stale
-          ? <AppText accessibilityRole="alert" variant="small" numberOfLines={1} style={{ color: colors.caution }}>{c('stale')}</AppText>
-          : <AppText variant="small" numberOfLines={1} style={{ color: colors.muted }}>{c('liveNote')}</AppText>)}
+        {liveLine}
       </View>
       {!terminal && <StatStrip items={stats} />}
-      {active && step && <Animated.View key={session.status} entering={reduceMotion ? undefined : FadeIn.duration(duration.state)}>
-        <ActionButton label={step.label} disabled={session.status === 'ARRIVED' && !session.meetingConfirmed} loading={state.busy} onPress={() => { if (session.status === 'ACCEPTED') void transition(step.action); else confirm(step.label, () => { void transition(step.action); }); }} />
-      </Animated.View>}
+      {stepButton}
       {active && session.status === 'ARRIVED' && <ActionButton variant="secondary" label={c('complete')} loading={state.busy} onPress={() => confirm(c('complete'), () => { void transition('report-complete'); })} />}
-      {active && <View style={buddyStyles.actions}>
-        <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={c('callShort')} icon={<IconPhone size={18} color={colors.primary} />} onPress={() => catchNative(async () => { const contact = await buddyRequest<{ phone: string | null }>(token, `/requests/${session.id}/contact`); if (!contact.phone) throw new Error(c('noPhone')); await Linking.openURL(`tel:${encodeURIComponent(contact.phone)}`); })} /></View>
-        <View style={buddyStyles.grow}><ActionButton compact variant="secondary" label={toRequester ? c('routeTo', { name: name.split(' ')[0] }) : c('toShelter')} icon={<IconRoute size={18} color={colors.primary} />} loading={routeBusy} onPress={() => { void requestRoute(toRequester ? 'TO_REQUESTER' : 'TO_SHELTER'); }} /></View>
-      </View>}
-    </View>
+      {actions}
+    </View>}
+    {navigating && actions}
 
     {(session.supportNeeds.length > 0 || !!session.message) && <View style={{ gap: 10 }}>
       {session.supportNeeds.length > 0 && <View accessible accessibilityLabel={`${c('support')}: ${session.supportNeeds.map(support).join(', ')}`} style={[buddyStyles.row, { gap: 6, flexWrap: 'wrap' }]}>{session.supportNeeds.map(need => <StatusChip key={need} label={support(need)} />)}</View>}

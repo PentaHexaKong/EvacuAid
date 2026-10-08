@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Com
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox, { Camera, CircleLayer, FillLayer, LineLayer, LocationPuck, MapView, MarkerView, RasterDemSource, ShapeSource, StyleImport, Terrain } from '@rnmapbox/maps';
+import Mapbox, { Camera, CircleLayer, FillLayer, LineLayer, LocationPuck, MapView, MarkerView, RasterDemSource, ShapeSource, StyleImport, Terrain, UserTrackingMode } from '@rnmapbox/maps';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconCube from '@tabler/icons-react-native/IconCube';
 import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
@@ -28,6 +28,8 @@ const FRAME_SETTLE_MS = 150;
 
 const NO_PADDING = { paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0 };
 const PITCH_3D = 45;
+const FOLLOW_PITCH = 50;
+const FOLLOW_ZOOM = 17.5;
 const HAZARD_COLOR = ['match', ['get', 'hazard'], ...Object.entries(hazard).flat(), colors.caution] as NonNullable<ComponentProps<typeof FillLayer>['style']>['fillColor'];
 
 export function DiscoverMap(props: DiscoverMapProps) {
@@ -56,12 +58,14 @@ function useDrawProgress(route: DiscoverMapProps['route']) {
   return draw.route === route ? draw.value : 0;
 }
 
-function RouteLayers({ route }: { route: NonNullable<DiscoverMapProps['route']> }) {
+function RouteLayers({ route, walked = 0 }: { route: NonNullable<DiscoverMapProps['route']>; walked?: number }) {
   const progress = useDrawProgress(route);
+  // One trim range per line: the undrawn tail while the route draws in, then the stretch already walked.
+  const trim = progress < 1 ? [progress, 1] : [0, walked];
   const shape = useMemo(() => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: route } }), [route]);
   return <ShapeSource id="evacuation-route" lineMetrics shape={shape}>
-    <LineLayer id="evacuation-route-casing" style={{ lineColor: colors.surface, lineWidth: 10, lineCap: 'round', lineJoin: 'round', lineTrimOffset: [progress, 1] }} />
-    <LineLayer id="evacuation-route-line" aboveLayerID="evacuation-route-casing" style={{ lineWidth: 6, lineCap: 'round', lineJoin: 'round', lineGradient: ['interpolate', ['linear'], ['line-progress'], 0, colors.sky, 1, colors.primary], lineTrimOffset: [progress, 1] }} />
+    <LineLayer id="evacuation-route-casing" style={{ lineColor: colors.surface, lineWidth: 10, lineCap: 'round', lineJoin: 'round', lineTrimOffset: trim }} />
+    <LineLayer id="evacuation-route-line" aboveLayerID="evacuation-route-casing" style={{ lineWidth: 6, lineCap: 'round', lineJoin: 'round', lineGradient: ['interpolate', ['linear'], ['line-progress'], 0, colors.sky, 1, colors.primary], lineTrimOffset: trim }} />
   </ShapeSource>;
 }
 
@@ -103,8 +107,9 @@ function PersonPin({ item, onSelect }: { item: DiscoverMarker; onSelect: (id: st
   </Pressable>;
 }
 
-function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onToggleMode, userLocation, focus, onLocate, topInset, bottomInset, creditsInset, controlsStyle, onFail }: DiscoverMapProps & { onFail: () => void }) {
+function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onToggleMode, userLocation, focus, onLocate, topInset, bottomInset, creditsInset, controlsStyle, follow, onFollowChange, walked, onFail }: DiscoverMapProps & { onFail: () => void }) {
   const { t } = useTranslation();
+  const reduceMotion = useContext(SystemReduceMotionContext);
   const camera = useRef<Camera>(null);
   const safeArea = useSafeAreaInsets();
   const size = useWindowDimensions();
@@ -138,10 +143,13 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
     <MapView style={StyleSheet.absoluteFill} styleURL={styleUrl} onDidFinishLoadingStyle={() => setReady(true)} onDidFinishLoadingMap={() => setReady(true)} onMapLoadingError={onFail} scaleBarEnabled={false} pitchEnabled={tilted} logoPosition={{ ...ornament, left: 12 }} attributionPosition={{ ...ornament, left: 100 }} accessibilityLabel={t('discoverMapLabel')}>
       {styleUrl === DEFAULT_MAPBOX_STYLE_URL && <StyleImport id="basemap" existing config={{ lightPreset: 'day', theme: 'faded', show3dObjects: tilted, showPointOfInterestLabels: false, showTransitLabels: false }} />}
       {tilted && <RasterDemSource id="mapbox-dem" url="mapbox://mapbox.mapbox-terrain-dem-v1" tileSize={514}><Terrain style={{ exaggeration: 1.3 }} /></RasterDemSource>}
-      <Camera ref={camera} defaultSettings={{ centerCoordinate: [106.8095, -6.2675], zoomLevel: 12 }} {...(tilted && view ? boundsCenter(view, size.width) : { bounds: view ?? undefined })} pitch={tilted ? PITCH_3D : 0} padding={NO_PADDING} animationDuration={400} />
-      {userLocation && <LocationPuck puckBearingEnabled={false} pulsing={{ isEnabled: false }} />}
+      {follow === undefined
+        ? <Camera ref={camera} defaultSettings={{ centerCoordinate: [106.8095, -6.2675], zoomLevel: 12 }} {...(tilted && view ? boundsCenter(view, size.width) : { bounds: view ?? undefined })} pitch={tilted ? PITCH_3D : 0} padding={NO_PADDING} animationDuration={400} />
+        // Turn-by-turn: the camera rides with the walker. No follow padding: Mapbox keeps it on the camera after following ends, which throws off the route framing; the banner and the sheet leave the walker near the middle of the visible map anyway. Reduce Motion keeps the view flat and north-up.
+        : <Camera key="follow" ref={camera} followUserLocation={follow} followUserMode={reduceMotion ? UserTrackingMode.Follow : UserTrackingMode.FollowWithHeading} followZoomLevel={FOLLOW_ZOOM} followPitch={reduceMotion ? 0 : FOLLOW_PITCH} onUserTrackingModeChange={event => onFollowChange?.(event.nativeEvent.payload.followUserLocation)} animationDuration={400} />}
+      {userLocation && <LocationPuck puckBearingEnabled={Boolean(follow)} puckBearing="heading" pulsing={{ isEnabled: false }} />}
       {zones && zones.features.length > 0 && <ZoneLayers zones={zones} />}
-      {route && <RouteLayers route={route} />}
+      {route && <RouteLayers route={route} walked={follow === undefined ? 0 : walked} />}
       {tilted && <PinShadows items={items} />}
       {items.map(item => {
         const active = selected === item.id;
@@ -161,7 +169,7 @@ function NativeMap({ items, selected, onSelect, route, zones, mode = '2d', onTog
     <Animated.View pointerEvents="box-none" style={[styles.controls, controlsStyle]}>
       <MapControls controls={[
         ...(onToggleMode ? [tilted ? { label: t('showFlatMap'), symbol: 'map' as const, icon: IconMap, onPress: onToggleMode } : { label: t('show3dMap'), symbol: 'view.3d' as const, icon: IconCube, onPress: onToggleMode }] : []),
-        { label: t('centerOnMe'), symbol: 'location' as const, icon: IconCurrentLocation, onPress: () => (userLocation && !focus ? recenter() : onLocate()) },
+        { label: t('centerOnMe'), symbol: 'location' as const, icon: IconCurrentLocation, onPress: () => (follow !== undefined ? onFollowChange?.(true) : userLocation && !focus ? recenter() : onLocate()) },
       ]} />
     </Animated.View>
     {timedOut && !ready && <View style={[styles.notice, { top: topInset + 68 }]}><AppText accessibilityRole="alert" variant="small">{t('discoverMapUnavailable')}</AppText></View>}

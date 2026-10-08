@@ -52,7 +52,8 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
     <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
   </Card>;
-  if (inSession && active && native.location) return <>{bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;
+  // While navigating, the turn banner takes the top of the screen, so the bar's title and buttons step aside.
+  if (inSession && active && native.location) return <>{!a.navigating && bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;
   return <Page keyboard>
     {bar}
     {banner}

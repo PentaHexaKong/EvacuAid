@@ -267,3 +267,58 @@ declare module '@tabler/icons-react-native/IconRoute' {
   const Icon: typeof import('@tabler/icons-react-native').IconRoute;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconArrowBackUp' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowBackUp;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowBearLeft' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowBearLeft;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowBearRight' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowBearRight;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowSharpTurnLeft' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowSharpTurnLeft;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowSharpTurnRight' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowSharpTurnRight;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconArrowUp' {
+  const Icon: typeof import('@tabler/icons-react-native').IconArrowUp;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCornerUpLeft' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCornerUpLeft;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCornerUpRight' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCornerUpRight;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconMapPinCheck' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMapPinCheck;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconRotateClockwise' {
+  const Icon: typeof import('@tabler/icons-react-native').IconRotateClockwise;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconStairs' {
+  const Icon: typeof import('@tabler/icons-react-native').IconStairs;
+  export default Icon;
+}
