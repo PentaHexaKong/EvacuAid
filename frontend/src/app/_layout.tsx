@@ -58,7 +58,7 @@ function FirstRunGate() {
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (preferences.completed && session.status !== 'ready') {
-    if (session.status === 'error' || session.status === 'signedOut') return <GuestSessionError />;
+    if (session.status === 'error') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
   return preferences.completed ? <Navigation /> : <SetupScreen onDone={target => setReturnTo(target ?? '/')} />;

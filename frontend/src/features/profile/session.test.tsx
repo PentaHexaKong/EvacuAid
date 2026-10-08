@@ -74,3 +74,22 @@ test('a user can explicitly replace a rejected token with a new guest', async ()
   expect(result.current.status).toBe('ready');
   expect(result.current.token).toBe('new-token');
 });
+
+test('deleting the profile leaves the session idle, so the next ensureGuest creates a new guest instead of an error', async () => {
+  jest.mocked(apiRequest)
+    .mockResolvedValueOnce({ access_token: 'first-token', user: profile })
+    .mockResolvedValueOnce(undefined)
+    .mockResolvedValueOnce({ access_token: 'second-token', user: { ...profile, id: 'guest-2' } });
+  const { result } = renderHook(useGuestSession, { wrapper });
+  await act(async () => result.current.ensureGuest());
+
+  await act(async () => result.current.deleteGuest());
+  expect(apiRequest).toHaveBeenCalledWith('/v1/guest-sessions/current', 'first-token', { method: 'DELETE' });
+  expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(GUEST_TOKEN_KEY);
+  expect(result.current.status).toBe('idle');
+  expect(result.current.token).toBeNull();
+
+  await act(async () => result.current.ensureGuest());
+  expect(result.current.status).toBe('ready');
+  expect(result.current.token).toBe('second-token');
+});

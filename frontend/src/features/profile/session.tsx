@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { apiRequest, type ApiError, type UserProfile } from './api';
 
 export const GUEST_TOKEN_KEY = 'evacuaid.guest-token.v1';
-type SessionStatus = 'idle' | 'loading' | 'ready' | 'error' | 'signedOut';
+type SessionStatus = 'idle' | 'loading' | 'ready' | 'error';
 type SessionContextValue = {
   token: string | null;
   user: UserProfile | null;
@@ -79,7 +79,8 @@ export function GuestSessionProvider({ children }: { children: ReactNode }) {
     await SecureStore.deleteItemAsync(GUEST_TOKEN_KEY);
     setToken(null);
     setUser(null);
-    setStatus('signedOut');
+    // Idle, not an error: finishing onboarding again creates the next guest profile.
+    setStatus('idle');
   };
 
   const startNewGuest = async () => {

@@ -100,8 +100,9 @@ export function ProfileScreen() {
       pending.current = true;
       setBusy(true);
       try {
-        await session.deleteGuest();
+        // Onboarding first, so the gate shows setup rather than a missing session while the delete runs.
         await resetOnboarding();
+        await session.deleteGuest();
       } catch { Alert.alert(t('deleteProfileError')); }
       finally { pending.current = false; setBusy(false); }
     })() },
