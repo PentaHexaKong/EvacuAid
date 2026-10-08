@@ -284,7 +284,7 @@ test('the voice Home leads with Speak and three spoken-word actions, and leaves 
   mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
   try {
     const view = render(<OverviewScreen />);
-    expect(view.getByRole('button', { name: 'Speak' })).toHaveProp('accessibilityHint', 'Then say what you need. A two-finger double-tap anywhere on this screen does the same.');
+    expect(view.getByRole('button', { name: 'Speak' })).toHaveProp('accessibilityHint', 'Then say what you need. A two-finger double-tap anywhere on this screen does the same. Say “read the alert”, “nearest gathering point” or “help me”.');
     expect(view.getByText('Read the alert aloud')).toBeTruthy();
     expect(view.getByText('Aula Kelurahan · 250 m')).toBeTruthy();
     expect(view.getByText('Ask for help')).toBeTruthy();
@@ -295,6 +295,17 @@ test('the voice Home leads with Speak and three spoken-word actions, and leaves 
     fireEvent.press(view.getByRole('button', { name: 'Speak' }));
     expect(mockStartListening).toHaveBeenCalledTimes(1);
   } finally { mockShelters = null; }
+});
+
+test.each(['id', 'en'])('the Speak hint includes command examples without reading the visible line twice (%s)', language => {
+  mockLanguage = language;
+  mockVoiceHome = true;
+  const copy = jest.requireActual(`../localization/${language}.json`);
+  const view = render(<OverviewScreen />);
+  expect(view.getByRole('button', { name: copy.voiceSpeak })).toHaveProp('accessibilityHint', `${copy.voiceHint} ${copy.voiceExamples}`);
+  expect(view.queryByText(copy.voiceExamples)).toBeNull();
+  expect(view.getByText(copy.voiceExamples, { includeHiddenElements: true })).toHaveProp('accessibilityElementsHidden', true);
+  expect(view.getByText(copy.voiceExamples, { includeHiddenElements: true })).toHaveProp('importantForAccessibility', 'no-hide-descendants');
 });
 
 test('the voice Home stops listening from the same button and starts from a Magic Tap anywhere', () => {

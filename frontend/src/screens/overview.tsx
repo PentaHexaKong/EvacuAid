@@ -154,7 +154,7 @@ export function OverviewScreen() {
         </View>
         {voiceHome
           ? access.listen && <View style={{ gap: 12 }}>
-            <SpeakButton listening={voice.listening} label={t(voice.listening ? 'voiceListening' : 'voiceSpeak')} detail={t(voice.listening ? 'voiceListeningDetail' : 'voiceSpeakDetail')} hint={t('voiceHint')} onPress={voice.toggle} />
+            <SpeakButton listening={voice.listening} label={t(voice.listening ? 'voiceListening' : 'voiceSpeak')} detail={t(voice.listening ? 'voiceListeningDetail' : 'voiceSpeakDetail')} hint={`${t('voiceHint')} ${t('voiceExamples')}`} onPress={voice.toggle} />
             {/* Visible examples for low vision; VoiceOver already hears them through the button's hint. A failure is shown here as well as spoken, for people who see the screen but did not hear it. */}
             {voice.failed
               ? <AppText accessibilityRole="alert" style={{ color: ink }}>{t('voiceUnavailable')}</AppText>
