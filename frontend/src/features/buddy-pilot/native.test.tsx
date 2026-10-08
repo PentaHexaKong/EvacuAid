@@ -127,3 +127,27 @@ test('inbox notifications fire once per new incoming item and never for history'
   expect(schedule).toHaveBeenCalledTimes(1);
   expect(schedule).toHaveBeenCalledWith({ content: { title: 'title:OFFER', body: 'EvacuAid Buddy', data: { requestId: 'r1' } }, trigger: null });
 });
+
+
+test('cancelling speech aborts only recognition owned by this hook and ignores late results', async () => {
+  const onCommand = jest.fn();
+  const { handlers, result } = speechHarness(onCommand);
+  const { ExpoSpeechRecognitionModule } = jest.requireMock('expo-speech-recognition');
+  act(() => result.current.cancelListening());
+  expect(ExpoSpeechRecognitionModule.abort).not.toHaveBeenCalled();
+  await act(async () => result.current.startListening());
+  act(() => handlers.start({}));
+  expect(result.current.listening).toBe(true);
+  act(() => result.current.cancelListening());
+  expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
+  expect(result.current.listening).toBe(false);
+  act(() => {
+    handlers.result({ isFinal: true, results: [{ transcript: 'tolong' }] });
+    handlers.error({ error: 'aborted' });
+    handlers.end({});
+    result.current.cancelListening();
+  });
+  expect(onCommand).not.toHaveBeenCalled();
+  expect(result.current.error).toBeNull();
+  expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
+});

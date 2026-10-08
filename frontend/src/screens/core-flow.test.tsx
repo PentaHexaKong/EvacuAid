@@ -24,7 +24,7 @@ let mockShelters: { name: string; distanceM: number }[] | null = null;
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: mockShelters }) }));
 jest.mock('expo-router', () => {
   const Toolbar = Object.assign(({ children }: { children: React.ReactNode }) => children, { View: ({ children }: { children: React.ReactNode }) => children });
-  return { useRouter: () => mockRouter, Stack: { Toolbar } };
+  return { useRouter: () => mockRouter, useIsFocused: () => mockFocused, Stack: { Toolbar } };
 });
 jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 100 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
@@ -266,12 +266,14 @@ let mockVoiceHome = false;
 let mockListen = true;
 let mockSoundFree = false;
 let mockListening = false;
+let mockFocused = true;
 let mockOnCommand: (transcript: string) => void = () => {};
 const mockStartListening = jest.fn(() => Promise.resolve());
 const mockStopListening = jest.fn();
-jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (transcript: string) => void }) => { mockOnCommand = onCommand; return { listening: mockListening, error: mockVoiceError, startListening: mockStartListening, stopListening: mockStopListening }; } }));
+const mockCancelListening = jest.fn();
+jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (transcript: string) => void }) => { mockOnCommand = onCommand; return { listening: mockListening, error: mockVoiceError, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockCancelListening }; } }));
 let mockVoiceError: string | null = null;
-beforeEach(() => { mockVoiceHome = false; mockListen = true; mockSoundFree = false; mockListening = false; mockVoiceError = null; });
+beforeEach(() => { mockVoiceHome = false; mockListen = true; mockSoundFree = false; mockListening = false; mockFocused = true; mockVoiceError = null; });
 
 test('the voice Home leads with Speak and three spoken-word actions, and leaves the map wording to everyone else', () => {
   const standard = render(<OverviewScreen />);
@@ -362,4 +364,32 @@ test.each([false, true])('the voice Home stays silent without listening, includi
   act(() => { mockOnCommand('read the alert'); mockOnCommand('what time is it'); });
   expect(mockStartListening).not.toHaveBeenCalled();
   expect(speak).not.toHaveBeenCalled();
+});
+
+
+test('the voice Home ignores speech commands while unfocused and resumes on return', () => {
+  mockVoiceHome = true;
+  const view = render(<OverviewScreen />);
+  mockFocused = false;
+  view.rerender(<OverviewScreen />);
+  act(() => { mockOnCommand('read the alert'); mockOnCommand('nearest gathering point'); mockOnCommand('help me'); mockOnCommand('what time is it'); });
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  expect(speak).not.toHaveBeenCalled();
+  mockFocused = true;
+  view.rerender(<OverviewScreen />);
+  act(() => mockOnCommand('help me'));
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+});
+
+test('leaving the voice Home while listening cancels recognition without stopping it', () => {
+  mockVoiceHome = true;
+  mockListening = true;
+  const view = render(<OverviewScreen />);
+  expect(mockCancelListening).not.toHaveBeenCalled();
+  mockFocused = false;
+  view.rerender(<OverviewScreen />);
+  expect(mockCancelListening).toHaveBeenCalledTimes(1);
+  expect(mockStopListening).not.toHaveBeenCalled();
+  act(() => mockOnCommand('help me'));
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
 });

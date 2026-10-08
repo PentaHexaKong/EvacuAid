@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import IconArrowRight from '@tabler/icons-react-native/IconArrowRight';
@@ -72,22 +72,24 @@ function RouteAction({ level, ink, tint, onRoute }: { level: AlertLevel; ink: st
 
 // Voice-first Home (visual need): spoken commands and the three rows below Speak run the same actions.
 function useVoiceHome(readText: string, nearest: RefObject<string | null>, listen: boolean) {
+  const focused = useIsFocused();
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const haptics = useHaptics();
-  const say = (text: string) => { if (!listen) return; void speak(text, i18n.language).catch(() => {}); };
+  const say = (text: string) => { if (!listen || !focused) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
     else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/discover'); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
   const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
-    if (!listen) return;
+    if (!listen || !focused) return;
     const command = homeCommand(transcript);
     if (command) run(command); else say(t('voiceUnknown'));
   } });
+  useEffect(() => { if (!focused && voice.listening) voice.cancelListening(); }, [focused, voice.listening, voice.cancelListening]);
   useEffect(() => { if (voice.error) say(t('voiceUnavailable')); }, [voice.error]); // eslint-disable-line react-hooks/exhaustive-deps
-  const toggle = () => { if (!listen) return; haptics.tap(); if (voice.listening) voice.stopListening(); else void voice.startListening(); };
+  const toggle = () => { if (!listen || !focused) return; haptics.tap(); if (voice.listening) voice.stopListening(); else void voice.startListening(); };
   return { listening: voice.listening, failed: Boolean(voice.error), toggle, run };
 }
 

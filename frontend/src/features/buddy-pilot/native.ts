@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -184,9 +184,10 @@ export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en';
       ExpoSpeechRecognitionModule.start({ lang: language === 'id' ? 'id-ID' : 'en-US', interimResults: false, continuous: false });
     } catch (cause) { mine.current = false; setError(cause instanceof Error ? cause.message : 'Speech recognition unavailable.'); }
   };
+  const cancelListening = useCallback(() => { if (!mine.current) return; mine.current = false; setListening(false); ExpoSpeechRecognitionModule.abort(); }, []);
   const speak = (text: string) => speakAloud(text, language);
   useEffect(() => () => { if (mine.current) ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
-  return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), speak };
+  return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), cancelListening, speak };
 }
 
 // Local notifications stand in for push on builds that can't receive it: they show while the app runs or is backgrounded.
