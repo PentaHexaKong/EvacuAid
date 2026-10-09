@@ -63,3 +63,11 @@ test.each([true, false])('40 metres before a turn it is announced once with a ta
   move(0.0009, 0.001); move(0.00095, 0.001);
   expect(mockNotify).toHaveBeenCalledTimes(1);
 });
+
+test('the walk to a person keeps its turns when their location stops updating', () => {
+  const toPerson: BuddyRoute = { ...route, leg: 'TO_REQUESTER' };
+  const view = renderHook(() => useRouteGuidance({ route: toPerson, position: fix(0, 0.0005), target: null, language: 'en', reroute: jest.fn(), speak: jest.fn(), voiceEnabled: false, haptics: false, cue, onInstruction: jest.fn() }));
+  act(() => { jest.advanceTimersByTime(1); });
+  expect(view.result.current.progress).not.toBeNull();
+  expect(view.result.current.next?.type).toBe(15);
+});

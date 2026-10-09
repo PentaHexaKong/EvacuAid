@@ -16,14 +16,15 @@ export function useRouteGuidance({ route, position, target, language, reroute, s
   const previous = useRef<{ route: BuddyRoute | null; segment: number }>({ route, segment: 0 });
   useEffect(() => {
     const update = () => {
-      const next = position && route?.route && (route.leg !== 'TO_REQUESTER' || target) ? routeProgress(position, route.route.geometry.coordinates, route.route.maneuvers, Date.now(), previous.current.route === route ? previous.current.segment : 0) : null;
+      // A route to a person stays usable when their location stops updating: it still leads to where they last were.
+      const next = position && route?.route ? routeProgress(position, route.route.geometry.coordinates, route.route.maneuvers, Date.now(), previous.current.route === route ? previous.current.segment : 0) : null;
       if (next) previous.current = { route, segment: next.segmentIndex };
       setProgress(next);
     };
     const initial = setTimeout(update, 0);
     const timer = setInterval(update, 5000);
     return () => { clearTimeout(initial); clearInterval(timer); };
-  }, [route, position, target]);
+  }, [route, position]);
 
   const path = route?.route ?? null;
   const maneuver = progress && path ? path.maneuvers[progress.maneuverIndex] ?? null : null;
