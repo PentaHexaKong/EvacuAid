@@ -14,6 +14,7 @@ from app.services import pilotService as service
 async def tick():
     async with SessionLocal() as db:
         await service.expire(db)
+        await alertService.cleanup(db)
         await alertService.enqueueAlerts(db)
         invites = (await db.execute(select(PilotInvitation).where(PilotInvitation.status.in_(('PENDING', 'REDEEMED')), PilotInvitation.expires_at <= service.now()).with_for_update(skip_locked=True))).scalars()
         for row in invites:
@@ -28,6 +29,11 @@ async def tick():
             for row in rows:
                 inbox = await db.get(PilotInbox, row.inbox_id)
                 tokens = (await db.execute(select(PilotPushToken).where(PilotPushToken.user_id == inbox.user_id))).scalars().all()
+                if inbox.kind == 'ALERT':
+                    alert = await alertService.activeAlert(db, inbox.payload.get('alertId'), ('SIAGA', 'AWAS'))
+                    if alert is None or (not tokens and inbox.created_at < service.now() - timedelta(hours=2)):
+                        row.sent_at = service.now()
+                        continue
                 if not tokens:
                     row.next_at = service.now() + timedelta(seconds=30)
                     continue
