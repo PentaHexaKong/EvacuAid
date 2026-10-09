@@ -133,7 +133,7 @@ export function BuddiesView({ a, userId, buddyCode }: { a: BuddyActions; userId:
         })}</Group>
         : <AppText style={{ color: colors.muted }}>{c('inboxEmpty')}</AppText>}
     </View>
-    {buddyCode && <CodeRow a={a} code={buddyCode} />}
+    {buddyCode && <CodeRow a={a} code={buddyCode} needs />}
   </View>;
 }
 

@@ -19,7 +19,7 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
 
   // With no friends yet the empty state offers Add Buddy too; either one opens the sheet.
   await screen.getByRole('button', 'Add Buddy').first().tap();
-  await expect(screen.getByText('Your Buddy code')).toBeVisible();
+  await expect(screen.getByText('Your code')).toBeVisible();
   await screen.getByRole('textbox', 'Invitation code').fill('ZZZZ-ZZZZ');
   // The keyboard covers the Send button in the sheet, so submit from the keyboard as a user would.
   await screen.getByRole('textbox', 'Invitation code').press('Enter');
@@ -46,7 +46,7 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
   if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
   await screen.getByRole('tab', 'Buddy').tap();
-  const { code } = await agent.extract('the Buddy code shown under "Your Buddy code", in the form XXXX-XXXX', { schema: z.object({ code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/) }) });
+  const { code } = await agent.extract('the Buddy code shown under "Your code", in the form XXXX-XXXX', { schema: z.object({ code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/) }) });
 
   const guest = await (await fetch(`${API}/v1/guest-sessions`, { method: 'POST' })).json();
   const friend: string = guest.access_token;

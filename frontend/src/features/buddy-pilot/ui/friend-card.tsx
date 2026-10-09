@@ -70,9 +70,9 @@ export function ReceivedInvites({ a }: { a: BuddyActions }) {
 }
 
 // The person's own permanent code, with a share button. Whoever enters it sends them an invitation.
-export function CodeRow({ a, code }: { a: BuddyActions; code: string }) {
+export function CodeRow({ a, code, needs }: { a: BuddyActions; code: string; needs?: boolean }) {
   const { c, catchNative } = a;
-  const share = () => catchNative(() => Share.share({ message: c('shareMessage', { code }) }));
+  const share = () => catchNative(() => Share.share({ message: c(needs ? 'shareMessageNeeds' : 'shareMessage', { code }) }));
   return <View style={styles.codeRow}>
     <View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{c('yourCode')}</AppText><AppText selectable style={styles.code}>{code}</AppText></View>
     <Pressable accessibilityRole="button" accessibilityLabel={c('shareCode')} style={styles.icon} onPress={share}><IconShare size={22} color={colors.ink} /></Pressable>

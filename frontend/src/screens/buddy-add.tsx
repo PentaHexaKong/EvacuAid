@@ -8,6 +8,7 @@ import { ActionButton, AppText, Field } from '@/components/ui';
 import { ValueMenu } from '@/components/native-controls';
 import { colors, corner, radius } from '@/theme';
 import { useGuestSession } from '@/features/profile/session';
+import { useProfile } from '@/features/profile/context';
 import { buddyRequest, type Relation } from '@/features/buddy-pilot/api';
 import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
 import { useBuddyCode } from '@/features/buddy-pilot/use-buddy-pilot';
@@ -30,12 +31,13 @@ export function BuddyAddScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ code?: string }>();
   const own = useBuddyCode(token);
+  const needs = useProfile().accessibility.length > 0;
   const [code, setCode] = useState(() => formatCode(params.code ?? ''));
   const [relation, setRelation] = useState<Relation>('KELUARGA');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
-  const share = () => { if (own) void Share.share({ message: c('shareMessage', { code: own }) }).catch(cause => setError(readableIssue(cause instanceof Error ? cause.message : c('requestFailed'), c))); };
+  const share = () => { if (own) void Share.share({ message: c(needs ? 'shareMessageNeeds' : 'shareMessage', { code: own }) }).catch(cause => setError(readableIssue(cause instanceof Error ? cause.message : c('requestFailed'), c))); };
   const direct = BUDDY_CODE.test(code);
   const ready = direct || code.length >= 12;
   const submit = async () => {
@@ -57,7 +59,7 @@ export function BuddyAddScreen() {
     <View style={styles.codeBlock}>
       <AppText variant="eyebrow" style={{ color: colors.muted }}>{c('yourCode')}</AppText>
       <View style={styles.figure}>{own ? <AppText variant="figure" selectable numberOfLines={1} adjustsFontSizeToFit style={styles.code}>{own}</AppText> : <ActivityIndicator accessibilityLabel={c('checking')} color={colors.primary} />}</View>
-      <AppText variant="small" style={{ color: colors.muted }}>{c('yourCodeHint')}</AppText>
+      <AppText variant="small" style={{ color: colors.muted }}>{c(needs ? 'yourCodeHintNeeds' : 'yourCodeHint')}</AppText>
       <ActionButton compact variant="secondary" label={c('shareCode')} disabled={!own} onPress={share} />
     </View>
     <View style={styles.field}>

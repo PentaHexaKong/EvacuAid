@@ -4,6 +4,8 @@ import { BuddyAddScreen } from './buddy-add';
 const mockRequest = jest.fn();
 const mockBack = jest.fn();
 let mockParams: { code?: string } = {};
+let mockNeeds: { type: string }[] = [];
+jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockNeeds }) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }), useLocalSearchParams: () => mockParams }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'private' }) }));
@@ -11,7 +13,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockRequest(...args) }));
 
 beforeEach(() => {
-  jest.clearAllMocks(); mockParams = {};
+  jest.clearAllMocks(); mockParams = {}; mockNeeds = [];
   mockRequest.mockImplementation((_token: string, path: string) => Promise.resolve(path === '/me/code' ? { code: 'ABCD-1234' } : { id: 'invite' }));
 });
 
@@ -63,4 +65,16 @@ test('a one-time invitation code from a shared link is redeemed as typed', async
   fireEvent.press(view.getByRole('button', { name: 'Send invitation' }));
   await waitFor(() => expect(mockRequest).toHaveBeenCalledWith('private', '/invitations/redeem', 'POST', { code: 'aB3_dE-6gH9kLmNo' }));
   expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+test('the code block explains the code for each role', async () => {
+  const helper = render(<BuddyAddScreen />);
+  expect(helper.getByText('Your code')).toBeTruthy();
+  expect(helper.getByText('People you want to help can enter this code.')).toBeTruthy();
+  await act(async () => {});
+  helper.unmount();
+  mockNeeds = [{ type: 'VISUAL_IMPAIRMENT' }];
+  const requester = render(<BuddyAddScreen />);
+  expect(requester.getByText('Share it with someone you trust so they can become your Buddy.')).toBeTruthy();
+  await act(async () => {});
 });
