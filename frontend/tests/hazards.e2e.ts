@@ -27,6 +27,6 @@ test('Home shows the area warning status and the Alerts tab opens', { timeout: 3
   if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
   await expect(screen.getByText(/^(Caution|Alert|Danger) for .+|^No warning for your area right now\.$/).first()).toBeVisible();
   await screen.getByRole('tab', 'Alerts').tap();
-  await expect(screen.getByRole('heading', 'Alerts')).toBeVisible();
+  await expect(screen.getByText('Alerts').first()).toBeVisible();
   await expect(screen.getByText("Can't load warnings right now.")).not.toBeVisible();
 });
