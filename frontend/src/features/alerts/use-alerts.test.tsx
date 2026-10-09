@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 import { fetchAlerts } from './api';
-import { findAlert, useAlerts } from './use-alerts';
+import { findAlert, resetAlerts, useAlerts } from './use-alerts';
 import { alertItems } from './test-fixtures';
 
 let mockToken = 'guest-0';
@@ -70,4 +70,16 @@ test('focus refreshes the shared feed', async () => {
   mockFocused = true;
   view.rerender({});
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+});
+test('a location change drops the old area and its in-flight response, and a failed refetch is an error, not stale', async () => {
+  const { result } = renderHook(useAlerts);
+  await waitFor(() => expect(result.current.status).toBe('ready'));
+  let finishOld: (value: typeof good) => void = () => {};
+  fetchMock.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }));
+  await act(async () => { void result.current.reload(); });
+  fetchMock.mockRejectedValueOnce(new Error('offline'));
+  await act(async () => { await resetAlerts(); });
+  await act(async () => { finishOld(good); });
+  expect(result.current.status).toBe('error');
+  expect(result.current.items).toEqual([]);
 });

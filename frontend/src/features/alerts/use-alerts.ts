@@ -8,6 +8,8 @@ type State = { status: 'loading' | 'ready' | 'no-location' | 'error'; items: Ale
 let state: State = { status: 'loading', items: [], updatedAt: null, stale: false };
 let currentToken: string | null = null;
 let pending: Promise<void> | null = null;
+// Bumped when the saved location changes, so a response for the old area is dropped.
+let generation = 0;
 const listeners = new Set<(value: State) => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let subscription: ReturnType<typeof AppState.addEventListener> | null = null;
@@ -16,18 +18,25 @@ const publish = (value: State) => { state = value; listeners.forEach(listener =>
 export const findAlert = (id: string | undefined) => state.items.find(item => item.id === id);
 async function load(token: string) {
   if (pending) return pending;
+  const started = generation;
   const request = (async () => {
     try {
       const response = await fetchAlerts(token);
-      if (currentToken !== token) return;
+      if (currentToken !== token || generation !== started) return;
       if (response.status === 'no-location') publish({ status: 'no-location', items: [], updatedAt: null, stale: false });
       else publish({ status: 'ready', items: response.data.items, updatedAt: Date.now(), stale: false });
     } catch {
-      if (currentToken === token) publish({ ...state, status: state.updatedAt === null ? 'error' : 'ready', stale: state.updatedAt !== null });
+      if (currentToken === token && generation === started) publish({ ...state, status: state.updatedAt === null ? 'error' : 'ready', stale: state.updatedAt !== null });
     }
   })();
   pending = request;
   try { await request; } finally { if (pending === request) pending = null; }
+}
+export async function resetAlerts() {
+  generation += 1;
+  pending = null;
+  publish({ status: 'loading', items: [], updatedAt: null, stale: false });
+  if (currentToken) await load(currentToken);
 }
 const poll = () => { if (foreground && currentToken) void load(currentToken); };
 function startTimer() {

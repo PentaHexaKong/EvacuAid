@@ -21,7 +21,7 @@ test('ties choose newest issued time with null last; empty has no top alert', ()
 test('mapper falls back for unknown hazard, null area and null times', () => {
   const view = mapAlert({ ...alertItems[0], hazardType: 'UNKNOWN', area: null, issuedAt: null, validUntil: null }, t);
   expect(view).toMatchObject({ title: 'alertHazardOther', area: 'Your area', issued: null, window: null });
-  expect(view.body).toBe('BMKG issued a Alert warning for Hazard in Your area.');
+  expect(view.body).toBe('Official warning for hazard in your area. Level: Alert.');
   expect(view.steps).toEqual(['alertStepSiaga1', 'alertStepSiaga2', 'alertStepSiaga3']);
 });
 test('mapper renders source, coordinates, WIB issue and expiry', () => {
