@@ -89,6 +89,9 @@ class NavigationDestination(BaseModel):
     name: str
     latitude: float
     longitude: float
+    entranceNote: str | None = None
+    entranceLatitude: float | None = None
+    entranceLongitude: float | None = None
 
 
 class NavigationRoute(BaseModel):

@@ -22,12 +22,30 @@ class SafeHouseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    entranceLatitude: float | None = Field(default=None, ge=-90, le=90)
+    entranceLongitude: float | None = Field(default=None, ge=-180, le=180)
+    entranceNote: str | None = Field(default=None, max_length=200)
     address: str | None = Field(default=None, max_length=500)
     status: ShelterStatus = ShelterStatus.UNKNOWN
     capacity: int | None = Field(default=None, ge=0, le=1000000, strict=True)
     currentOccupancy: int | None = Field(default=None, ge=0, le=1000000, strict=True)
     wheelchairAccessible: bool | None = None
     verifiedNow: bool = False
+
+    @field_validator('entranceNote')
+    @classmethod
+    def cleanEntranceNote(cls, value):
+        if value is not None:
+            if any(character in value for character in ('\n', '\r', '\v', '\f', '\x85', '\u2028', '\u2029')):
+                raise ValueError('Entrance note must not contain newlines')
+            return value.strip()
+        return value
+
+    @model_validator(mode='after')
+    def entrancePair(self):
+        if (self.entranceLatitude is None) != (self.entranceLongitude is None):
+            raise ValueError('Entrance coordinates must both be present or both null')
+        return self
 
     @field_validator('name')
     @classmethod
