@@ -21,6 +21,7 @@ test('invitation input formats typed and prefilled codes', async () => {
   mockParams = { code: 'abcd5678' };
   const view = render(<BuddyAddScreen />);
   expect(view.getByLabelText('Invitation code')).toHaveProp('value', 'ABCD-5678');
+  expect(view.getByText('This code came from a link. Send it only if you know the person who shared it.')).toBeTruthy();
   fireEvent.changeText(view.getByLabelText('Invitation code'), 'k7q2m9xd');
   expect(view.getByLabelText('Invitation code')).toHaveProp('value', 'K7Q2-M9XD');
   await act(async () => {});
@@ -77,4 +78,13 @@ test('the code block explains the code for each role', async () => {
   const requester = render(<BuddyAddScreen />);
   expect(requester.getByText('Share it with someone you trust so they can become your Buddy.')).toBeTruthy();
   await act(async () => {});
+});
+
+test('a person with support needs asks the code owner to be their Buddy', async () => {
+  mockNeeds = [{ type: 'VISUAL_IMPAIRMENT' }];
+  const view = render(<BuddyAddScreen />);
+  expect(view.getByText('Enter the code of someone you trust. They have to accept first.')).toBeTruthy();
+  fireEvent.changeText(view.getByLabelText('Invitation code'), 'k7q2m9xd');
+  fireEvent.press(view.getByRole('button', { name: 'Send invitation' }));
+  await waitFor(() => expect(mockRequest).toHaveBeenCalledWith('private', '/invitations/direct', 'POST', { code: 'K7Q2-M9XD', relation: 'KELUARGA', direction: 'SEEK_HELP' }));
 });

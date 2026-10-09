@@ -58,25 +58,24 @@ jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyCode: jest.
 
 beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
 
-test('empty Buddy state offers real invitation and nearby actions without sample people', () => {
+test('a person with no Buddy can search nearby, add a Buddy or call 112, with no helper controls', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  mockRun.mockResolvedValueOnce({ id: 'new-request' });
   const view = render(<BuddyPilotScreen />);
-  expect(view.getByText('No Buddies yet')).toBeTruthy();
-  expect(view.getByText('Share an invitation with someone you trust.')).toBeTruthy();
-  expect(view.getAllByRole('button', { name: 'Create invitation' })).toHaveLength(1);
-  expect(view.getByRole('button', { name: 'Create invitation' })).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Find nearby helpers' })).toBeTruthy();
-  expect(view.queryByText('Raka Pratama')).toBeNull();
+  expect(view.getByText('You have no Buddy yet. Look for a helper nearby, or add someone you trust.')).toBeTruthy();
+  expect(view.getByRole('link', { name: 'Call 112' })).toBeTruthy();
+  expect(view.queryByRole('switch')).toBeNull();
+  expect(view.queryByRole('tab')).toBeNull();
+  expect(view.queryByLabelText('Invitation code')).toBeNull();
+  fireEvent.press(view.getAllByRole('button', { name: 'Add Buddy' })[1]);
+  expect(mockPush).toHaveBeenCalledWith('/buddy-add');
+  fireEvent.press(view.getByRole('button', { name: 'Find help nearby' }));
   expect(mockRun).not.toHaveBeenCalled();
-});
-
-test('helper acceptance requires consent and submits the current offer identity', () => {
-  mockSession = { id: 'session-1', requesterUserId: 'requester', helperUserId: null, requesterName: 'Test requester', helperName: null, status: 'WAITING', message: 'Please meet at the entrance', supportNeeds: [], attempts: [{ id: 'offer-1', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
-  const view = render(<BuddyPilotScreen />);
-  expect(view.getByRole('button', { name: 'Accept and help' })).toBeDisabled();
-  expect(mockRun).not.toHaveBeenCalled();
-  fireEvent.press(view.getByRole('checkbox', { name: 'Share my precise location with my assigned partner during the accepted session.' }));
-  fireEvent.press(view.getByRole('button', { name: 'Accept and help' }));
-  expect(mockRun).toHaveBeenCalledWith('/requests/session-1/accept', { attemptId: 'offer-1', sharingConsent: true });
+  expect(alert).toHaveBeenCalledWith('Find help nearby?', 'We look for registered helpers near you. Your precise location is shared only after someone accepts.', expect.any(Array));
+  alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests/new-request/nearby', expect.objectContaining({ latitude: -6.2 })));
+  expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: null, sharingConsent: true }));
+  alert.mockRestore();
 });
 
 
@@ -92,21 +91,13 @@ test('spoken help uses the primary contact only after explicit confirmation', ()
   render(<BuddyPilotScreen />);
   mockCommand('help');
   expect(mockRun).not.toHaveBeenCalled();
-  expect(alert).toHaveBeenCalledWith('Send request', 'Share my precise location with my assigned partner during the accepted session.', expect.any(Array));
+  expect(alert).toHaveBeenCalledWith('Ask Trusted person for help?', 'Your location is shared with Trusted person during this session. You can stop it any time.', expect.any(Array));
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
   expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'primary-helper', sharingConsent: true }));
   alert.mockRestore();
 });
 
 
-test('a new invitation link updates the code on an already mounted Buddy screen', () => {
-  mockParams = { code: 'first-invite' };
-  const view = render(<BuddyPilotScreen />);
-  expect(view.getByPlaceholderText('Invitation code')).toHaveProp('value', 'first-invite');
-  mockParams = { code: 'next-invite' };
-  view.rerender(<BuddyPilotScreen />);
-  expect(view.getByPlaceholderText('Invitation code')).toHaveProp('value', 'next-invite');
-});
 
 test('a delayed availability refresh rejected after opt-out reloads state instead of showing an error', async () => {
   jest.useFakeTimers();
@@ -134,26 +125,6 @@ test('the requester sees the partner labelled by their role, and no empty name w
   expect(view.queryByText('Requester')).toBeNull();
 });
 
-test('the segmented control switches between My Buddies and Nearby, and the dev simulator is dev-only', () => {
-  const view = render(<BuddyPilotScreen />);
-  expect(view.getByRole('button', { name: 'Create invitation' })).toBeTruthy();
-  fireEvent.press(view.getByRole('tab', { name: 'Nearby' }));
-  expect(view.getByRole('switch', { name: 'I am available to help' })).toBeTruthy();
-  expect(view.getByText('No nearby requests yet')).toBeTruthy();
-  expect(view.getByText('Turn on “I am available to help” to receive requests from people near you.')).toBeTruthy();
-  mockAvailability = { optedIn: true, enrolled: true };
-  view.rerender(<BuddyPilotScreen />);
-  expect(view.getByText('When there is an emergency nearby and someone needs a Buddy, their request appears here.')).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Simulate GPS alert request' })).toBeTruthy();
-  view.unmount();
-  const previous = __DEV__;
-  try {
-    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
-    const release = render(<BuddyPilotScreen />);
-    fireEvent.press(release.getByRole('tab', { name: 'Nearby' }));
-    expect(release.queryByRole('button', { name: 'Simulate GPS alert request' })).toBeNull();
-  } finally { (globalThis as unknown as { __DEV__: boolean }).__DEV__ = previous; }
-});
 
 test('a redeemed invitation shows as a friend request that confirms only after the dialog', () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -161,21 +132,14 @@ test('a redeemed invitation shows as a friend request that confirms only after t
   const view = render(<BuddyPilotScreen />);
   expect(view.getByText('Wants to be your Buddy')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Confirm' }));
+  expect(view.getByText('ID 12345678')).toBeTruthy();
+  expect(alert).toHaveBeenCalledWith('Confirm this person', 'Baim Pratama · ID 12345678', expect.any(Array));
   expect(mockRun).not.toHaveBeenCalled();
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
   expect(mockRun).toHaveBeenCalledWith('/invitations/inv-1/confirm', {});
   alert.mockRestore();
 });
 
-test('a nearby GPS offer surfaces on the Nearby tab with consent-gated Help this person', () => {
-  mockSession = { id: 'gps', requesterUserId: 'nina', helperUserId: null, requesterName: 'Nina Rahma', status: 'WAITING', nearby: true, message: 'Saya perlu bantuan', supportNeeds: ['VISUAL_IMPAIRMENT'], attempts: [{ id: 'offer-gps', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
-  const view = render(<BuddyPilotScreen />);
-  expect(view.getByText('Nearby emergency')).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Help this person' })).toBeDisabled();
-  fireEvent.press(view.getByRole('checkbox', { name: 'Share my precise location with my assigned partner during the accepted session.' }));
-  fireEvent.press(view.getByRole('button', { name: 'Help this person' }));
-  expect(mockRun).toHaveBeenCalledWith('/requests/gps/accept', { attemptId: 'offer-gps', sharingConsent: true });
-});
 
 test('the helper session shows one primary action for the current status', () => {
   const base = { id: 'live', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina Rahma', helperName: 'Me', message: '', supportNeeds: [], attempts: [], meetingConfirmed: false };
@@ -203,16 +167,19 @@ test('the header menu enables notifications and starts or stops listening', () =
   expect(mockStopListening).toHaveBeenCalledTimes(1);
 });
 
-test('request consent uses a native switch before sending to a Buddy', () => {
-  mockContacts = [{ id: 'trusted', buddyUserId: 'trusted-helper', name: 'Trusted person', level: 'PRIMARY' }];
+test('asking a Buddy names them and the location sharing, and sends only after confirming', () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  mockContacts = [{ id: 'trusted', buddyUserId: 'trusted-helper', name: 'Trusted person', level: 'PRIMARY', available: true }, { id: 'second', buddyUserId: 'second-helper', name: 'Second person', level: 'SECONDARY', available: false }];
   const view = render(<BuddyPilotScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Request help' }));
-  const consent = view.getByRole('switch', { name: 'Share my precise location with my assigned partner during the accepted session.' });
-  expect(consent).toHaveProp('value', false);
-  fireEvent.changeText(view.getByLabelText('What help do you need?'), 'Meet at the entrance');
-  fireEvent(consent, 'valueChange', true);
-  fireEvent.press(view.getByRole('button', { name: 'Send request' }));
+  fireEvent.press(view.getByRole('button', { name: 'Ask Trusted for help' }));
+  expect(alert).toHaveBeenCalledWith('Ask Trusted person for help?', 'Your location is shared with Trusted person during this session. You can stop it any time.', expect.any(Array));
+  expect(mockRun).not.toHaveBeenCalled();
+  alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
   expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'trusted-helper', sharingConsent: true }));
+  fireEvent.press(view.getByRole('button', { name: 'Second person, Unavailable. Tap to ask for help.' }));
+  alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
+  expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'second-helper' }));
+  alert.mockRestore();
 });
 
 test('an active session with a known position becomes a full-screen map with the next step in its sheet', () => {
@@ -373,13 +340,16 @@ test('a helper who is nobody\'s Buddy yet sees how auto search turns on instead 
   expect(view.queryByRole('switch', { name: 'I am available to help' })).toBeNull();
 });
 
-test('a person with support needs sees a helper\'s invitation and their own Buddy code', async () => {
-  mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }];
+test('a person with support needs accepts a helper\'s offer and cancels an invitation they sent', () => {
   mockReceived = [{ id: 'offered', status: 'SENT', ownerName: 'Offerer', direction: 'OFFER_HELP', relation: 'TEMAN' }];
-  mockBuddyRequest.mockImplementation((_token: string, path: string) => Promise.resolve(path === '/me/code' ? { code: 'K7Q2-M9XD' } : {}));
+  mockInvitations = [{ id: 'asked', status: 'SENT', direction: 'SEEK_HELP', redeemerName: 'Asked person', redeemerUserId: 'asked-user', expiresAt: '2030-01-01T00:00:00Z' }];
   const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Wants to be your Buddy')).toBeTruthy();
   expect(view.getByText('Offerer is offering to be your Buddy and will receive your help requests.')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Accept' }));
   expect(mockRun).toHaveBeenCalledWith('/invitations/offered/accept', {});
-  await waitFor(() => expect(view.getByText('K7Q2-M9XD')).toBeTruthy());
+  expect(view.getByText('Asked person')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Cancel' }));
+  expect(mockRun).toHaveBeenCalledWith('/invitations/asked', undefined, 'DELETE');
+  expect(view.queryByText('Your code')).toBeNull();
 });

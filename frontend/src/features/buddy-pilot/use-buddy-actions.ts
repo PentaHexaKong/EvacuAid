@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
-import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type Invitation, type Position, type Session } from '@/features/buddy-pilot/api';
+import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type Position, type Session } from '@/features/buddy-pilot/api';
 import type { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
 import type { ApiError } from '@/features/profile/api';
 import { useBuddyNative, useBuddySpeech } from '@/features/buddy-pilot/native';
@@ -20,15 +20,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
   const { soundFree } = useAccess();
-  const params = useLocalSearchParams<{ code?: string; requestId?: string; help?: string }>();
+  const params = useLocalSearchParams<{ requestId?: string; help?: string }>();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (state.session?.status !== 'WAITING') return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [state.session?.status]);
-  const [codeInput, setCodeInput] = useState({ source: params.code, value: params.code ?? '' });
-  const code = codeInput.source === params.code ? codeInput.value : params.code ?? '';
-  const setCode = (value: string) => setCodeInput({ source: params.code, value });
-  const [invite, setInvite] = useState<Invitation | null>(null);
-  const [helper, setHelper] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
   const [chat, setChat] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -49,7 +43,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const partner = requester ? session?.helperName : session?.requesterName;
   const partnerLocation = state.locations.find(item => item.userId !== userId);
   const statusText = [session ? status(session.status) : c('empty'), partner, partnerLocation ? `${c('updated')}: ${new Date(partnerLocation.observedAt).toLocaleTimeString(language)}. ${partnerLocation.stale ? c('stale') : native.location ? `${Math.round(distanceM(native.location, partnerLocation))} m` : ''}` : session && active ? c('locationMissing') : ''].filter(Boolean).join('. ');
-  const confirm = (label: string, action: () => void, body = label) => Alert.alert(label, body, [{ text: c('cancel'), style: 'cancel' }, { text: c('yes'), onPress: action }]);
+  const confirm = (label: string, action: () => void, body = label, yes = c('yes')) => Alert.alert(label, body, [{ text: c('cancel'), style: 'cancel' }, { text: yes, onPress: action }]);
   const catchNative = (action: () => Promise<unknown>) => { setLocalError(null); void action().catch(cause => setLocalError(cause instanceof Error ? cause.message : c('requestFailed'))); };
   const autoShared = useRef<string | null>(null);
   const sessionId = session?.id;
@@ -80,11 +74,12 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (action === 'decline') state.dismissSession(); else await state.refresh(result.id);
     return true;
   };
-  // One path for "help me" from voice and from Home: confirm out loud, then ask the chosen or primary Buddy.
+  // One path for "help me" from the page, voice and Home: name the Buddy and the location sharing, then ask them.
   // Without a Buddy it says so and offers 112; it never dials on its own.
-  const askForHelp = () => {
-    const target = helper ?? state.contacts.find(item => item.level === 'PRIMARY')?.buddyUserId;
-    if (target) confirm(c('send'), () => { void sendRequest(target, true); }, c('consent'));
+  const askForHelp = (targetId?: string) => {
+    const contact = targetId ? state.contacts.find(item => item.buddyUserId === targetId) : state.contacts.find(item => item.level === 'PRIMARY') ?? state.contacts[0];
+    const name = contact?.name ?? c('name');
+    if (contact) { idempotency.current = null; confirm(c('askBuddyTitle', { name }), () => { void sendRequest(contact.buddyUserId); }, c('acceptBody', { name }), c('request')); }
     else Alert.alert(c('emptyTitle'), c('noBuddyHelp'), [{ text: c('cancel'), style: 'cancel' }, { text: c('call112'), onPress: () => { void Linking.openURL('tel:112'); } }]);
   };
   const voice = useBuddySpeech({ language: language.startsWith('id') ? 'id' : 'en', onCommand: transcript => {
@@ -93,7 +88,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     else if (/ulang|repeat/.test(command)) void voice.speak(route ? currentInstruction.current || c('noRoute') : c('noRoute'));
     else if (/batal|akhiri|cancel|end/.test(command) && session) confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
     else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
-    else if (/terdekat|nearby/.test(command)) confirm(c('nearby'), () => { void startNearby(true); }, `${c('nearbyExplanation')} ${c('consent')}`);
+    else if (/terdekat|nearby/.test(command)) askNearby();
     else if (/bantuan|help/.test(command) && !session) askForHelp();
     else void voice.speak(c('unknownCommand'));
   } });
@@ -135,19 +130,19 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     return () => { cancelled = true; clearInterval(timer); };
   }, [state.availability?.optedIn, token]);
 
-  const sendRequest = async (target = helper, voiceConfirmed = false) => {
-    if ((!consent && !voiceConfirmed) || (!message.trim() && !voiceConfirmed) || !target) { setLocalError(c('consentRequired')); return; }
+  const sendRequest = async (target: string) => {
     idempotency.current ??= `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    const result = await state.run<Session>('/requests', { helperUserId: target, message: message.trim() || c('request'), supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current });
-    if (result) { idempotency.current = null; setHelper(null); setMessage(''); await state.refresh(result.id); }
+    const result = await state.run<Session>('/requests', { helperUserId: target, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current });
+    if (result) { idempotency.current = null; await state.refresh(result.id); }
   };
+  const askNearby = () => confirm(c('searchNearbyTitle'), () => { void startNearby(true); }, c('searchNearbyBody'), c('searchShort'));
   const startNearby = async (voiceConfirmed = false) => {
     if (!consent && !voiceConfirmed) { setLocalError(c('consentRequired')); return; }
     try {
       const position = await native.obtainLocation();
       if (session && !terminalStatuses.has(session.status)) { await transition('nearby', position); return; }
       idempotency.current ??= `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-      const created = await state.run<Session>('/requests', { helperUserId: null, message: message.trim() || c('request'), supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current, ...position });
+      const created = await state.run<Session>('/requests', { helperUserId: null, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current, ...position });
       if (created) {
         idempotency.current = null;
         await state.run(`/requests/${created.id}/nearby`, position);
@@ -185,9 +180,8 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const attempt = session?.attempts.find(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > now && session?.status === 'WAITING');
   const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
   const guidance = useRouteGuidance({ route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, haptics: preferences.vibrationEnabled, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
-  const resetIdempotency = () => { idempotency.current = null; };
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, code, setCode, invite, setInvite, helper, setHelper, message, setMessage, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, resetIdempotency, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, sendRequest, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, askForHelp, askNearby, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;

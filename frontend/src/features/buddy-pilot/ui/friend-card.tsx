@@ -9,7 +9,7 @@ import { duration, ease, spring } from '@/theme/motion';
 import { relativeTime } from '@/features/hazards/time';
 import { relationLabel } from '../copy';
 import type { BuddyActions } from '../use-buddy-actions';
-import { buddyStyles, Card, PersonAvatar, StatusChip } from './parts';
+import { buddyStyles, Card, Group, PersonAvatar, Row, StatusChip } from './parts';
 
 const offerEnter = () => {
   'worklet';
@@ -58,7 +58,7 @@ export function ReceivedInvites({ a }: { a: BuddyActions }) {
     const name = item.ownerName ?? c('name');
     const detail = [...(item.ownerNeeds ?? []).map(support), relationLabel(item.relation, c)].filter(Boolean).join(' · ');
     return <FriendMotion key={item.id}><Card tint="info">
-      <StatusChip tone="info" label={c('wantsYou')} />
+      <StatusChip tone="info" label={c(item.direction === 'OFFER_HELP' ? 'friendRequest' : 'wantsYou')} />
       <View style={buddyStyles.row}><PersonAvatar name={name} size={48} /><View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{name}</AppText>{!!detail && <AppText style={{ color: colors.muted }}>{detail}</AppText>}</View></View>
       <AppText style={{ color: colors.muted }}>{c(item.direction === 'OFFER_HELP' ? 'inviteBodyOffered' : 'inviteBodyReceived', { name })}</AppText>
       <View style={buddyStyles.actions}>
@@ -69,10 +69,23 @@ export function ReceivedInvites({ a }: { a: BuddyActions }) {
   })}</>;
 }
 
-// The person's own permanent code, with a share button. Whoever enters it sends them an invitation.
-export function CodeRow({ a, code, needs }: { a: BuddyActions; code: string; needs?: boolean }) {
+// Invitations this person sent that the other side has not answered yet.
+export function SentInvites({ a, direction }: { a: BuddyActions; direction: 'SEEK_HELP' | 'OFFER_HELP' }) {
+  const { state, c } = a;
+  const sent = state.invitations.filter(item => item.status === 'SENT' && item.direction === direction);
+  if (!sent.length) return null;
+  return <View style={{ gap: 10 }}>
+    <AppText variant="section" accessibilityRole="header">{c('sentHeading')}</AppText>
+    <Group>{sent.map(item => <Row key={item.id} leading={<PersonAvatar name={item.redeemerName} size={44} />} title={item.redeemerName ?? c('name')} detail={c('sentDetail')}
+      trailing={<ActionButton compact variant="secondary" label={c('cancelInvite')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}`, undefined, 'DELETE'); }} />}
+    />)}</Group>
+  </View>;
+}
+
+// The helper's own permanent code, with a share button. Whoever enters it sends them an invitation.
+export function CodeRow({ a, code }: { a: BuddyActions; code: string }) {
   const { c, catchNative } = a;
-  const share = () => catchNative(() => Share.share({ message: c(needs ? 'shareMessageNeeds' : 'shareMessage', { code }) }));
+  const share = () => catchNative(() => Share.share({ message: c('shareMessage', { code }) }));
   return <View style={styles.codeRow}>
     <View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{c('yourCode')}</AppText><AppText selectable style={styles.code}>{code}</AppText></View>
     <Pressable accessibilityRole="button" accessibilityLabel={c('shareCode')} style={styles.icon} onPress={share}><IconShare size={22} color={colors.ink} /></Pressable>

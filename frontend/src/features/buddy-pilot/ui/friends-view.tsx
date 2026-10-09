@@ -7,7 +7,7 @@ import buddyArt from '../../../../assets/brand/quick/buddy.png';
 import { relationLabel } from '../copy';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, EmptyCard, Group, PersonAvatar, Row } from './parts';
-import { CodeRow, FriendCard, ReceivedInvites } from './friend-card';
+import { CodeRow, FriendCard, ReceivedInvites, SentInvites } from './friend-card';
 
 export function FriendsView({ a, code }: { a: BuddyActions; code: string | null }) {
   const { state, c, support, session, attempt, active, confirm, catchNative } = a;
@@ -34,12 +34,7 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
       })}</Group>
       <AppText variant="small" style={{ color: colors.muted }}>{c('friendsFootnote')}</AppText>
     </View>}
-    {sent.length > 0 && <View style={styles.section}>
-      <AppText variant="section" accessibilityRole="header">{c('sentHeading')}</AppText>
-      <Group>{sent.map(item => <Row key={item.id} leading={<PersonAvatar name={item.redeemerName} size={44} />} title={item.redeemerName ?? c('name')} detail={c('sentDetail')}
-        trailing={<ActionButton compact variant="secondary" label={c('cancelInvite')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}`, undefined, 'DELETE'); }} />}
-      />)}</Group>
-    </View>}
+    <SentInvites a={a} direction="OFFER_HELP" />
     {empty ? <EmptyCard title={c('noFriendsTitle')} body={c('noFriendsBody')} art={buddyArt}>
       {code && <View style={[buddyStyles.quote, styles.codeBlock]}><AppText variant="figure" selectable style={styles.code}>{code}</AppText></View>}
       <ActionButton label={c('shareCode')} disabled={!code} onPress={share} />
