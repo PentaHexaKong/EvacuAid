@@ -10,8 +10,9 @@ import type { BuddyActions } from '../use-buddy-actions';
 import buddyArt from '../../../../assets/brand/quick/buddy.png';
 import { buddyStyles, Card, EmptyCard, Group, PersonAvatar, Row, StatusChip } from './parts';
 import { IncomingRequestCard } from './incoming-request-card';
+import { CodeRow, ReceivedInvites } from './friend-card';
 
-export function BuddiesView({ a, userId }: { a: BuddyActions; userId: string }) {
+export function BuddiesView({ a, userId, buddyCode }: { a: BuddyActions; userId: string; buddyCode?: string | null }) {
   const { state, c, language, helper, setHelper, message, setMessage, consent, setConsent, invite, setInvite, code, setCode, attempt, session, confirm, startNearby, sendRequest, resetIdempotency } = a;
   const { t } = useTranslation();
   const friendRequests = state.invitations.filter(item => item.status === 'REDEEMED');
@@ -49,6 +50,7 @@ export function BuddiesView({ a, userId }: { a: BuddyActions; userId: string }) 
     </Card>;
   return <View style={{ gap: 16 }}>
     {attempt && session && !session.nearby && <IncomingRequestCard a={a} />}
+    <ReceivedInvites a={a} />
 
     {friendRequests.map(item => <Card key={item.id}>
       <StatusChip label={c('friendRequest')} tone="info" />
@@ -131,6 +133,7 @@ export function BuddiesView({ a, userId }: { a: BuddyActions; userId: string }) 
         })}</Group>
         : <AppText style={{ color: colors.muted }}>{c('inboxEmpty')}</AppText>}
     </View>
+    {buddyCode && <CodeRow a={a} code={buddyCode} needs />}
   </View>;
 }
 

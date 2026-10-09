@@ -1,14 +1,13 @@
-import { Platform, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Platform, Share, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import IconShare from '@tabler/icons-react-native/IconShare';
 import { ActionButton, AppText } from '@/components/ui';
 import { MoreMenu } from '@/components/native-controls';
 import { colors, radius } from '@/theme';
 import buddyArt from '../../../../assets/brand/quick/buddy.png';
 import { relationLabel } from '../copy';
 import type { BuddyActions } from '../use-buddy-actions';
-import { buddyStyles, Card, EmptyCard, Group, PersonAvatar, Row, StatusChip } from './parts';
-import { FriendCard, FriendMotion } from './friend-card';
+import { buddyStyles, EmptyCard, Group, PersonAvatar, Row } from './parts';
+import { CodeRow, FriendCard, ReceivedInvites } from './friend-card';
 
 export function FriendsView({ a, code }: { a: BuddyActions; code: string | null }) {
   const { state, c, support, session, attempt, active, confirm, catchNative } = a;
@@ -22,19 +21,7 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
   const details = (needs?: string[], relation?: Parameters<typeof relationLabel>[0]) => [...(needs ?? []).map(support), relationLabel(relation, c)].filter(Boolean).join(' · ');
   return <View style={styles.content}>
     {offer && <FriendCard a={a} />}
-    {state.received.map(item => {
-      const name = item.ownerName ?? c('name');
-      const detail = details(item.ownerNeeds, item.relation);
-      return <FriendMotion key={item.id}><Card tint="info">
-        <StatusChip tone="info" label={c('wantsYou')} />
-        <View style={buddyStyles.row}><PersonAvatar name={name} size={48} /><View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{name}</AppText>{!!detail && <AppText style={{ color: colors.muted }}>{detail}</AppText>}</View></View>
-        <AppText style={{ color: colors.muted }}>{c(item.direction === 'OFFER_HELP' ? 'inviteBodyOffered' : 'inviteBodyReceived', { name })}</AppText>
-        <View style={buddyStyles.actions}>
-          <View style={buddyStyles.grow}><ActionButton variant="secondary" label={c('declineShort')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}/decline`, {}); }} /></View>
-          <View style={buddyStyles.grow}><ActionButton label={c('approve')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}/accept`, {}); }} /></View>
-        </View>
-      </Card></FriendMotion>;
-    })}
+    <ReceivedInvites a={a} />
     {listed.length > 0 && <View style={styles.section}>
       <AppText variant="section" accessibilityRole="header">{c('friendsHeading')}</AppText>
       <Group>{listed.map(contact => {
@@ -57,10 +44,7 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
       {code && <View style={[buddyStyles.quote, styles.codeBlock]}><AppText variant="figure" selectable style={styles.code}>{code}</AppText></View>}
       <ActionButton label={c('shareCode')} disabled={!code} onPress={share} />
       <ActionButton variant="secondary" label={c('addBuddy')} onPress={() => router.push('/buddy-add')} />
-    </EmptyCard> : code && <View style={styles.codeRow}>
-      <View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{c('yourCode')}</AppText><AppText selectable style={[styles.code, styles.codeValue]}>{code}</AppText></View>
-      <Pressable accessibilityRole="button" accessibilityLabel={c('shareCode')} style={styles.icon} onPress={share}><IconShare size={22} color={colors.ink} /></Pressable>
-    </View>}
+    </EmptyCard> : code && <CodeRow a={a} code={code} />}
   </View>;
 }
 
@@ -70,7 +54,4 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.primary },
   codeBlock: { backgroundColor: colors.canvas, alignItems: 'center' },
   code: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), letterSpacing: 0, fontVariant: ['tabular-nums'] },
-  codeValue: { fontSize: 17, lineHeight: 22, color: colors.muted },
-  codeRow: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong, minHeight: 61, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
