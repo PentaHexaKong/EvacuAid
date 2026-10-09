@@ -37,7 +37,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   const sync = useCallback(async () => {
     if (!token || !user || !localReady) return;
-    setReady(false);
     setError(null);
     try {
       const raw = await AsyncStorage.getItem(PREFERENCES_KEY);

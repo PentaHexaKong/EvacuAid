@@ -1,0 +1,64 @@
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import RootLayout from '@/app/_layout';
+import { apiRequest } from '@/features/profile/api';
+import { ensureForeground, ensureNotifications } from '@/features/location/permissions';
+import { PREFERENCES_KEY } from '@/features/preferences/storage';
+
+let mockToken: string | null = null;
+const mockProfileReady = true;
+const mockSaveLocation = jest.fn().mockResolvedValue(undefined);
+const mockRegisterPush = jest.fn().mockResolvedValue(undefined);
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => {
+  const Stack = ({ children }: { children: React.ReactNode }) => children;
+  Stack.Screen = function Screen() { return null; };
+  Stack.Protected = ({ children }: { children: React.ReactNode }) => children;
+  return { Stack, useRouter: () => ({ replace: mockReplace }) };
+});
+jest.mock('expo-notifications', () => ({ addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })), getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null), clearLastNotificationResponseAsync: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('expo-linking', () => ({ addEventListener: jest.fn(() => ({ remove: jest.fn() })), getInitialURL: jest.fn().mockResolvedValue(null), parse: () => ({ hostname: 'buddy-invite', queryParams: { code: 'pilot-code' } }) }));
+jest.mock('expo-splash-screen', () => ({ preventAutoHideAsync: jest.fn().mockResolvedValue(undefined), hideAsync: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children, SafeAreaView: ({ children }: { children: React.ReactNode }) => children, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+jest.mock('@/features/location/alert-area', () => ({}));
+jest.mock('@/features/profile/context', () => ({ ONBOARDING_NEEDS_KEY: 'test.onboarding-needs', ProfileProvider: ({ children }: { children: React.ReactNode }) => children, useProfile: () => ({ ready: mockProfileReady, accessibility: [], saveLocation: mockSaveLocation }) }));
+jest.mock('@/features/profile/session', () => ({ GuestSessionProvider: ({ children }: { children: React.ReactNode }) => children, useGuestSession: () => ({ token: mockToken, user: mockToken ? { id: 'guest-id' } : null, status: 'ready', ensureGuest: jest.fn() }) }));
+jest.mock('@/localization', () => ({ i18n: {}, localizationReady: Promise.resolve(), selectLanguage: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('react-i18next', () => ({ I18nextProvider: ({ children }: { children: React.ReactNode }) => children, useTranslation: () => ({ t: (key: string) => jest.requireActual('../../localization/en.json')[key] ?? key, i18n: { language: 'en' } }) }));
+
+jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/profile/api'), apiRequest: jest.fn() }));
+jest.mock('@/features/location/permissions', () => ({ ...jest.requireActual('@/features/location/permissions'), ensureForeground: jest.fn(), ensureNotifications: jest.fn() }));
+jest.mock('@/features/location/push-token', () => ({ prepareNotificationChannel: jest.fn().mockResolvedValue(undefined), registerPushToken: (...args: unknown[]) => mockRegisterPush(...args) }));
+jest.mock('expo-location', () => ({ getCurrentPositionAsync: jest.fn().mockResolvedValue({ coords: { latitude: 1, longitude: 2, accuracy: 101 }, timestamp: 1000 }), Accuracy: { High: 4 } }));
+
+test('preference re-sync keeps the reach step and permission outcomes mounted', async () => {
+  await AsyncStorage.clear();
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  jest.mocked(ensureForeground).mockResolvedValueOnce('granted');
+  jest.mocked(ensureNotifications).mockResolvedValueOnce('granted');
+  let resolve!: (value: unknown) => void;
+  jest.mocked(apiRequest).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const view = render(<RootLayout />);
+  await act(async () => {});
+  expect(view.getByRole('button', { name: 'Get started' })).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Turn on' })));
+  expect(mockSaveLocation).toHaveBeenCalledWith(1, 2, 101, '1970-01-01T00:00:01.000Z');
+  mockToken = 'guest';
+  view.rerender(<RootLayout />);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/v1/users/guest-id/preferences', 'guest'));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(view.getByRole('button', { name: 'Go to Home' })).toBeTruthy();
+  expect(view.getByRole('alert')).toHaveTextContent('Precise location is off. Helpers need it to find you.');
+  await act(async () => resolve({ voice_enabled: true, vibration_enabled: true, text_enabled: true, language: 'en', larger_text: false, stronger_contrast: false }));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(view.getByRole('button', { name: 'Go to Home' })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Get started' })).toBeNull();
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+  expect(mockRegisterPush).toHaveBeenCalledWith('guest');
+});

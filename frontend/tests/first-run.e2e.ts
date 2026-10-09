@@ -26,7 +26,7 @@ test('deleting the profile returns to the welcome screen, where the language men
 
   await screen.getByRole('button', 'Get started').tap();
   await screen.getByRole('button', 'Continue').tap();
-  await screen.getByRole('button', 'Go to Home').tap();
+  await screen.getByRole('button', 'Continue').tap();
   await expect(screen.getByText('Stay reachable in an emergency')).toBeVisible();
   await screen.getByRole('button', 'Not now').tap();
   await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 60_000 });

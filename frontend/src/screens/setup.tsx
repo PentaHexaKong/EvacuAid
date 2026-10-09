@@ -249,7 +249,7 @@ function WarningStep({ busy, onFinish, onHelp, onBack }: { busy: boolean; onFini
     </Enter>
     <View style={{ flex: 1, minHeight: 12 }} />
     <Enter index={3} style={{ gap: 12 }}>
-      <ActionButton variant="gradient" label={t('continueHome')} loading={busy} onPress={onFinish} />
+      <ActionButton variant="gradient" label={t('nextStep')} loading={busy} onPress={onFinish} />
       <ActionButton variant="secondary" label={t('requestHelp')} disabled={busy} onPress={onHelp} />
     </Enter>
   </>;
@@ -279,7 +279,7 @@ function ReachStep({ busy, onFinish, onBack, onReach }: { onReach?: (permissions
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const value = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 10000); })]);
-          if (alive.current) { setFix(value); if (isPrecise(value.coords.accuracy)) onReach?.({ location: value }); }
+          if (alive.current) { setFix(value); onReach?.({ location: value }); }
         } catch {} finally { clearTimeout(timer); }
       }
     } finally { if (alive.current) setAsking(false); }
@@ -307,7 +307,7 @@ function ReachStep({ busy, onFinish, onBack, onReach }: { onReach?: (permissions
 function PermissionRow({ title, reason, Icon, permission }: { title: string; reason: string; Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; permission: PermissionResult | null }) {
   const { t } = useTranslation();
   const status = permission === null ? '' : t(permission === 'granted' ? 'reachOn' : 'reachOff');
-  return <View accessible accessibilityLabel={[title, reason, status].filter(Boolean).join('. ')} style={[styles.switchRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+  return <View accessible accessibilityLabel={[title, reason, status].filter(Boolean).map(value => value.replace(/\.+$/, '')).join('. ')} style={[styles.switchRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
     <View style={{ width: 40, height: 40, backgroundColor: colors.accentSoft, ...corner(radius.sm), alignItems: 'center', justifyContent: 'center' }}><Icon size={22} strokeWidth={2} color={colors.primary} /></View>
     <View style={{ flex: 1, gap: 4 }}><AppText variant="button">{title}</AppText><AppText variant="small" style={{ color: colors.muted }}>{reason}</AppText></View>
     {permission && <View style={{ alignItems: 'center', gap: 4 }}>{permission === 'granted' && <IconCircleCheck size={22} color={colors.primary} />}<AppText variant="small" style={{ color: permission === 'granted' ? colors.primary : colors.muted }}>{status}</AppText></View>}
