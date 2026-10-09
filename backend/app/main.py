@@ -14,6 +14,7 @@ from sqlalchemy import text
 from app.config import DEFAULT_ADM4, REDIS_URL
 from app.db.session import engine, SessionLocal
 from app.models.risk import RiskRequest, RiskResponse
+from app.routers.alerts import router as alerts_router
 from app.routers.pilot import router as pilot_router
 from app.services.pilotWorker import run as run_pilot_worker
 from app.routers.context import router as context_router
@@ -49,6 +50,7 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
+app.include_router(alerts_router)
 app.include_router(pilot_router)
 app.include_router(users_router)
 app.include_router(sessions_router)

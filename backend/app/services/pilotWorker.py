@@ -7,12 +7,15 @@ from sqlalchemy import delete, select, update
 
 from app.db.session import SessionLocal
 from app.db.models.pilot import PilotAvailability, PilotInbox, PilotInvitation, PilotMessage, PilotOutbox, PilotPushToken, PilotRequest
+from app.services import alertService
 from app.services import pilotService as service
 
 
 async def tick():
     async with SessionLocal() as db:
         await service.expire(db)
+        await alertService.cleanup(db)
+        await alertService.enqueueAlerts(db)
         invites = (await db.execute(select(PilotInvitation).where(PilotInvitation.status.in_(('PENDING', 'REDEEMED')), PilotInvitation.expires_at <= service.now()).with_for_update(skip_locked=True))).scalars()
         for row in invites:
             row.status = 'EXPIRED'
@@ -26,10 +29,20 @@ async def tick():
             for row in rows:
                 inbox = await db.get(PilotInbox, row.inbox_id)
                 tokens = (await db.execute(select(PilotPushToken).where(PilotPushToken.user_id == inbox.user_id))).scalars().all()
+                payload = inbox.payload
+                if inbox.kind == 'ALERT':
+                    alert = await alertService.activeAlert(db, inbox.payload.get('alertId'), ('SIAGA', 'AWAS'))
+                    if alert is None or (not tokens and inbox.created_at < service.now() - timedelta(hours=2)):
+                        row.sent_at = service.now()
+                        continue
+                    payload = alertService.payload(alert)
                 if not tokens:
                     row.next_at = service.now() + timedelta(seconds=30)
                     continue
-                body = [{'to': token.token, 'title': 'EvacuAid Buddy', 'body': 'Ada pembaruan Buddy. Buka aplikasi untuk melihat.', 'sound': 'default', 'data': {**inbox.payload, 'inboxId': str(inbox.id)}} for token in tokens]
+                body = [{'to': token.token, 'title': payload.get('title', 'EvacuAid Buddy'), 'body': payload.get('body', 'Ada pembaruan Buddy. Buka aplikasi untuk melihat.'), 'sound': 'default', 'data': {**payload, 'inboxId': str(inbox.id)}} for token in tokens]
+                if 'interruptionLevel' in payload:
+                    for message in body:
+                        message.update(interruptionLevel=payload['interruptionLevel'], priority='high')
                 row.attempts += 1
                 try:
                     result = await client.post('https://exp.host/--/api/v2/push/send', json=body)

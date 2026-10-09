@@ -36,6 +36,7 @@ USER_AGENT = os.getenv(
 DATABASE_URL = os.getenv(
     'DATABASE_URL', 'postgresql+asyncpg://evacuaid:change-me@postgres:5432/evacuaid'
 )
+ALERT_PUSH_ENABLED = os.getenv('ALERT_PUSH_ENABLED', 'false').lower() == 'true'
 REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
 CONTEXT_CACHE_TTL_SECONDS = int(os.getenv('CONTEXT_CACHE_TTL_SECONDS', '60'))
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://valhalla:8002').rstrip('/')
@@ -83,6 +84,8 @@ def ensure_data_directories() -> None:
 INARISK_BASE_URL = os.getenv('INARISK_BASE_URL', 'https://gis.bnpb.go.id/server/rest/services/inarisk').rstrip('/')
 BMKG_EARTHQUAKE_URL = os.getenv('BMKG_EARTHQUAKE_URL', 'https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json')
 BMKG_CAP_URL = os.getenv('BMKG_CAP_URL', 'https://www.bmkg.go.id/alerts/nowcast/id')
+# AWAS reserved for evacuation-level official sources
+BMKG_CAP_OFFICIAL_STATUS = {'Extreme': 'SIAGA', 'Severe': 'WASPADA', 'Moderate': 'WASPADA'}
 FIRMS_BASE_URL = os.getenv('FIRMS_BASE_URL', 'https://firms.modaps.eosdis.nasa.gov').rstrip('/')
 FIRMS_MAP_KEY = os.getenv('FIRMS_MAP_KEY', '')
 FIRMS_SOURCE = os.getenv('FIRMS_SOURCE', 'VIIRS_NOAA20_NRT')
