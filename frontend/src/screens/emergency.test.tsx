@@ -67,7 +67,7 @@ test.each([
   const view = render(<EmergencyScreen />);
   fireEvent.press(view.getByRole('button', { name: label }));
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', response);
-  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname, params: { [param]: expect.any(String), ...(param === 'help' ? { consented: '1' } : {}) } });
+  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname, params: { [param]: expect.any(String) } });
   expect(Alert.alert).not.toHaveBeenCalled();
 });
 test.each([null, 'Sari'])('buddy action shares caption and goes to help (%s)', async buddy => {
