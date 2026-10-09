@@ -4,11 +4,12 @@ from fastapi import HTTPException
 
 from app.db.models.pilot import PilotLocation
 from app.models.hazard import HazardEvidence
+from app.models.navigation import HazardStatus
 from app.repositories import hazardRepository, shelterRepository
 from app.services import navigationService, pilotService, shelterService, user_service
 from app.services.navigationService import routeHazards
 from app.services.routeCandidateService import evaluatedCandidates
-from app.services.routeEvaluationService import applyRanking, rankingKey
+from app.services.routeEvaluationService import applyRanking, evaluateRoute, rankingKey
 from app.services.valhallaProvider import NoRoute, RoutingUnavailable, ValhallaRoutingProvider
 
 
@@ -80,19 +81,21 @@ async def session_route(db, request, actor, payload):
         try:
             provider = ValhallaRoutingProvider()
             selected = None
+            hazard_unavailable = evidence is None
             if evidence is not None:
                 try:
                     candidates = await evaluatedCandidates(provider, origin, destination, evidence, payload.profile == 'WHEELCHAIR', str(shelter.id) if shelter else 'requester', session=db, profile=payload.profile)
                 except hazardRepository.HazardStateUnavailable:
-                    evidence = None
-                else:
-                    applyRanking(candidates, enforcePreference=False)
-                    feasible = sorted((item for item in candidates if item.feasible), key=rankingKey)
-                    if not feasible:
-                        rejection_reasons.append('NO_FEASIBLE_ROUTE')
-                        rejection_reasons.extend(reason for item in candidates for reason in item.reasons)
-                        continue
-                    selected = feasible[0]
+                    hazard_unavailable = True
+                    route = await provider.route(origin, destination, payload.profile)
+                    candidates = [evaluateRoute(str(shelter.id) if shelter else 'requester', route, evidence, payload.profile == 'WHEELCHAIR')]
+                applyRanking(candidates, enforcePreference=False)
+                feasible = sorted((item for item in candidates if item.feasible), key=rankingKey)
+                if not feasible:
+                    rejection_reasons.append('NO_FEASIBLE_ROUTE')
+                    rejection_reasons.extend(reason for item in candidates for reason in item.reasons)
+                    continue
+                selected = feasible[0]
             route = selected.route if selected else await provider.route(origin, destination, payload.profile)
         except RoutingUnavailable:
             return {'routeStatus': 'UNAVAILABLE', 'selectionReasonCodes': ['ROUTING_PROVIDER_UNAVAILABLE'], 'leg': payload.leg}
@@ -102,11 +105,13 @@ async def session_route(db, request, actor, payload):
             continue
         if not route.maneuvers:
             return {'routeStatus': 'UNAVAILABLE', 'selectionReasonCodes': ['MANEUVERS_UNAVAILABLE'], 'leg': payload.leg}
-        if selected:
+        if not hazard_unavailable:
             hazard, hazard_reasons = selected.hazardStatus, selected.reasons
         else:
             hazard, hazard_reasons = await routeHazards(route.geometry)
-            hazard_reasons = hazard_reasons + ['HAZARD_STATE_UNAVAILABLE']
+            if hazard != HazardStatus.POTENTIALLY_EXPOSED:
+                hazard = HazardStatus.UNKNOWN
+            hazard_reasons = [reason for reason in (selected.reasons if selected else []) + hazard_reasons if reason != 'NO_KNOWN_HAZARD_INTERSECTION'] + ['HAZARD_STATE_UNAVAILABLE']
         wheelchair = payload.profile == 'WHEELCHAIR'
         reasons += hazard_reasons + (['WHEELCHAIR_COSTING', 'OSM_ACCESSIBILITY_UNVERIFIED', 'ROUTE_ACCESSIBILITY_UNKNOWN'] if wheelchair else ['ROUTE_PEDESTRIAN_ACCESS'])
         request = await pilotService.get_request(db, request_id, actor, connected=True)

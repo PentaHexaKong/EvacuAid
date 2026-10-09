@@ -9,6 +9,7 @@ from app.models.shelter import ShelterCreate
 from app.models.user import UserCreate
 from app.repositories import hazardRepository
 from app.services import navigationService, pilotNavigation, shelterService, user_service
+from app.services.petabencana_service import PetaBencanaFetchResult
 from tests.test_hazard_navigation import noReports
 from tests.test_hazards import syntheticEvidence, syntheticRoute
 
@@ -126,6 +127,104 @@ async def testSessionRouteHazardStateUnavailableFallsBack(dbSession, monkeypatch
     assert response['route']['maneuvers']
     assert calls == [(0, 0)]
     assert provider.plainCalls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('leg', ['TO_REQUESTER', 'TO_SHELTER'])
+@pytest.mark.parametrize('kind', [EvidenceType.CRITICAL_HAZARD, EvidenceType.CONFIRMED_CLOSURE])
+async def testSessionRouteCorridorFailureRejectsKnownHardConstraint(dbSession, monkeypatch, leg, kind):
+    request, actor, payload = await sessionFixture(dbSession, leg)
+    await hazardRepository.saveEvidence(dbSession, [syntheticEvidence(kind=kind)])
+    await dbSession.commit()
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
+    original = hazardRepository.activeEvidence
+    calls = []
+
+    async def evidence(session, center, radiusM, geometry=None):
+        calls.append(geometry)
+        if geometry is not None:
+            raise hazardRepository.HazardStateUnavailable('SYNTHETIC_TEST_UNAVAILABLE')
+        return await original(session, center, radiusM, geometry)
+
+    monkeypatch.setattr(hazardRepository, 'activeEvidence', evidence)
+    provider = Provider()
+    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    assert response['routeStatus'] == 'UNAVAILABLE'
+    assert response['leg'] == leg
+    assert 'NO_FEASIBLE_ROUTE' in response['selectionReasonCodes']
+    assert 'ROUTE_REJECTED_CRITICAL_HAZARD' in response['selectionReasonCodes']
+    if kind == EvidenceType.CONFIRMED_CLOSURE:
+        assert 'CONFIRMED_INFRASTRUCTURE_CLOSURE' in response['selectionReasonCodes']
+    assert 'route' not in response
+    assert request.selected_shelter_id is None
+    assert len(calls) == 2
+    assert calls[0] is None
+    assert provider.plainCalls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('leg', ['TO_REQUESTER', 'TO_SHELTER'])
+@pytest.mark.parametrize('failureStage', ['initial', 'corridor'])
+@pytest.mark.parametrize('reports', [[], [{'latitude': 0, 'longitude': 0}]])
+async def testSessionRouteDegradedSafetyStatus(dbSession, monkeypatch, leg, failureStage, reports):
+    request, actor, payload = await sessionFixture(dbSession, leg)
+
+    async def evidence(db, center):
+        if failureStage == 'initial':
+            raise hazardRepository.HazardStateUnavailable('SYNTHETIC_TEST_UNAVAILABLE')
+        return []
+
+    async def unavailable(*args, **kwargs):
+        raise hazardRepository.HazardStateUnavailable('SYNTHETIC_TEST_UNAVAILABLE')
+
+    async def fetchReports():
+        return PetaBencanaFetchResult(reports=reports)
+
+    monkeypatch.setattr(navigationService, 'routeEvidence', evidence)
+    if failureStage == 'corridor':
+        monkeypatch.setattr(hazardRepository, 'activeEvidence', unavailable)
+    monkeypatch.setattr(navigationService, 'fetch_reports', fetchReports)
+    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: Provider())
+    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    assert response['routeStatus'] == 'READY'
+    assert response['evaluation']['safetyStatus'] == ('POTENTIALLY_EXPOSED' if reports else 'UNKNOWN')
+    assert 'HAZARD_STATE_UNAVAILABLE' in response['evaluation']['reasonCodes']
+    assert 'NO_KNOWN_HAZARD_INTERSECTION' not in response['evaluation']['reasonCodes']
+    assert 'NO_KNOWN_HAZARD_INTERSECTION' not in response['selectionReasonCodes']
+    if reports:
+        assert 'POTENTIAL_HAZARD_EXPOSURE' in response['evaluation']['reasonCodes']
+
+
+@pytest.mark.asyncio
+async def testSessionRouteCorridorFailureTriesNextShelter(dbSession, monkeypatch):
+    request, actor, payload = await sessionFixture(dbSession, 'TO_SHELTER')
+    safe = await shelterService.createShelter(dbSession, ShelterCreate(name='SYNTHETIC_TEST_SAFE', latitude=0.02, longitude=0, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
+    await hazardRepository.saveEvidence(dbSession, [syntheticEvidence(kind=EvidenceType.CONFIRMED_CLOSURE)])
+    await dbSession.commit()
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
+    original = hazardRepository.activeEvidence
+
+    async def evidence(session, center, radiusM, geometry=None):
+        if geometry is not None:
+            raise hazardRepository.HazardStateUnavailable('SYNTHETIC_TEST_UNAVAILABLE')
+        return await original(session, center, radiusM, geometry)
+
+    async def fetchReports():
+        return PetaBencanaFetchResult(reports=[])
+
+    monkeypatch.setattr(hazardRepository, 'activeEvidence', evidence)
+    monkeypatch.setattr(navigationService, 'fetch_reports', fetchReports)
+    provider = Provider()
+    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    assert response['routeStatus'] == 'READY'
+    assert response['destination']['shelterId'] == safe.id
+    assert request.selected_shelter_id == safe.id
+    assert response['route']['geometry']['coordinates'] == [[0, 0], [0, 0.02]]
+    assert response['evaluation']['safetyStatus'] == 'UNKNOWN'
+    assert 'HAZARD_STATE_UNAVAILABLE' in response['evaluation']['reasonCodes']
+    assert provider.plainCalls == 2
 
 
 @pytest.mark.asyncio
