@@ -34,10 +34,11 @@ export function useRouteGuidance({ route, position, target, language, reroute, s
   const maneuver = progress && path ? path.maneuvers[progress.maneuverIndex] ?? null : null;
   const next = progress && path ? path.maneuvers[progress.maneuverIndex + 1] ?? null : null;
   const instruction = maneuver ? instructionText(maneuver, language) : null;
-  const act = useEffectEvent((kind: 'instruction' | 'reroute' | 'speak', text: string | null = null) => {
+  const act = useEffectEvent((kind: 'instruction' | 'reroute' | 'speak' | 'arrival', text: string | null = null) => {
     if (kind === 'instruction') onInstruction(text);
     else if (kind === 'reroute') reroute();
-    else if (text) { caption?.(text); if (voiceEnabled) void speak(text); }
+    // Turns are already on screen, so they are captioned only when nothing is spoken. Arrival lines carry the entrance note and always show.
+    else if (text) { if (kind === 'arrival' || !voiceEnabled) caption?.(text); if (voiceEnabled) void speak(text); }
   });
   useEffect(() => {
     act('instruction', instruction);
@@ -58,8 +59,8 @@ export function useRouteGuidance({ route, position, target, language, reroute, s
   const arrival = useRef<{ route: BuddyRoute | null; near: boolean; middle: boolean; here: boolean }>({ route: null, near: false, middle: false, here: false });
   const nudge = useEffectEvent((kind: 'turn' | 'near' | 'middle' | 'arrive') => {
     const copy = language === 'id' ? id : en;
-    if (kind === 'near') act('speak', `${copy.arriveNear.replace('{{distance}}', String(Math.round(progress?.remainingM ?? 30))).replace('{{name}}', destinationName ?? route?.destination?.name ?? '')}${entranceNote ? ` ${entranceNote}` : ''}`);
-    if (kind === 'arrive') act('speak', waitingName ? copy.arriveWaiting.replace('{{name}}', waitingName) : copy.arriveHere);
+    if (kind === 'near') act('arrival', `${copy.arriveNear.replace('{{distance}}', String(Math.round(progress?.remainingM ?? 30))).replace('{{name}}', destinationName ?? route?.destination?.name ?? '')}${entranceNote ? ` ${entranceNote}` : ''}`);
+    if (kind === 'arrive') act('arrival', waitingName ? copy.arriveWaiting.replace('{{name}}', waitingName) : copy.arriveHere);
     if (kind === 'turn' && upcoming) act('speak', cue(upcoming));
     if (haptics) void (kind === 'arrive' ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) : Haptics.impactAsync(kind === 'middle' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light)).catch(() => {});
   });
