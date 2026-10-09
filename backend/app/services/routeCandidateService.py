@@ -10,7 +10,7 @@ from app.models.hazard import HazardEvidence
 from app.models.navigation import RouteEvidence, RouteEvidenceKind
 from app.services.elevationProvider import ElevationProvider
 from app.services.hazardEvaluator import hardGeometry
-from app.models.hazard import EvidenceType, HazardType
+from app.models.hazard import EvidenceType
 from app.services.routeEvaluationService import evaluateRoute
 from app.services.valhallaProvider import NoRoute, RouteData, RoutingUnavailable
 from app.utils.hazardGeometry import projection, sampleSegments, validGeometry
@@ -130,7 +130,7 @@ async def evaluatedCandidates(provider, origin, destination, evidence, mobilityR
                     continue
                 startConnector = LineString([actualStart, snappedStart])
                 endConnector = LineString([snappedEnd, actualEnd])
-                escapeConnector = item.hazardType == HazardType.TSUNAMI and item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and zone.covers(actualStart) and zone.covers(snappedStart)
+                escapeConnector = item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and zone.covers(actualStart) and zone.covers(snappedStart)
                 if (startConnector.length > 0.01 and startConnector.intersects(zone) and not escapeConnector) or (endConnector.length > 0.01 and endConnector.intersects(zone)):
                     result.feasible = False
                     result.reasons.extend(['ENDPOINT_HAZARD_CONNECTION_UNKNOWN', 'AUTHORITATIVE_HAZARD_INTERSECTION', 'ROUTE_REJECTED_CRITICAL_HAZARD'])

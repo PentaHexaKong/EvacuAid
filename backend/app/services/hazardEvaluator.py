@@ -99,6 +99,9 @@ def evaluateHazards(route, evidence: list[HazardEvidence], elevation=None) -> tu
     reasons = []
     feasible = True
     closest = None
+    origin = Point(line.coords[0])
+    originItems = [(item, zone) for item in items if item.hard() and item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and (zone := hardGeometry(item, forward)) is not None and zone.covers(origin)]
+    originZone = unary_union([zone for _, zone in originItems]) if originItems else None
     tsunamiHard = [hardGeometry(item, forward) for item in items if item.hazardType == HazardType.TSUNAMI and item.hard() and item.evidenceType != EvidenceType.CONFIRMED_CLOSURE]
     tsunamiHard = [zone for zone in tsunamiHard if zone is not None]
     tsunamiZone = unary_union(tsunamiHard) if tsunamiHard else None
@@ -114,7 +117,7 @@ def evaluateHazards(route, evidence: list[HazardEvidence], elevation=None) -> tu
                 feasible = False
             continue
         if item.hard() and line.intersects(hardGeometry(item, forward)):
-            special = escape and item.hazardType == HazardType.TSUNAMI and item.evidenceType != EvidenceType.CONFIRMED_CLOSURE
+            special = item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and hardGeometry(item, forward).covers(origin)
             if not special:
                 feasible = False
                 reasons.extend(['AUTHORITATIVE_HAZARD_INTERSECTION', 'ROUTE_REJECTED_CRITICAL_HAZARD'])
@@ -177,6 +180,31 @@ def evaluateHazards(route, evidence: list[HazardEvidence], elevation=None) -> tu
         EVALUATORS[name](result, relevant, elevation, fireKernels)
         result.exposure = min(1, max(0, result.exposure))
         result.state = 'POTENTIALLY_EXPOSED' if any(item.authority != Authority.OFFICIAL for item in relevant) else 'EXPOSED' if result.intersectionRatio > 0 else 'UNKNOWN'
+    if originZone is not None:
+        exitDistance, reentered = escapeProgress(line, originZone)
+        escapeReasons = []
+        if exitDistance is None or originZone.covers(Point(line.coords[-1])):
+            feasible = False
+            escapeReasons.append('HAZARD_ZONE_NOT_EXITED')
+        elif not reentered:
+            escapeReasons.append('HAZARD_ZONE_EXIT')
+        if reentered:
+            feasible = False
+            escapeReasons.append('HAZARD_ZONE_REENTRY')
+        reasons.extend(escapeReasons)
+        for name in {item.hazardType.value.lower() for item, _ in originItems}:
+            if name not in metrics:
+                continue
+            result = metrics[name]
+            result.reasonCodes.extend(escapeReasons)
+            if name != 'tsunami':
+                result.firstExitDistanceM = exitDistance
+                result.firstExitTimeSec = route.durationSec * exitDistance / line.length if exitDistance is not None else None
+                result.reentered = reentered
+                result.intersectionRatio = line.intersection(originZone).length / line.length
+            result.state = 'EXPOSED'
+        if not feasible:
+            reasons.extend(['AUTHORITATIVE_HAZARD_INTERSECTION', 'ROUTE_REJECTED_CRITICAL_HAZARD'])
     if escape:
         result = metrics['tsunami']
         exitDistance, reentered = escapeProgress(line, tsunamiZone)

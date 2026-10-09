@@ -170,3 +170,29 @@ async def testOneDestinationProviderFailureDoesNotDiscardFeasibleShelter(dbSessi
     assert response.routeStatus == NavigationStatus.READY
     assert response.destination.name == 'SYNTHETIC_TEST_1'
     assert any('ROUTING_PROVIDER_UNAVAILABLE' in item.reasonCodes for item in response.rejectedCandidates)
+
+
+@pytest.mark.asyncio
+async def testNavigationEndpointReturnsFloodEscapeRoute(dbSession, monkeypatch):
+    import httpx
+    from tests.test_navigation import WorkingProvider, createApi
+    item = syntheticEvidence(geometry={'type': 'Polygon', 'coordinates': [[[106.799, -6.201], [106.804, -6.201], [106.804, -6.199], [106.799, -6.199], [106.799, -6.201]]]})
+    item.metadata['officialStatus'] = 'AWAS'
+    await hazardRepository.saveEvidence(dbSession, [item])
+    shelter = await shelterService.createShelter(dbSession, ShelterCreate(name='SYNTHETIC_TEST_OUTSIDE', latitude=-6.2, longitude=106.81, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
+    await dbSession.commit()
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', WorkingProvider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers={'Authorization': f"Bearer {guest['access_token']}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body['routeStatus'] == 'READY'
+    assert body['destination']['shelterId'] == str(shelter.id)
+    assert body['route'] is not None
+    assert body['evaluation']['safetyStatus'] == 'EXPOSED'
+    assert 'HAZARD_ZONE_EXIT' in body['evaluation']['reasonCodes']
+    assert 'NO_KNOWN_HAZARD_INTERSECTION' not in body['evaluation']['reasonCodes']
+    assert 'NO_FEASIBLE_ROUTE' not in body['selectionReasonCodes']

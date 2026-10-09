@@ -261,3 +261,22 @@ async def testSessionRouteRetainsManeuversRequirement(dbSession, monkeypatch):
     response = await pilotNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'UNAVAILABLE'
     assert response['selectionReasonCodes'] == ['MANEUVERS_UNAVAILABLE']
+
+
+@pytest.mark.asyncio
+async def testSessionShelterRouteReturnsFloodEscape(dbSession, monkeypatch):
+    request, actor, payload = await sessionFixture(dbSession, 'TO_SHELTER')
+    item = syntheticEvidence(geometry={'type': 'Polygon', 'coordinates': [[[-0.001, -0.001], [0.004, -0.001], [0.004, 0.001], [-0.001, 0.001], [-0.001, -0.001]]]})
+    await hazardRepository.saveEvidence(dbSession, [item])
+    await dbSession.commit()
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
+    provider = Provider()
+    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    assert response['routeStatus'] == 'READY'
+    assert response['evaluation']['safetyStatus'] == 'EXPOSED'
+    assert 'HAZARD_ZONE_EXIT' in response['evaluation']['reasonCodes']
+    assert 'NO_KNOWN_HAZARD_INTERSECTION' not in response['evaluation']['reasonCodes']
+    assert response['route']['maneuvers']
+    assert provider.attempts == 0
+    assert request.selected_shelter_id == response['destination']['shelterId']
