@@ -20,7 +20,7 @@ import { TabHeader, TabScrollView } from '@/components/tab-shell';
 import { ActionButton, AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { SpeakButton } from '@/components/speak-button';
-import { incomingNamesSummary } from '@/features/buddy-pilot/incoming-contacts';
+import { relyingSummary } from '@/features/buddy-pilot/incoming-contacts';
 import { useIncomingContacts } from '@/features/buddy-pilot/use-incoming-contacts';
 import { useProfile } from '@/features/profile/context';
 import { useGuestSession } from '@/features/profile/session';
@@ -116,7 +116,8 @@ export function OverviewScreen() {
   const hasNeeds = accessibility.length > 0;
   const incomingContacts = useIncomingContacts(token, !hasNeeds);
   const { t, i18n } = useTranslation();
-  const peopleDetail = incomingNamesSummary(incomingContacts) || t('homePeopleRelyingDetail');
+  const peopleSummary = relyingSummary(incomingContacts);
+  const peopleDetail = peopleSummary.key ? t(peopleSummary.key, peopleSummary.params) : peopleSummary.params.names || t('homePeopleRelyingDetail');
   const router = useRouter();
   // The hero follows the most severe alert, so a newer Normal notice never hides an active warning.
   const alerts = useAlerts();
@@ -189,7 +190,7 @@ export function OverviewScreen() {
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconLifebuoy size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeAskHelp')} detail={t('homeAskHelpDetail')} trailing={chevron} onPress={() => voice.run('help')} />
         </Group> : <Group inset={0}>
           {hasNeeds && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
-          {!hasNeeds && incomingContacts.length > 0 && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('homePeopleRelying')} detail={peopleDetail} accessibilityLabel={`${t('homePeopleRelying')}. ${peopleDetail}`} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
+          {!hasNeeds && incomingContacts.length > 0 && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('homePeopleRelying')} detail={<AppText variant="small" style={{ color: peopleSummary.tone === 'critical' ? colors.critical : colors.muted }}>{peopleDetail}</AppText>} accessibilityLabel={`${t('homePeopleRelying')}. ${peopleDetail}`} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMap size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickMap')} detail={t('quickMapDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/discover'); }} />
         </Group>}
         {collapsible && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}

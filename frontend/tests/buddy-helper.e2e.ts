@@ -66,8 +66,9 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
     requestId = request.id;
     await screen.getByRole('tab', 'Home').tap();
     await screen.getByRole('tab', 'Buddy').tap();
-    await screen.getByRole('button', 'Accept & help').tap({ timeout: 30_000 });
-    await screen.getByRole('button', 'Confirm').tap();
+    await expect(screen.getByText('Nina Rahma needs your help')).toBeVisible({ timeout: 30_000 });
+    await expect(screen.getByText('Shares your location with Nina Rahma while you help')).toBeVisible();
+    await screen.getByRole('button', "I'll help Nina Rahma").tap();
     await expect(screen.getByRole('button', 'Start travelling to requester')).toBeVisible({ timeout: 30_000 });
 
     // A phone keeps sending its position; one ping would go stale before the route is asked for.

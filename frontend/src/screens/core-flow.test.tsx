@@ -13,7 +13,7 @@ import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
 
 let mockAccessibility: { type: string; severity: null }[] = [];
-let mockIncomingContacts: { name: string | null }[] = [];
+let mockIncomingContacts: Pick<import('@/features/buddy-pilot/api').Contact, 'name' | 'latestAlertResponse'>[] = [];
 let mockNotifications: boolean | undefined;
 jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility }) }));
 jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
@@ -591,4 +591,16 @@ test('Not now finishes even while a permission request is pending', async () => 
   view.unmount();
   await act(async () => resolve('granted'));
   expect(ensureNotifications).not.toHaveBeenCalled();
+});
+
+
+test('helper Home prioritizes needs help in critical colour and summarizes safe answers', () => {
+  const at = new Date().toISOString();
+  mockIncomingContacts = [{ name: 'Ari', latestAlertResponse: { alertId: 'warning', response: 'SAFE', at } }, { name: 'Budi', latestAlertResponse: { alertId: 'warning', response: 'NEEDS_HELP', at } }];
+  const view = render(<OverviewScreen />);
+  expect(view.getByText('Budi needs help')).toHaveStyle({ color: require('@/theme').colors.critical });
+  expect(view.getByRole('button', { name: 'People who rely on you. Budi needs help' })).toBeTruthy();
+  mockIncomingContacts = [{ name: 'Ari', latestAlertResponse: { alertId: 'warning', response: 'SAFE', at } }, { name: 'Budi' }];
+  view.rerender(<OverviewScreen />);
+  expect(view.getByText('Ari marked safe')).toBeTruthy();
 });

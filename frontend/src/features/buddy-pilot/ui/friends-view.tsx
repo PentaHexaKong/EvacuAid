@@ -1,21 +1,25 @@
 import { Platform, Share, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { relativeTime } from '@/features/hazards/time';
 import { useRouter } from 'expo-router';
 import { ActionButton, AppText } from '@/components/ui';
 import { MoreMenu } from '@/components/native-controls';
 import { colors, radius } from '@/theme';
 import buddyArt from '../../../../assets/brand/quick/buddy.png';
 import { relationLabel } from '../copy';
+import { orderRelyingContacts } from '../incoming-contacts';
 import type { BuddyActions } from '../use-buddy-actions';
-import { buddyStyles, EmptyCard, Group, PersonAvatar, Row } from './parts';
+import { buddyStyles, EmptyCard, Group, PersonAvatar, Row, StatusChip } from './parts';
 import { CodeRow, FriendCard, ReceivedInvites, SentInvites } from './friend-card';
 
 export function FriendsView({ a, code }: { a: BuddyActions; code: string | null }) {
   const { state, c, support, session, attempt, active, confirm, catchNative } = a;
   const router = useRouter();
+  const { t } = useTranslation();
   const sent = state.invitations.filter(item => item.status === 'SENT' && item.direction === 'OFFER_HELP');
   const offer = attempt && session && !session.nearby;
   // A friend who is asking for help is the card at the top, so they are not repeated in the list.
-  const listed = state.incomingContacts.filter(contact => !offer || contact.userId !== session.requesterUserId);
+  const listed = orderRelyingContacts(state.incomingContacts.filter(contact => !offer || contact.userId !== session.requesterUserId));
   const empty = !state.incomingContacts.length && !state.received.length && !sent.length && !offer;
   const share = () => { if (code) catchNative(() => Share.share({ message: c('shareMessage', { code }) })); };
   const details = (needs?: string[], relation?: Parameters<typeof relationLabel>[0]) => [...(needs ?? []).map(support), relationLabel(relation, c)].filter(Boolean).join(' · ');
@@ -25,9 +29,12 @@ export function FriendsView({ a, code }: { a: BuddyActions; code: string | null 
     {listed.length > 0 && <View style={styles.section}>
       <AppText variant="section" accessibilityRole="header">{c('friendsHeading')}</AppText>
       <Group>{listed.map(contact => {
+        const answer = contact.latestAlertResponse;
+        const time = answer && relativeTime(answer.at);
+        const answerKey = answer?.response === 'SAFE' ? 'relyingSafe' : answer?.response === 'EVACUATING' ? 'relyingEvacuating' : 'relyingNeedsHelp';
         const helping = active && session?.requesterUserId === contact.userId;
         return <Row key={contact.id} leading={<PersonAvatar name={contact.name} size={44} />} title={contact.name ?? c('name')}
-          detail={helping ? <View style={[buddyStyles.row, { gap: 6 }]}><View style={styles.dot} /><AppText style={{ color: colors.primary }}>{c('inSession')}</AppText></View> : <AppText style={{ color: colors.muted }}>{details(contact.needs, contact.relation)}</AppText>}
+          detail={answer && time ? <StatusChip dot tone={answer.response === 'SAFE' ? 'neutral' : answer.response === 'EVACUATING' ? 'info' : 'critical'} label={t(answerKey, { time: t(time.key, { count: time.count }) })} /> : helping ? <View style={[buddyStyles.row, { gap: 6 }]}><View style={styles.dot} /><AppText style={{ color: colors.primary }}>{c('inSession')}</AppText></View> : <AppText style={{ color: colors.muted }}>{details(contact.needs, contact.relation)}</AppText>}
           onPress={helping ? () => { void state.refresh(session.id); } : undefined}
           trailing={<MoreMenu label={`${c('more')}: ${contact.name ?? c('name')}`} items={[{ label: c('remove'), destructive: true, onPress: () => confirm(c('remove'), () => { void state.run(`/contacts/${contact.id}`, undefined, 'DELETE'); }) }]} />}
         />;

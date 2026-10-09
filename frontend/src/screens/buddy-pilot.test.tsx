@@ -19,6 +19,7 @@ let mockReceived: unknown[] = [];
 let mockIncomingContacts: unknown[] = [];
 let mockAccessibility: { type: string }[] = [];
 const mockPush = jest.fn();
+let mockPathname = '/buddy';
 let mockParams: { code?: string } = {};
 let mockAvailability = { optedIn: false, enrolled: true };
 let mockLocation: { latitude: number; longitude: number; accuracyM?: number; observedAt?: string } | null = null;
@@ -33,9 +34,9 @@ jest.mock('expo-router', () => {
     Menu: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel: string }) => <View accessibilityLabel={accessibilityLabel}>{children}</View>,
     MenuAction: ({ children, onPress }: { children: string; onPress: () => void }) => <Pressable accessibilityRole="menuitem" accessibilityLabel={children} onPress={onPress} />,
   });
-  return { useRouter: () => ({ push: mockPush }), useFocusEffect: (callback: () => void) => useEffect(callback, [callback]), useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
+  return { usePathname: () => mockPathname, useRouter: () => ({ push: mockPush }), useFocusEffect: (callback: () => void) => useEffect(callback, [callback]), useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
 });
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: Record<string, string>) => key.startsWith('relying') ? jest.requireActual('@/localization/en.json')[key].replace('{{time}}', params?.time ?? '') : key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'private', user: { id: 'helper' } }) }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockAccessibility, ready: true }) }));
 jest.mock('@/components/discover-map.native', () => ({ DiscoverMap: () => { const { View } = jest.requireActual('react-native'); return <View testID="session-map" />; } }));
@@ -352,4 +353,47 @@ test('a person with support needs accepts a helper\'s offer and cancels an invit
   fireEvent.press(view.getByRole('button', { name: 'Cancel' }));
   expect(mockRun).toHaveBeenCalledWith('/invitations/asked', undefined, 'DELETE');
   expect(view.queryByText('Your code')).toBeNull();
+});
+
+
+test('presents each pending attempt once and leaves the card after answering later', () => {
+  mockAccessibility = [];
+  mockSession = { id: 'takeover', requesterUserId: 'nina', requesterName: 'Nina', status: 'WAITING', supportNeeds: [], attempts: [{ id: 'takeover-first', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
+  const view = render(<BuddyPilotScreen />);
+  expect(mockPush).toHaveBeenCalledWith('/help-request/takeover');
+  view.rerender(<BuddyPilotScreen />);
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(view.getByRole('button', { name: 'Accept & help' })).toBeTruthy();
+  mockSession = { ...(mockSession as object), attempts: [{ id: 'takeover-next', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
+  view.rerender(<BuddyPilotScreen />);
+  expect(mockPush).toHaveBeenCalledTimes(2);
+});
+
+test('does not present a takeover while already on a help request route', () => {
+  mockAccessibility = [];
+  mockPathname = '/help-request/already-open';
+  mockSession = { id: 'already-open', requesterUserId: 'nina', status: 'WAITING', supportNeeds: [], attempts: [{ id: 'already-open-attempt', helperUserId: 'helper', status: 'PENDING', expiresAt: new Date(Date.now() + 120000).toISOString() }] };
+  const view = render(<BuddyPilotScreen />);
+  expect(mockPush).not.toHaveBeenCalled();
+  mockPathname = '/buddy';
+  view.rerender(<BuddyPilotScreen />);
+  expect(mockPush).toHaveBeenCalledWith('/help-request/already-open');
+});
+
+test('friends render and order all alert answer states', () => {
+  mockAccessibility = [];
+  const at = new Date().toISOString();
+  mockIncomingContacts = [
+    { id: 'safe', name: 'Ari', latestAlertResponse: { response: 'SAFE', at } },
+    { id: 'none', name: 'Budi', needs: ['VISUAL_IMPAIRMENT'], relation: 'TEMAN' },
+    { id: 'evacuating', name: 'Citra', latestAlertResponse: { response: 'EVACUATING', at } },
+    { id: 'needs', name: 'Dewi', latestAlertResponse: { response: 'NEEDS_HELP', at } },
+  ];
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Safe · timeJustNow')).toBeTruthy();
+  expect(view.getByText('Evacuating · timeJustNow')).toBeTruthy();
+  expect(view.getByText('Needs help · timeJustNow')).toBeTruthy();
+  expect(view.getByText('accessibility_VISUAL_IMPAIRMENT · Friend')).toBeTruthy();
+  const names = view.getAllByText(/^(Ari|Budi|Citra|Dewi)$/).map(node => node.props.children);
+  expect(names).toEqual(['Dewi', 'Citra', 'Budi', 'Ari']);
 });
