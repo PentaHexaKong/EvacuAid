@@ -134,8 +134,8 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const nearbyPending = useRef(false);
   const fallbackSearched = useRef(new Set<string>());
   const startNearby = async (voiceConfirmed = false, offer112 = false) => {
-    if (nearbyPending.current) return;
-    if (!consent && !voiceConfirmed) { setLocalError(c('consentRequired')); return; }
+    if (nearbyPending.current) return false;
+    if (!consent && !voiceConfirmed) { setLocalError(c('consentRequired')); return false; }
     nearbyPending.current = true;
     try {
       let position: Position;
@@ -144,7 +144,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
         if (offer112) Alert.alert(c('locationMissing'), readableIssue(cause instanceof Error ? cause.message : c('locationMissing'), c) ?? c('locationMissing'), [{ text: c('cancel'), style: 'cancel' }, { text: c('call112'), onPress: () => { void Linking.openURL('tel:112'); } }]);
         throw cause;
       }
-      if (session && !terminalStatuses.has(session.status)) { await transition('nearby', position); return; }
+      if (session && !terminalStatuses.has(session.status)) return Boolean(await transition('nearby', position));
       idempotency.current ??= `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
       const created = await state.run<Session>('/requests', { helperUserId: null, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current, ...position });
       if (created) {
@@ -152,7 +152,8 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
         await state.run(`/requests/${created.id}/nearby`, position);
         await state.refresh(created.id);
       }
-    } catch (cause) { setLocalError(cause instanceof Error ? cause.message : c('locationMissing')); }
+      return Boolean(created);
+    } catch (cause) { setLocalError(cause instanceof Error ? cause.message : c('locationMissing')); return false; }
     finally { nearbyPending.current = false; }
   };
   const askFromHome = useEffectEvent(() => {
@@ -167,11 +168,11 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (session) state.dismissSession();
     askFromHome();
   }, [params.help, params.consented, state.loading, state.error, session, state.dismissSession]);
-  const searchFallback = useEffectEvent(() => { void startNearby(true); });
+  // A failed search (no location, request error) is not recorded, so the next refresh or Retry tries again.
+  const searchFallback = useEffectEvent((id: string) => { void startNearby(true).then(done => { if (done) fallbackSearched.current.add(id); }); });
   useEffect(() => {
     if (!requester || session?.status !== 'FALLBACK_REQUIRED' || fallbackSearched.current.has(session.id) || nearbyPending.current) return;
-    fallbackSearched.current.add(session.id);
-    searchFallback();
+    searchFallback(session.id);
   }, [requester, session]);
   const requestRoute = async (leg: 'TO_REQUESTER' | 'TO_SHELTER', position?: Position) => {
     if (!session || routeBusy) return;

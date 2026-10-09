@@ -44,3 +44,11 @@ test('notification presentation suppresses the gate', () => {
   render(<AlertGate />);
   expect(mockPush).not.toHaveBeenCalled();
 });
+test('an answered warning silences lower and equal ones but not a more severe one', () => {
+  mockItems = [item('answered', { level: 'awas', myResponse: 'EVACUATING' }), item('lower'), item('equal', { level: 'awas' })];
+  const view = render(<AlertGate />);
+  expect(mockPush).not.toHaveBeenCalled();
+  mockItems = [item('answered-siaga', { myResponse: 'SAFE' }), item('worse', { level: 'awas' })];
+  view.rerender(<AlertGate />);
+  expect(mockPush).toHaveBeenCalledWith({ pathname: '/emergency/[id]', params: { id: 'worse' } });
+});
