@@ -113,5 +113,11 @@ test('a failed reroute keeps guiding on the last good route', () => {
   view.rerender(<EvacuateScreen />);
   expect(view.getByRole('header', { name: 'Turn left' })).toBeTruthy();
   expect(view.queryByText('No safe walking route was found.')).toBeNull();
+  expect(view.getByRole('alert')).toHaveTextContent("Couldn't update your route. These directions may be out of date.");
+  fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+  expect(mockFind).toHaveBeenLastCalledWith('hall');
   expect(view.getByRole('button', { name: "I've arrived, I'm safe" })).toBeTruthy();
+  mockPhase = 'denied';
+  view.rerender(<EvacuateScreen />);
+  expect(view.getByRole('header', { name: 'Guidance needs your location.' })).toBeTruthy();
 });
