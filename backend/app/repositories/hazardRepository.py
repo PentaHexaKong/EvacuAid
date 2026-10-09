@@ -4,13 +4,13 @@ import uuid
 
 from geoalchemy2 import Geography
 from geoalchemy2.shape import from_shape, to_shape
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from shapely.geometry import mapping
 
 from app.config import HAZARD_MAX_EVIDENCE
 from app.db.models.hazard import HazardRecord
-from app.models.hazard import HazardEvidence
+from app.models.hazard import Authority, EvidenceType, HazardEvidence
 from app.utils.hazardGeometry import validGeometry
 
 
@@ -60,3 +60,13 @@ async def activeEvidence(session, center: tuple[float, float], radiusM: float, g
     if len(rows) > HAZARD_MAX_EVIDENCE:
         raise HazardStateUnavailable('HAZARD_EVIDENCE_LIMIT_EXCEEDED')
     return [HazardEvidence(sourceId=row.sourceId, hazardType=row.hazardType, source=row.source, authority=row.authority, evidenceType=row.evidenceType, geometry=mapping(to_shape(row.geometry)), severity=row.severity, confidence=row.confidence, observedAt=row.observedAt, validFrom=row.validFrom, validUntil=row.validUntil, metadata=row.evidenceMetadata) for row in rows]
+
+
+def coversLocation(latitude, longitude):
+    return func.ST_Covers(HazardRecord.geometry, func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326))
+
+
+def activeOfficialAlerts(statuses=('WASPADA', 'SIAGA', 'AWAS'), now=None):
+    now = now or datetime.now(timezone.utc)
+    status = HazardRecord.evidenceMetadata['officialStatus'].astext
+    return select(HazardRecord).where(HazardRecord.authority == Authority.OFFICIAL.value, HazardRecord.evidenceType.in_((EvidenceType.ACTIVE_WARNING.value, EvidenceType.CRITICAL_HAZARD.value)), status.in_(statuses), or_(HazardRecord.validFrom.is_(None), HazardRecord.validFrom <= now), or_(HazardRecord.validUntil.is_(None), HazardRecord.validUntil > now)).order_by(case((status == 'AWAS', 0), (status == 'SIAGA', 1), else_=2), func.coalesce(HazardRecord.observedAt, HazardRecord.validFrom).desc().nulls_last(), HazardRecord.id)
