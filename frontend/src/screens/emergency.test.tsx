@@ -15,6 +15,7 @@ let mockAccess = { voiceHome: false, listen: false, autoRead: false, soundFree: 
 let mockBuddy: string | null = null;
 let mockIncoming: { name: string }[] = [];
 let mockFocused = true;
+let mockStale = false;
 const mockRouter = { canGoBack: jest.fn(), replace: jest.fn(), back: jest.fn() };
 const mockReload = jest.fn().mockResolvedValue(undefined);
 const mockHaptics = { tap: jest.fn(), alert: jest.fn() };
@@ -27,7 +28,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
   for (const [name, value] of Object.entries(values ?? {})) text = text.replace(`{{${name}}}`, value);
   return text;
 }, i18n: { language: 'en' } }) }));
-jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ items: mockItem ? [mockItem] : [], reload: mockReload }), findAlert: () => mockItem, applyResponse: jest.fn() }));
+jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ items: mockItem ? [mockItem] : [], reload: mockReload, stale: mockStale, status: 'ready' }), findAlert: () => mockItem, applyResponse: jest.fn() }));
 jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn() }));
 jest.mock('@/features/alerts/alert-gate', () => ({ markAlertPresented: jest.fn() }));
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
@@ -128,6 +129,17 @@ test('close posts nothing and does not ask Always', async () => {
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
   expect(respondToAlert).not.toHaveBeenCalled();
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+test('a failed reload is not shown as an ended warning and can be retried', async () => {
+  mockItem = undefined;
+  mockStale = true;
+  try {
+    const view = render(<EmergencyScreen />);
+    await waitFor(() => expect(view.getByText("Can't load warnings right now.")).toBeTruthy());
+    expect(view.queryByText('This warning has ended.')).toBeNull();
+    fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(2));
+  } finally { mockStale = false; }
 });
 test('ended warning reloads once and offers Close', async () => {
   mockItem = undefined;

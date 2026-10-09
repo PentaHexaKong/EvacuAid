@@ -55,6 +55,8 @@ export function EmergencyScreen() {
   const insets = useSafeAreaInsets();
   const { stops, ink } = sky[alert?.level ?? 'normal'];
   const [checked, setChecked] = useState<string | null>(null);
+  // The reload never throws; a failed one leaves the feed stale or in error, which is not proof the warning ended.
+  const unconfirmed = alerts.stale || alerts.status === 'error';
   const opened = useRef<string | null>(null);
   const active = useRef(false);
   const narration = useRef(false);
@@ -192,7 +194,7 @@ export function EmergencyScreen() {
           {access.voiceHome && access.listen && !access.soundFree && <SpeakButton listening={voice.listening} label={t(voice.listening ? 'voiceListening' : 'voiceSpeak')} detail={t('emergencyVoicePrompt')} hint={t('emergencyVoicePrompt')} onPress={toggle} />}
           {actions.map(action => action.variant === 'link' ? <Tap key={action.id} onPress={() => run(action.id)} style={{ minHeight: 44 }}><AppText variant="button" style={{ color: ink }}>{labels[action.id]}</AppText></Tap> : <ActionButton key={action.id} variant={action.variant} label={labels[action.id]} detail={action.id === 'buddy' ? buddyName ? t('emergencyShareCaption', { name: buddyName }) : t('emergencyShareCaptionNearby') : undefined} onPress={() => run(action.id)} />)}
         </Enter>
-      </> : <View style={[styles.content, { flex: 1, justifyContent: 'center' }]}><AppText accessibilityRole="header" style={{ color: ink }}>{t(checked === id ? 'emergencyEnded' : 'loading')}</AppText><ActionButton variant="secondary" label={t('emergencyClose')} onPress={close} /></View>}
+      </> : <View style={[styles.content, { flex: 1, justifyContent: 'center' }]}><AppText accessibilityRole="header" style={{ color: ink }}>{t(checked !== id ? 'loading' : unconfirmed ? 'alertUnavailable' : 'emergencyEnded')}</AppText>{checked === id && unconfirmed && <ActionButton label={t('retry')} onPress={() => { setChecked(null); void alerts.reload().then(() => setChecked(id)); }} />}<ActionButton variant="secondary" label={t('emergencyClose')} onPress={close} /></View>}
     </ScrollView>
   </View>;
 }
