@@ -15,16 +15,15 @@ jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/featur
 jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
 let mockLanguage = 'en';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
-// topAlert's own ranking is covered in discover-profile.test; here each level is pinned to test what Home renders.
 let mockTopLevel: string | null = null;
-jest.mock('@/features/content/samples', () => {
-  const actual = jest.requireActual('@/features/content/samples');
-  // __esModule keeps Babel's interop from copying topAlert once at import, so the getter is read on every render.
-  return Object.defineProperties({ ...actual }, {
-    __esModule: { value: true },
-    topAlert: { enumerable: true, get: () => ({ ...(mockTopLevel ? { ...actual.sampleAlerts[1], level: mockTopLevel } : actual.topAlert), ...(mockAlertId ? { id: mockAlertId } : {}) }) },
-  });
-});
+let mockAlertsStatus = 'ready';
+let mockAlertsStale = false;
+const mockReloadAlerts = jest.fn();
+jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => {
+  const { alertItems } = jest.requireActual('@/features/alerts/test-fixtures');
+  const items = mockTopLevel === 'normal' || mockAlertsStatus !== 'ready' ? [] : [{ ...(mockTopLevel ? alertItems[1] : alertItems[0]), level: mockTopLevel ?? 'siaga', ...(mockAlertId ? { id: mockAlertId } : {}) }, ...(mockTopLevel ? [] : [alertItems[1]])];
+  return { status: mockAlertsStatus, items, stale: mockAlertsStale, updatedAt: Date.parse('2026-09-17T01:30:00Z'), reload: mockReloadAlerts };
+} }));
 let mockShelters: { name: string; distanceM: number }[] | null = null;
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: mockShelters }) }));
 jest.mock('expo-router', () => {
@@ -32,7 +31,7 @@ jest.mock('expo-router', () => {
   return { useRouter: () => mockRouter, useIsFocused: () => mockFocused, Stack: { Toolbar } };
 });
 jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 100 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: Record<string, string>) => Object.entries(params ?? {}).reduce((text, [name, value]) => text.replace(`{{${name}}}`, value), (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key), i18n: { language: mockLanguage } }) }));
 jest.mock('@/components/settings-menu', () => ({ SettingsMenu: ({ notifications }: { notifications?: boolean }) => { mockNotifications = notifications; return null; } }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
 const { selectLanguage } = jest.requireMock('@/localization') as { selectLanguage: jest.Mock };
@@ -119,11 +118,11 @@ test('finishing onboarding from the warning step returns Home', async () => {
   expect(done).toHaveBeenCalledWith(undefined);
 });
 
-test('Home shows the sample alert level with its label and routes to a gathering point', () => {
+test('Home shows the live alert level with its label and routes to a gathering point', () => {
   const view = render(<OverviewScreen />);
-  expect(view.getByRole('header', { name: 'Caution for heavy rain and strong winds.' })).toBeTruthy();
-  expect(view.getByText('08:30 to 11:30 WIB')).toBeTruthy();
-  expect(view.getByText('Keep checking for updates and pack a go-bag.')).toBeTruthy();
+  expect(view.getByRole('header', { name: 'Alert for extreme weather.' })).toBeTruthy();
+  expect(view.getByText('Until 17 Sep 2026 · 11:30 WIB')).toBeTruthy();
+  expect(view.getByText('Get ready to leave. Check your route and tell your Buddy.')).toBeTruthy();
   expect(view.getByLabelText('EvacuAid')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/discover', params: { route: expect.any(String) } });
@@ -135,7 +134,7 @@ test('Home escalates its words and route action with the top alert, and says all
   try {
     mockTopLevel = 'siaga';
     const severe = render(<OverviewScreen />);
-    expect(severe.getByRole('header', { name: 'Alert for water on local roads.' })).toBeTruthy();
+    expect(severe.getByRole('header', { name: 'Alert for flooding.' })).toBeTruthy();
     expect(severe.getByText('Get ready to leave. Check your route and tell your Buddy.')).toBeTruthy();
     expect(severe.queryByText('Start route')).toBeNull();
     severe.unmount();
@@ -150,8 +149,8 @@ test('Home escalates its words and route action with the top alert, and says all
     expect(clear.queryByText(/go-bag|Get ready|gathering point now/)).toBeNull();
     expect(clear.queryByText(/Find gathering point|See gathering points on the map/)).toBeNull();
     expect(clear.queryByText('Read the full alert')).toBeNull();
-    expect(clear.getByRole('header', { name: 'Recent alerts' })).toBeTruthy();
-    expect(clear.getByLabelText(/^Caution\. Heavy rain and strong winds\./)).toBeTruthy();
+    expect(clear.queryByRole('header', { name: 'Recent alerts' })).toBeNull();
+    expect(clear.queryByRole('button', { name: 'See all' })).toBeNull();
   } finally {
     mockTopLevel = null;
   }
@@ -171,8 +170,8 @@ test('Home links the header alert and lists only the other alerts below', () => 
   fireEvent.press(view.getByRole('button', { name: 'Read the full alert' }));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
   expect(view.getByRole('header', { name: 'Other alerts' })).toBeTruthy();
-  expect(view.queryByLabelText(/^Caution\. Heavy rain and strong winds\./)).toBeNull();
-  fireEvent.press(view.getByLabelText(/^Normal\. Water on local roads\./));
+  expect(view.queryByLabelText(/^Alert\. Extreme weather\./)).toBeNull();
+  fireEvent.press(view.getByLabelText(/^Caution\. Flooding\./));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'water' } });
   fireEvent.press(view.getByRole('button', { name: 'See all' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts-tab');
@@ -195,7 +194,7 @@ test.each(['id', 'en'])('support-needs Home has two quick rows, help and the map
 let mockAutoRead = false;
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ autoRead: mockAutoRead, simpleHome: mockSimpleHome, voiceHome: mockVoiceHome, listen: mockListen, soundFree: mockSoundFree }) }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn(() => Promise.resolve()) }));
-beforeEach(() => { mockAutoRead = false; });
+beforeEach(() => { mockAutoRead = false; mockAlertsStatus = 'ready'; mockAlertsStale = false; });
 
 test('Home reads an alert once across re-renders and remounts', () => {
   mockAutoRead = true;
@@ -204,14 +203,14 @@ test('Home reads an alert once across re-renders and remounts', () => {
   view.unmount();
   render(<OverviewScreen />);
   expect(speak).toHaveBeenCalledTimes(1);
-  expect(speak).toHaveBeenCalledWith(expect.stringContaining('Heavy rain and strong winds'), 'en');
-  expect(jest.mocked(speak).mock.calls[0][0]).toContain('08:30 to 11:30 WIB');
-  expect(jest.mocked(speak).mock.calls[0][0]).toContain('Keep checking for updates and pack a go-bag.');
+  expect(speak).toHaveBeenCalledWith(expect.stringContaining('Extreme weather'), 'en');
+  expect(jest.mocked(speak).mock.calls[0][0]).toContain('Until 17 Sep 2026 · 11:30 WIB');
+  expect(jest.mocked(speak).mock.calls[0][0]).toContain('Get ready to leave. Check your route and tell your Buddy.');
   mockTopLevel = 'siaga';
   try {
     const second = render(<OverviewScreen />);
     expect(speak).toHaveBeenCalledTimes(2);
-    expect(speak).toHaveBeenLastCalledWith(expect.stringContaining('Water on local roads'), 'en');
+    expect(speak).toHaveBeenLastCalledWith(expect.stringContaining('Flooding'), 'en');
     second.unmount();
   } finally { mockTopLevel = null; }
   render(<OverviewScreen />);
@@ -335,7 +334,7 @@ test('spoken commands on the voice Home read the alert, open the gathering point
     render(<OverviewScreen />);
     jest.mocked(speak).mockClear();
     act(() => mockOnCommand('read the alert'));
-    expect(jest.mocked(speak).mock.calls.at(-1)![0]).toContain('Heavy rain and strong winds');
+    expect(jest.mocked(speak).mock.calls.at(-1)![0]).toContain('Extreme weather');
     act(() => mockOnCommand('titik kumpul terdekat'));
     expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Nearest gathering point: Aula Kelurahan, 250 m');
     expect(mockRouter.navigate).not.toHaveBeenCalled();
@@ -446,4 +445,37 @@ test('the voice Home nearest row speaks the shelter without navigation', () => {
     expect(speak).toHaveBeenCalledWith('Nearest gathering point: Aula Kelurahan, 250 m', 'en');
     expect(mockRouter.navigate).not.toHaveBeenCalled();
   } finally { mockShelters = null; }
+});
+
+
+test('Home loading does not announce a no-warning result', () => {
+  mockAlertsStatus = 'loading';
+  const view = render(<OverviewScreen />);
+  expect(view.queryByText('No warning for your area right now.')).toBeNull();
+  expect(view.queryByRole('header', { name: 'Conditions are normal. No active warnings.' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'See all' })).toBeNull();
+});
+
+test('Home no-location shows the save action without automatic feedback', () => {
+  mockAlertsStatus = 'no-location';
+  mockAutoRead = true;
+  const view = render(<OverviewScreen />);
+  expect(view.getByRole('header', { name: 'Warnings need your location.' })).toBeTruthy();
+  expect(view.getByText('Save your location to see warnings for your area.')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Save location' })).toBeTruthy();
+  expect(speak).not.toHaveBeenCalled();
+  expect(mockAlertHaptic).not.toHaveBeenCalled();
+});
+
+test('Home error offers retry and stale data keeps its warning with the update time', () => {
+  mockAlertsStatus = 'error';
+  const view = render(<OverviewScreen />);
+  expect(view.getByRole('header', { name: "Can't load warnings right now." })).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+  expect(mockReloadAlerts).toHaveBeenCalledTimes(1);
+  mockAlertsStatus = 'ready';
+  mockAlertsStale = true;
+  view.rerender(<OverviewScreen />);
+  expect(view.getByRole('header', { name: 'Alert for extreme weather.' })).toBeTruthy();
+  expect(view.getByText("Can't refresh right now. Last updated 17 Sep 2026 · 08:30 WIB.")).toBeTruthy();
 });

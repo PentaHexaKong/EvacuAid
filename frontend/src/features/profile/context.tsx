@@ -1,3 +1,4 @@
+import { resetAlerts } from '@/features/alerts/use-alerts';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest, type UserProfile } from './api';
@@ -115,11 +116,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       method: 'PUT', body: JSON.stringify({ latitude, longitude, accuracy_m: accuracy, observed_at: observedAt }),
     });
     setProfile(updated);
+    void resetAlerts();
   };
   const deleteLocation = async () => {
     if (!token || !profile) throw new Error('Profile is not ready');
     const updated = await apiRequest<UserProfile>(`/v1/users/${profile.id}/location`, token, { method: 'DELETE' });
     setProfile(updated);
+    void resetAlerts();
   };
 
   return <Context.Provider value={{ profile, accessibility, name: profile?.name ?? '', ready, error, retry, saveName, saveProfile, saveAccessibility, saveLocation, deleteLocation }}>{children}</Context.Provider>;
