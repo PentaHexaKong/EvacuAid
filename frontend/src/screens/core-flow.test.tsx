@@ -1,12 +1,18 @@
 import { speak } from '@/features/feedback/speech';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
+import * as Location from 'expo-location';
+import { ensureForeground, ensureNotifications } from '@/features/location/permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PreferencesProvider } from '@/features/preferences/context';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
 import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
+
+jest.mock('@/features/location/permissions', () => ({ ...jest.requireActual('@/features/location/permissions'), ensureForeground: jest.fn(), ensureNotifications: jest.fn() }));
+jest.mock('@/features/location/push-token', () => ({ prepareNotificationChannel: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('expo-location', () => ({ getCurrentPositionAsync: jest.fn(), Accuracy: { High: 4 } }));
 
 let mockLanguage = 'en';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
@@ -73,7 +79,7 @@ test('onboarding walks welcome, help and an example warning, saving the chosen h
   await act(async () => {});
   expect(view.queryByRole('progressbar')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 1 });
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 1 });
   expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
   fireEvent.press(view.getByRole('checkbox', { name: 'Older adult' }));
   fireEvent.press(view.getByRole('checkbox', { name: 'Limited mobility' }));
@@ -84,10 +90,13 @@ test('onboarding walks welcome, help and an example warning, saving the chosen h
   fireEvent.press(view.getByRole('checkbox', { name: 'Stronger text contrast' }));
   expect(view.queryByRole('switch')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 2 });
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
   expect(view.getByText('Pack an emergency bag')).toBeTruthy();
   expect(view.queryByRole('button', { name: /Read the warning aloud/i })).toBeNull();
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Request help' })));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
   expect(done).toHaveBeenCalledWith('/buddy');
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: false });
   expect(JSON.parse((await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY))!)).toEqual(['ELDERLY', 'MOBILITY_LIMITATION']);
@@ -111,6 +120,8 @@ test('finishing onboarding from the warning step returns Home', async () => {
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
   expect(done).toHaveBeenCalledWith(undefined);
 });
 
@@ -403,4 +414,70 @@ test('leaving the voice Home while listening cancels recognition without stoppin
   expect(mockStopListening).not.toHaveBeenCalled();
   act(() => mockOnCommand('help me'));
   expect(mockRouter.navigate).not.toHaveBeenCalled();
+});
+
+
+test.each([5, 101])('reach asks in sequence and handles a %s m fix', async accuracy => {
+  jest.mocked(ensureForeground).mockResolvedValueOnce('granted');
+  jest.mocked(ensureNotifications).mockResolvedValueOnce('granted');
+  const fix = { coords: { latitude: 1, longitude: 2, accuracy }, timestamp: 1000 } as Location.LocationObject;
+  jest.mocked(Location.getCurrentPositionAsync).mockResolvedValueOnce(fix);
+  const reach = jest.fn();
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onReach={reach} onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Go to Home' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Turn on' })));
+  expect(jest.mocked(ensureForeground).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(ensureNotifications).mock.invocationCallOrder[0]);
+  expect(reach).toHaveBeenCalledWith({ notifications: true });
+  expect(Location.getCurrentPositionAsync).toHaveBeenCalledWith({ accuracy: Location.Accuracy.High });
+  if (accuracy <= 100) {
+    expect(reach).toHaveBeenCalledWith({ location: fix });
+    expect(view.queryByRole('alert')).toBeNull();
+  } else {
+    expect(reach).not.toHaveBeenCalledWith({ location: fix });
+    expect(view.getByRole('alert')).toHaveTextContent('Precise location is off. Helpers need it to find you.');
+    const settings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    fireEvent.press(view.getByRole('button', { name: 'Open Settings' }));
+    expect(settings).toHaveBeenCalled();
+  }
+  expect(view.getByLabelText(/^Location\. So warnings.*On$/)).toHaveProp('accessible', true);
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+});
+
+test('reach offers settings for blocked permission and back returns to the warning', async () => {
+  jest.mocked(ensureForeground).mockResolvedValueOnce('blocked');
+  jest.mocked(ensureNotifications).mockResolvedValueOnce('denied');
+  const view = render(<PreferencesProvider><SetupScreen /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Go to Home' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Turn on' })));
+  expect(view.getByRole('button', { name: 'Open Settings' })).toBeTruthy();
+  expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+  fireEvent.press(view.getByRole('button', { name: 'Back' }));
+  expect(view.getByText('Pack an emergency bag')).toBeTruthy();
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
+});
+
+test('Not now finishes even while a permission request is pending', async () => {
+  let resolve!: (permission: 'granted') => void;
+  jest.mocked(ensureForeground).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Go to Home' }));
+  fireEvent.press(view.getByRole('button', { name: 'Turn on' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+  view.unmount();
+  await act(async () => resolve('granted'));
+  expect(ensureNotifications).not.toHaveBeenCalled();
 });

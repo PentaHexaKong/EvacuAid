@@ -416,5 +416,18 @@
   "homeNearest": "Titik kumpul terdekat",
   "homeNearestDetail": "Membuka daftar titik kumpul",
   "homeAskHelp": "Minta bantuan",
-  "homeAskHelpDetail": "Buddy-mu dihubungi setelah kamu konfirmasi"
+  "homeAskHelpDetail": "Buddy-mu dihubungi setelah kamu konfirmasi",
+  "reachTitle": "Tetap bisa dihubungi saat darurat",
+  "reachBody": "Dua izin membantu EvacuAid memberi peringatan sesuai lokasimu dan memudahkan seseorang menemukanmu. Kamu bisa mengubahnya kapan saja di Pengaturan.",
+  "reachLocationTitle": "Lokasi",
+  "reachLocationReason": "Agar peringatan sesuai lokasimu, dan pendamping bisa cepat menemukanmu.",
+  "reachNotificationsTitle": "Notifikasi",
+  "reachNotificationsReason": "Agar peringatan sampai kepadamu meski aplikasi ditutup.",
+  "reachTurnOn": "Aktifkan",
+  "reachNotNow": "Nanti saja",
+  "reachOn": "Aktif",
+  "reachOff": "Nonaktif",
+  "reachPreciseOff": "Lokasi presisi belum aktif. Pendamping membutuhkannya untuk menemukanmu.",
+  "alertAreaTitle": "Perbarui areaku untuk peringatan",
+  "alertAreaDetail": "Menggunakan perkiraan lokasi hanya saat kamu berpindah sekitar 500 m. Tidak dibagikan dengan buddy di luar permintaan bantuan."
 }

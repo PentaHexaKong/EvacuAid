@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccess } from '@/features/access/use-access';
 import * as Location from 'expo-location';
+import { ensureForeground } from '@/features/location/permissions';
 import { useGuestSession } from '@/features/profile/session';
 import type { ApiError } from '@/features/profile/api';
 import { nearbyShelters, requestRoute, toCoordinates, type Coordinate, type NavigationResponse, type Origin, type Shelter } from './api';
@@ -14,8 +15,8 @@ const initial: EvacuationState = { phase: 'needsLocation', origin: null, shelter
 
 async function fix(origin: Origin | null, askPermission: boolean): Promise<Origin | null> {
   if (origin && Date.now() - Date.parse(origin.observedAt) < FRESH_MS) return origin;
-  const permission = askPermission ? await Location.requestForegroundPermissionsAsync() : await Location.getForegroundPermissionsAsync();
-  if (!permission.granted) return null;
+  const granted = askPermission ? await ensureForeground() === 'granted' : (await Location.getForegroundPermissionsAsync()).granted;
+  if (!granted) return null;
   const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
   return { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracyM: position.coords.accuracy ?? null, observedAt: new Date(Math.min(position.timestamp, Date.now())).toISOString() };
 }
