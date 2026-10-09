@@ -1,8 +1,8 @@
 import { Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAccess } from '@/features/access/use-access';
-import { useContext, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { useContext, useEffect, useState } from 'react';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import Animated, { withTiming } from 'react-native-reanimated';
 import { TabHeader } from '@/components/tab-shell';
 import { ActionButton, AppText, Page } from '@/components/ui';
@@ -17,6 +17,8 @@ import { FriendsView } from './friends-view';
 import { NearbyView } from './nearby-view';
 import { SessionMap, SessionView } from './session-view';
 import { Card } from './parts';
+
+const presentedAttempts = new Set<string>();
 
 type Tab = 'friends' | 'auto';
 // The incoming tab fades in from the side its segment sits on: a short nudge, not a page slide.
@@ -33,6 +35,12 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
   const a = useBuddyActions({ token, userId, state });
   const { c, session, requester, attempt, active, issue, voice, native, catchNative, setLocalError } = a;
   const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!attempt || !session || pathname.startsWith('/help-request/') || presentedAttempts.has(attempt.id)) return;
+    presentedAttempts.add(attempt.id);
+    router.push(`/help-request/${session.id}`);
+  }, [attempt, session, pathname, router]);
   const code = useBuddyCode(token);
   const [chosenTab, setTab] = useState<Tab>('friends');
   const reduceMotion = useContext(SystemReduceMotionContext);
