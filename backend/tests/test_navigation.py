@@ -76,6 +76,7 @@ async def testNavigationSelectsSuitableShelterAndRoutes(dbSession, monkeypatch):
     assert response.routeStatus == NavigationStatus.READY
     assert response.destination.shelterId == selected.id
     assert response.route.geometry['type'] == 'LineString'
+    assert response.route.maneuvers == []
     assert any(item.reasonCodes == ['SHELTER_FULL'] for item in response.rejectedCandidates)
 
 
@@ -327,3 +328,28 @@ def test_maneuvers_carry_up_to_two_street_names():
     named, unnamed = parseManeuvers({'maneuvers': [{**step, 'street_names': ['Jalan Melati', 'Jalan Mawar', 'Jalan Anggrek']}, step]}, 2)
     assert named['streetNames'] == ['Jalan Melati', 'Jalan Mawar']
     assert unnamed['streetNames'] == []
+
+
+@pytest.mark.asyncio
+async def testNavigationEndpointReturnsProviderManeuvers(dbSession, monkeypatch):
+    selected = await shelter(dbSession, 'Guidance Hall', latitude=-6.201, longitude=106.801)
+    maneuvers = [{'instruction': 'Walk to Guidance Hall', 'beginShapeIndex': 0, 'endShapeIndex': 1, 'distanceM': 1200, 'durationSec': 900, 'type': 1, 'streetNames': ['Test Street']}]
+
+    class GuidanceProvider(WorkingProvider):
+        async def route(self, origin, destination, profile='WALKING'):
+            route = await super().route(origin, destination, profile)
+            route.maneuvers = maneuvers
+            return route
+
+    async def emptyReports(session):
+        return []
+
+    monkeypatch.setattr(navigationService.externalDataService, 'storedReports', emptyReports)
+    monkeypatch.setattr(navigationService, 'ValhallaRoutingProvider', GuidanceProvider)
+    transport = httpx.ASGITransport(app=createApi(dbSession))
+    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
+        guest = (await client.post('/v1/guest-sessions')).json()
+        response = await client.post('/v1/navigation/routes', json={'userId': guest['user']['id'], 'destinationShelterId': str(selected.id), 'origin': {'latitude': -6.2, 'longitude': 106.8, 'observedAt': datetime.now(timezone.utc).isoformat()}}, headers={'Authorization': f"Bearer {guest['access_token']}"})
+    assert response.status_code == 200
+    assert response.json()['routeStatus'] == 'READY'
+    assert response.json()['route']['maneuvers'] == maneuvers

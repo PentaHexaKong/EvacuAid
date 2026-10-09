@@ -7,7 +7,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 
 const step = (type: number, distanceM: number, streetNames?: string[]): Maneuver => ({ instruction: 'Engine sentence.', beginShapeIndex: 1, endShapeIndex: 2, distanceM, durationSec: 60, type, streetNames });
 const progress = { segmentIndex: 0, offRouteM: 0, remainingM: 1040, nextManeuverM: 152, maneuverIndex: 0, nearDestination: false };
-const guidance = (over: Partial<RouteGuidance> = {}): RouteGuidance => ({ ready: true, progress, maneuver: step(1, 152), next: step(10, 60, ['Jalan Melati']), after: step(15, 200), instruction: 'Mulai berjalan', upcoming: 'Belok kanan ke Jalan Melati', remainingM: 1040, minutes: 13, nextManeuverM: 152, walked: 0.1, ...over });
+const guidance = (over: Partial<RouteGuidance> = {}): RouteGuidance => ({ arrived: false, ready: true, progress, maneuver: step(1, 152), next: step(10, 60, ['Jalan Melati']), after: step(15, 200), instruction: 'Mulai berjalan', upcoming: 'Belok kanan ke Jalan Melati', remainingM: 1040, minutes: 13, nextManeuverM: 152, walked: 0.1, ...over });
 
 test('the banner shows the distance to the next turn, the turn and its street, then the turn after a short block', () => {
   const view = render(<ManeuverBanner guidance={guidance()} busy={false} name="Baim" top={60} />);

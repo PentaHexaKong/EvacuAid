@@ -152,6 +152,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     selected = ranked[0]
     selectedShelter, shelterReasons, _ = next(item for item in feasible if item[2] is selected)
     route, evaluation = routeResponse(selected)
+    route.maneuvers = selected.route.maneuvers
     route.profile = 'WHEELCHAIR' if mobilityRequired else 'PEDESTRIAN'
     reasons = shelterReasons + evaluation.reasonCodes + selectionReasons(selected, ranked)
     logEvaluation('ready', startedAt, evaluations, selected)

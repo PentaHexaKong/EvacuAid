@@ -199,6 +199,7 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
         <Evidence caution={evaluation.safetyStatus !== 'NO_KNOWN_HAZARD'}>{t(`hazard_${evaluation.safetyStatus}`)}</Evidence>
         <Evidence caution>{t(`routeAccess_${evaluation.accessibilityStatus}`)}</Evidence>
       </View>}
+      <ActionButton variant="gradient" label={t('evacuateStart')} onPress={() => router.push({ pathname: '/evacuate', params: { shelterId: destination?.shelterId } })} />
       <ActionButton variant="secondary" label={t('chooseAnotherShelter')} onPress={onChooseAnother} />
     </>;
   }

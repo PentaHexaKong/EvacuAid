@@ -92,7 +92,7 @@ const readyRoute = {
   response: {
     routeStatus: 'READY' as const,
     destination: { shelterId: 's1', name: 'Community hall', latitude: -6.27, longitude: 106.82, source: null },
-    route: { distanceM: 900, durationSec: 660, geometry: null, profile: 'pedestrian' },
+    route: { distanceM: 900, durationSec: 660, geometry: null, profile: 'pedestrian', maneuvers: [] },
     evaluation: { safetyStatus: 'UNKNOWN' as const, accessibilityStatus: 'UNKNOWN' as const, reasonCodes: [] },
     selectionReasonCodes: [],
   },
@@ -234,6 +234,8 @@ test('a ready route shows the figures and unknown evidence, with no external map
   expect(view.getByText(en.hazard_UNKNOWN)).toBeTruthy();
   expect(view.getByText(en.routeAccess_UNKNOWN)).toBeTruthy();
   expect(view.queryByRole('button', { name: /Apple Maps|Google Maps/ })).toBeNull();
+  fireEvent.press(view.getByRole('button', { name: en.evacuateStart }));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/evacuate', params: { shelterId: 's1' } });
   fireEvent.press(view.getByRole('button', { name: en.chooseAnotherShelter }));
   expect(mockEvac.clearRoute).toHaveBeenCalledTimes(1);
 });

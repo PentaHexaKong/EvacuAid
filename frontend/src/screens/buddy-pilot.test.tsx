@@ -210,7 +210,7 @@ test.each([false, true])('voice controls and status speech follow soundFree (%s)
 
 test.each([false, true])('repeat guidance is hidden without a gap for soundFree (%s)', soundFree => {
   mockSoundFree = soundFree;
-  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} guidance={{ ready: false, progress: null, maneuver: null, next: null, after: null, instruction: null, upcoming: null, remainingM: 0, minutes: 0, nextManeuverM: 0, walked: 0 }} speak={mockSpeak} reroute={jest.fn()} />);
+  const view = render(<RouteView route={{ routeStatus: 'UNAVAILABLE', leg: 'TO_SHELTER', destination: null, route: null, evaluation: null, selectionReasonCodes: [] }} guidance={{ arrived: false, ready: false, progress: null, maneuver: null, next: null, after: null, instruction: null, upcoming: null, remainingM: 0, minutes: 0, nextManeuverM: 0, walked: 0 }} speak={mockSpeak} reroute={jest.fn()} />);
   expect(view.getByText('Last location is old, not the current position.')).toBeTruthy();
   expect(Boolean(view.queryByRole('button', { name: 'Repeat instruction' }))).toBe(!soundFree);
   expect(view.getByRole('button', { name: 'Recalculate route' })).toBeTruthy();

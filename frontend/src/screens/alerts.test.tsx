@@ -64,22 +64,21 @@ let mockShelters: { name: string; distanceM: number }[] | null = null;
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: mockShelters }) }));
 beforeEach(() => { mockShelters = null; });
 
-test.each([false, true])('voice Home alert route speaks the nearest shelter without navigation (sheet=%s)', async sheet => {
+test.each([false, true])('voice Home alert route opens guidance for the alert (sheet=%s)', async sheet => {
   mockAccess = { listen: true, autoRead: false, voiceHome: true };
   mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
   const view = render(<AlertScreen sheet={sheet} />);
   fireEvent.press(view.getByRole('button', { name: id.findRouteToShelter }));
-  await waitFor(() => expect(Speech.speak).toHaveBeenCalledWith(`${id.homeNearest}: Aula Kelurahan, 250 m`, { language: 'id-ID' }));
-  expect(mockRouter.navigate).not.toHaveBeenCalled();
-  expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+  expect(sheet ? mockRouter.dismissTo : mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/evacuate', params: { alertId: 'rain' } });
+  expect(Speech.speak).not.toHaveBeenCalled();
 });
 
-test('voice Home alert route speaks the fallback before shelters load', async () => {
+test('voice Home alert route opens guidance before shelters load', async () => {
   mockAccess = { listen: true, autoRead: false, voiceHome: true };
   const view = render(<AlertScreen />);
   fireEvent.press(view.getByRole('button', { name: id.findRouteToShelter }));
-  await waitFor(() => expect(Speech.speak).toHaveBeenCalledWith(id.homeNearestDetail, { language: 'id-ID' }));
-  expect(mockRouter.navigate).not.toHaveBeenCalled();
+  expect(Speech.speak).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/evacuate', params: { alertId: 'rain' } });
   expect(mockRouter.dismissTo).not.toHaveBeenCalled();
 });
 
@@ -88,8 +87,7 @@ test.each([false, true])('voice Home alert route stays silent without listening 
   const view = render(<AlertScreen sheet={sheet} />);
   fireEvent.press(view.getByRole('button', { name: id.findRouteToShelter }));
   expect(Speech.speak).not.toHaveBeenCalled();
-  expect(mockRouter.navigate).not.toHaveBeenCalled();
-  expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+  expect(sheet ? mockRouter.dismissTo : mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/evacuate', params: { alertId: 'rain' } });
 });
 
 test.each([false, true])('sighted alert route keeps Discover navigation (sheet=%s)', sheet => {

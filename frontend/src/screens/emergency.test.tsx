@@ -103,17 +103,16 @@ test('safe does not prompt when background permission is already granted', async
   await act(async () => {});
   expect(Alert.alert).not.toHaveBeenCalled();
 });
-test.each([false, true])('blind evacuation speaks only with listening enabled (%s)', async listen => {
+test.each([false, true])('blind evacuation opens guidance with listening enabled (%s)', async listen => {
   mockNeeds = ['VISUAL_IMPAIRMENT'];
   mockAccess = { voiceHome: true, listen, autoRead: false, soundFree: false };
   const view = render(<EmergencyScreen />);
   fireEvent.press(view.getByRole('button', { name: 'Start evacuation' }));
   await act(async () => {});
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', 'EVACUATING');
-  expect(mockRouter.back).toHaveBeenCalledTimes(1);
-  expect(mockRouter.replace).not.toHaveBeenCalled();
-  if (listen) expect(Speech.speak).toHaveBeenCalledWith('Nearest gathering point: Town Hall, 250 m', { language: 'en-US' });
-  else expect(Speech.speak).not.toHaveBeenCalled();
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/evacuate', params: { alertId: 'rain' } });
+  expect(Speech.speak).not.toHaveBeenCalled();
 });
 test('check people navigates without posting', () => {
   mockIncoming = [{ name: 'Sari' }];
@@ -160,7 +159,7 @@ test.each(['close', 'safe', 'blind evacuate', 'ended'] as const)('%s returns Hom
   if (action === 'ended') await waitFor(() => expect(view.getByText('This warning has ended.')).toBeTruthy());
   fireEvent.press(view.getByRole('button', { name: action === 'safe' ? "I'm safe" : action === 'blind evacuate' ? 'Start evacuation' : 'Close' }));
   await act(async () => {});
-  expect(mockRouter.replace).toHaveBeenCalledWith('/');
+  expect(mockRouter.replace).toHaveBeenCalledWith(action === 'blind evacuate' ? { pathname: '/evacuate', params: { alertId: 'rain' } } : '/');
   expect(mockRouter.back).not.toHaveBeenCalled();
   if (action === 'safe' || action === 'blind evacuate') expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', action === 'safe' ? 'SAFE' : 'EVACUATING');
   else expect(respondToAlert).not.toHaveBeenCalled();

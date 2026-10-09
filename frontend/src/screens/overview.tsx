@@ -85,8 +85,7 @@ function useVoiceHome(readText: string, nearest: RefObject<string | null>, liste
   const say = (text: string) => { if (!listen || !focused) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
-    // ponytail: interim until spoken evacuation guidance lands.
-    else if (command === 'nearest') { if (nearest.current) say(nearest.current); }
+    else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/evacuate'); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
   const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
