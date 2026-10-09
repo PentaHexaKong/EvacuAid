@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform } from 'react-native';
-import Constants from 'expo-constants';
+import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -10,6 +9,8 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { speak as speakAloud } from '../feedback/speech';
 import type { ApiError } from '../profile/api';
 import { buddyRequest } from './api';
+import { ensureBackground, ensureForeground, ensureNotifications } from '@/features/location/permissions';
+import { prepareNotificationChannel, registerPushToken } from '@/features/location/push-token';
 
 const TASK = 'evacuaid.buddy-location.v1';
 const SESSION_KEY = 'evacuaid.buddy-location-session.v1';
@@ -41,6 +42,7 @@ if (!TaskManager.isTaskDefined(TASK)) TaskManager.defineTask<{ locations: Locati
 
 export function useBuddyNative({ sessionId, active, token, onRefresh, language = 'en' }: { sessionId: string | null; active: boolean | undefined; token: string | null; language?: 'id' | 'en'; onRefresh: (requestId?: string) => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [settingsBlocked, setSettingsBlocked] = useState(false);
   const [tracking, setTracking] = useState(false);
   const [foregroundOnly, setForegroundOnly] = useState(false);
   const [location, setLocation] = useState<BuddyPosition | null>(null);
@@ -55,8 +57,9 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
 
   const obtainLocation = async () => {
     setError(null);
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) throw new Error(message('Location permission is required. You can enable it in Settings.', 'Izin lokasi diperlukan. Aktifkan di Pengaturan.'));
+    const permission = await ensureForeground();
+    setSettingsBlocked(permission === 'blocked');
+    if (permission !== 'granted') throw new Error(message('Location permission is required. You can enable it in Settings.', 'Izin lokasi diperlukan. Aktifkan di Pengaturan.'));
     const value = position(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
     setLocation(value);
     return value;
@@ -101,10 +104,12 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       setTracking(true);
       await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, sessionId }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
-      const permission = await Location.requestBackgroundPermissionsAsync();
+      const permission = await ensureBackground();
       ensureCurrent();
-      setForegroundOnly(!permission.granted);
-      if (!permission.granted) return;
+      setForegroundOnly(permission !== 'granted');
+      setSettingsBlocked(permission === 'blocked');
+      if (permission === 'blocked') setError(message('Location permission is required. You can enable it in Settings.', 'Izin lokasi diperlukan. Aktifkan di Pengaturan.'));
+      if (permission !== 'granted') return;
       await Location.startLocationUpdatesAsync(TASK, { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 5, deferredUpdatesInterval: 15000, pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: true, foregroundService: { notificationTitle: 'EvacuAid Buddy', notificationBody: message('Sharing location during your accepted Buddy session.', 'Berbagi lokasi selama sesi Buddy yang diterima.') } });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
     } catch (cause) { fail(cause); throw cause; } finally { starting.current = false; }
@@ -113,13 +118,15 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     setError(null);
     try {
       if (!token) throw new Error(message('Connect your guest profile first.', 'Hubungkan profil tamu terlebih dahulu.'));
-      if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('buddy', { name: 'Buddy requests', importance: Notifications.AndroidImportance.HIGH });
-      const permission = await Notifications.requestPermissionsAsync();
-      if (!permission.granted) throw new Error(message('Notifications are disabled. Requests remain available in the app.', 'Notifikasi dinonaktifkan. Permintaan tetap tersedia di aplikasi.'));
-      const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
-      if (!projectId) throw new Error(message('Push is not configured in this build. In-app updates remain available.', 'Notifikasi push belum dikonfigurasi pada versi ini. Pembaruan dalam aplikasi tetap tersedia.'));
-      const result = await Notifications.getExpoPushTokenAsync({ projectId });
-      await buddyRequest(token, '/push-token', 'PUT', { token: result.data });
+      await prepareNotificationChannel();
+      const permission = await ensureNotifications();
+      setSettingsBlocked(permission === 'blocked');
+      if (permission !== 'granted') throw new Error(message('Notifications are disabled. Requests remain available in the app.', 'Notifikasi dinonaktifkan. Permintaan tetap tersedia di aplikasi.'));
+      try { await registerPushToken(token); }
+      catch (cause) {
+        if (cause instanceof Error && cause.message === 'Push is not configured in this build. In-app updates remain available.') throw new Error(message(cause.message, 'Notifikasi push belum dikonfigurasi pada versi ini. Pembaruan dalam aplikasi tetap tersedia.'));
+        throw cause;
+      }
     } catch (cause) { fail(cause); throw cause; }
   };
   useEffect(() => {
@@ -167,7 +174,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     }, 10000);
     return () => clearInterval(timer);
   }, [tracking, active, sessionId, token]);
-  return { error, tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
+  return { ...(settingsBlocked ? { settingsBlocked: true } : {}), error, tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
 }
 
 export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en'; onCommand: (transcript: string) => void }) {

@@ -322,3 +322,8 @@ declare module '@tabler/icons-react-native/IconStairs' {
   const Icon: typeof import('@tabler/icons-react-native').IconStairs;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconCircleCheck' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCircleCheck;
+  export default Icon;
+}

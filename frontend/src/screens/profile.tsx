@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import * as Location from 'expo-location';
+import { ensureForeground } from '@/features/location/permissions';
+import { alertAreaRunning, askAlwaysAndStart, stopAlertArea } from '@/features/location/alert-area';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +60,8 @@ export function ProfileScreen() {
   const router = useRouter();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [areaRunning, setAreaRunning] = useState(false);
+  useEffect(() => { void alertAreaRunning().then(setAreaRunning).catch(() => {}); }, []);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -71,12 +75,12 @@ export function ProfileScreen() {
     setBusy(true);
     let position: Location.LocationObject;
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) throw new Error('permission');
+      const permission = await ensureForeground();
+      if (permission !== 'granted') throw new Error(permission === 'blocked' ? 'blocked' : 'permission');
       position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     } catch (cause) {
       setBusy(false);
-      Alert.alert(t('locationSaveErrorTitle'), cause instanceof Error && cause.message === 'permission' ? t('locationPermissionDenied') : t('locationRetrieveError'));
+      Alert.alert(t('locationSaveErrorTitle'), cause instanceof Error && ['permission', 'blocked'].includes(cause.message) ? t('locationPermissionDenied') : t('locationRetrieveError'), cause instanceof Error && cause.message === 'blocked' ? [{ text: t('cancel'), style: 'cancel' }, { text: t('openSettings'), onPress: () => void Linking.openSettings() }] : undefined);
       return;
     }
     Alert.alert(t('locationConsentTitle'), t('locationConsentBody', {
@@ -91,6 +95,24 @@ export function ProfileScreen() {
         finally { setBusy(false); }
       })() },
     ], { cancelable: false });
+  };
+
+  const toggleArea = async (value: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (value) {
+        if (!session.token || !profile) throw new Error('Profile is not ready');
+        const permission = await askAlwaysAndStart(session.token, profile.id);
+        if (permission !== 'granted') Alert.alert(t('locationSaveErrorTitle'), t('locationPermissionDenied'), permission === 'blocked' ? [{ text: t('cancel'), style: 'cancel' }, { text: t('openSettings'), onPress: () => void Linking.openSettings() }] : undefined);
+      } else {
+        await stopAlertArea();
+        setAreaRunning(false);
+        await deleteLocation();
+      }
+      setAreaRunning(await alertAreaRunning());
+    } catch { Alert.alert(t('locationSaveErrorTitle'), t('profileSaveError')); }
+    finally { setBusy(false); }
   };
 
   const removeProfile = () => Alert.alert(t('deleteProfile'), t('deleteProfileBody'), [
@@ -153,6 +175,8 @@ export function ProfileScreen() {
       <SettingsRow Icon={IconAccessible} label={t('supportNeeds')} value={accessibility.length ? t('needsSelected', { count: accessibility.length }) : t('needsNone')} onPress={() => router.push('/profile/name')} />
       <SettingsRow Icon={IconIdBadge} label={t('rowProfileDetails')} value={t('valueEdit')} onPress={() => router.push('/profile/name')} />
       <SettingsRow Icon={IconUsers} label={t('rowBuddy')} value={t('valueManage')} onPress={() => router.dismissTo('/buddy')} />
+      <SettingsRow Icon={IconMapPin} label={t('alertAreaTitle')} hint={t('alertAreaDetail')} toggle={{ value: areaRunning, disabled: busy, hitSlop: 8, onChange: value => void toggleArea(value) }} />
+      <AppText variant="small" style={{ color: colors.muted }}>{t('alertAreaDetail')}</AppText>
       {observedAt && <SettingsRow Icon={IconMapPin} label={t('rowShareDistance')} hint={t('shareLocationWithBuddies')} toggle={{ value: profile?.share_location_with_buddies ?? false, disabled: busy, onChange: value => void saveProfile({ share_location_with_buddies: value }).catch(() => Alert.alert(t('profileSaveError'))) }} />}
       {observedAt && <SettingsRow Icon={IconMapPinOff} label={t('removeLocation')} onPress={() => void deleteLocation().catch(() => Alert.alert(t('profileSaveError')))} />}
       <SettingsRow Icon={IconRefresh} label={t('resetSetup')} value={t('valueStart')} onPress={() => void resetOnboarding().then(() => router.replace('/')).catch(() => Alert.alert(t('profileSaveError')))} />
@@ -172,7 +196,7 @@ export function ProfileScreen() {
 
 type RowMenu = { selection: string; options: { value: string; label: string }[]; onSelect: (value: string) => void };
 
-function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, menu, destructive = false, first = false, onPress }: { Icon: Icon; label: string; value?: string; hint?: string; accessory?: 'chevron' | 'picker' | 'external'; toggle?: { value: boolean; disabled?: boolean; onChange: (value: boolean) => void }; menu?: RowMenu; destructive?: boolean; first?: boolean; onPress?: () => void }) {
+function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, menu, destructive = false, first = false, onPress }: { Icon: Icon; label: string; value?: string; hint?: string; accessory?: 'chevron' | 'picker' | 'external'; toggle?: { value: boolean; disabled?: boolean; hitSlop?: number; onChange: (value: boolean) => void }; menu?: RowMenu; destructive?: boolean; first?: boolean; onPress?: () => void }) {
   const { preferences } = usePreferences();
   const nativeMenu = menu && Platform.OS === 'ios';
   const labelColor = destructive ? colors.critical : colors.ink;
@@ -181,7 +205,7 @@ function SettingsRow({ Icon, label, value, hint, accessory = 'chevron', toggle, 
     <View style={[styles.tile, { backgroundColor: destructive ? colors.critical : colors.borderStrong }]}><Icon size={12} strokeWidth={2.6} color={colors.surface} /></View>
     <AppText accessibilityElementsHidden={nativeMenu} importantForAccessibility={nativeMenu ? 'no' : 'auto'} style={[styles.label, { color: labelColor }]}>{label}</AppText>
     {toggle
-      ? <Switch style={SWITCH_CENTER} accessibilityLabel={label} accessibilityHint={hint} value={toggle.value} disabled={toggle.disabled} trackColor={{ true: colors.primary }} onValueChange={toggle.onChange} />
+      ? <Switch style={SWITCH_CENTER} hitSlop={toggle.hitSlop} accessibilityLabel={label} accessibilityHint={hint} value={toggle.value} disabled={toggle.disabled} trackColor={{ true: colors.primary }} onValueChange={toggle.onChange} />
       : nativeMenu
         ? <ValueMenu label={label} value={value ?? ''} menu={menu} size={preferences.largerText ? 26 : 22} destructive={destructive} />
         : <View style={styles.value}>

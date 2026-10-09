@@ -1,5 +1,5 @@
-import { useContext, useState, type ComponentType, type ReactNode } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { Linking, StyleSheet, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, G, Line, LinearGradient as SvgLinearGradient, Mask, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
+import * as Location from 'expo-location';
+import IconBell from '@tabler/icons-react-native/IconBell';
+import IconCircleCheck from '@tabler/icons-react-native/IconCircleCheck';
+import IconMapPin from '@tabler/icons-react-native/IconMapPin';
 import IconArrowLeft from '@tabler/icons-react-native/IconArrowLeft';
 import IconChevronDown from '@tabler/icons-react-native/IconChevronDown';
 import IconEar from '@tabler/icons-react-native/IconEar';
@@ -26,14 +30,16 @@ import type { Language } from '@/localization/language';
 import type { AlertViewModel } from '@/features/alerts/alerts';
 import { PreferencesPreview, usePreferences } from '@/features/preferences/context';
 import { defaults, type Preferences } from '@/features/preferences/storage';
+import { ensureForeground, ensureNotifications, isPrecise, type PermissionResult } from '@/features/location/permissions';
+import { prepareNotificationChannel } from '@/features/location/push-token';
 import { ONBOARDING_NEEDS_KEY, type AccessibilityType } from '@/features/profile/context';
 
 // React Native's iOS Switch composes alignSelf: 'flex-start', which pins it to the top of a centred row.
 const SWITCH_CENTER = { alignSelf: 'center' } as const;
 const OPTIONS = ['voiceEnabled', 'vibrationEnabled', 'largerText', 'strongerContrast', 'textEnabled'] as const;
 type Option = typeof OPTIONS[number];
-type Step = 'welcome' | 'help' | 'warning';
-const BLOOM: Record<Step, BloomStage> = { welcome: 'hidden', help: 'rest', warning: 'hidden' };
+type Step = 'welcome' | 'help' | 'warning' | 'reach';
+const BLOOM: Record<Step, BloomStage> = { welcome: 'hidden', help: 'rest', warning: 'hidden', reach: 'hidden' };
 // ponytail: tiles are presets over the existing flags; mobility has no flag yet and is only saved to the profile.
 const NEEDS: { type: AccessibilityType; key: string; Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; preset: Option[] }[] = [
   { type: 'VISUAL_IMPAIRMENT', key: 'needVisual', Icon: IconEye, preset: ['voiceEnabled', 'largerText', 'strongerContrast'] },
@@ -48,13 +54,16 @@ async function guarded(setBusy: (busy: boolean) => void, setError: (error: boole
   try { await work(); } catch { setError(true); } finally { setBusy(false); }
 }
 
-export function SetupScreen({ editing = false, onDone, beforePreferences, footer }: { editing?: boolean; onDone?: (target?: string) => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
+export type ReachPermissions = { location?: Location.LocationObject; notifications?: boolean };
+
+export function SetupScreen({ editing = false, onDone, onReach, beforePreferences, footer }: { editing?: boolean; onDone?: (target?: string) => void; onReach?: (permissions: ReachPermissions) => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const { preferences, save } = usePreferences();
   const [step, setStep] = useState<Step>('welcome');
   const [draft, setDraft] = useState(preferences);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [target, setTarget] = useState<string | undefined>();
   const [needs, setNeeds] = useState<AccessibilityType[]>([]);
   const insets = useSafeAreaInsets();
   const finish = (skip = false, target?: string) => guarded(setBusy, setError, async () => {
@@ -100,7 +109,8 @@ export function SetupScreen({ editing = false, onDone, beforePreferences, footer
     <Page transparent fill edgeInsets={insets}>
       {step === 'welcome' && <WelcomeStep busy={busy} onLanguage={language => void changeLanguage(language)} onStart={() => go('help')} onSkip={() => void finish(true)} />}
       {step === 'help' && <HelpStep draft={draft} needs={needs} busy={busy} onNeeds={chooseNeeds} onChange={change} onNext={() => go('warning')} onLater={() => void finish(true)} onBack={() => go('welcome')} />}
-      {step === 'warning' && <WarningStep busy={busy} onFinish={() => void finish()} onHelp={() => void finish(false, '/buddy')} onBack={() => go('help')} />}
+      {step === 'warning' && <WarningStep busy={busy} onFinish={() => { setTarget(undefined); go('reach'); }} onHelp={() => { setTarget('/buddy'); go('reach'); }} onBack={() => go('help')} />}
+      {step === 'reach' && <ReachStep busy={busy} onReach={onReach} onFinish={() => void finish(false, target)} onBack={() => go('warning')} />}
       {errorText}
       {footer}
     </Page>
@@ -166,14 +176,14 @@ function WelcomeStep({ busy, onLanguage, onStart, onSkip }: { busy: boolean; onL
 function StepHeader({ current, busy, onBack }: { current: number; busy: boolean; onBack: () => void }) {
   const { t } = useTranslation();
   const reduceMotion = useContext(SystemReduceMotionContext);
-  const total = 2;
+  const total = 3;
   return <View style={{ gap: 14 }}>
     <View style={styles.brandRow}>
       <Tap accessibilityLabel={t('back')} disabled={busy} onPress={onBack} style={styles.back}><IconArrowLeft size={24} color={colors.ink} /></Tap>
     </View>
     <View accessible accessibilityRole="progressbar" accessibilityLabel={t('setupStep', { current, total })} accessibilityValue={{ min: 0, max: total, now: current }} style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>
-        {[1, 2].map(index => <View key={index} style={styles.dash}>
+        {[1, 2, 3].map(index => <View key={index} style={styles.dash}>
           <Animated.View style={[styles.dashFill, { width: index <= current ? '100%' : '0%', transitionProperty: 'width', transitionDuration: reduceMotion ? 0 : duration.dash, transitionTimingFunction: easeCss.out }]} />
         </View>)}
       </View>
@@ -239,10 +249,69 @@ function WarningStep({ busy, onFinish, onHelp, onBack }: { busy: boolean; onFini
     </Enter>
     <View style={{ flex: 1, minHeight: 12 }} />
     <Enter index={3} style={{ gap: 12 }}>
-      <ActionButton variant="gradient" label={t('continueHome')} loading={busy} onPress={onFinish} />
+      <ActionButton variant="gradient" label={t('nextStep')} loading={busy} onPress={onFinish} />
       <ActionButton variant="secondary" label={t('requestHelp')} disabled={busy} onPress={onHelp} />
     </Enter>
   </>;
+}
+
+function ReachStep({ busy, onFinish, onBack, onReach }: { onReach?: (permissions: ReachPermissions) => void; busy: boolean; onFinish: () => void; onBack: () => void }) {
+  const { t } = useTranslation();
+  const [locationPermission, setLocationPermission] = useState<PermissionResult | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<PermissionResult | null>(null);
+  const [fix, setFix] = useState<Location.LocationObject | null>(null);
+  const [asking, setAsking] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const ask = async () => {
+    if (asking) return;
+    setAsking(true);
+    try {
+      const location = await ensureForeground().catch(() => 'denied' as const);
+      if (!alive.current) return;
+      setLocationPermission(location);
+      await prepareNotificationChannel().catch(() => {});
+      const notifications = await ensureNotifications().catch(() => 'denied' as const);
+      if (!alive.current) return;
+      setNotificationPermission(notifications);
+      if (notifications === 'granted') onReach?.({ notifications: true });
+      if (location === 'granted') {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const value = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 10000); })]);
+          if (alive.current) { setFix(value); onReach?.({ location: value }); }
+        } catch {} finally { clearTimeout(timer); }
+      }
+    } finally { if (alive.current) setAsking(false); }
+  };
+  const decided = locationPermission !== null && notificationPermission !== null;
+  const settings = () => void Linking.openSettings();
+  return <>
+    <StepHeader current={3} busy={busy || asking} onBack={onBack} />
+    <Enter index={0}><AppText variant="question" accessibilityRole="header">{t('reachTitle')}</AppText></Enter>
+    <Enter index={1}><AppText variant="lead">{t('reachBody')}</AppText></Enter>
+    <Enter index={2} style={{ gap: 10 }}>
+      <PermissionRow title={t('reachLocationTitle')} reason={t('reachLocationReason')} Icon={IconMapPin} permission={locationPermission} />
+      {fix && !isPrecise(fix.coords.accuracy) && <View style={{ gap: 4 }}><AppText variant="small" accessibilityRole="alert">{t('reachPreciseOff')}</AppText><Tap accessibilityLabel={t('openSettings')} style={{ minHeight: 44 }} onPress={settings}><AppText variant="button" style={{ color: colors.primary }}>{t('openSettings')}</AppText></Tap></View>}
+      <PermissionRow title={t('reachNotificationsTitle')} reason={t('reachNotificationsReason')} Icon={IconBell} permission={notificationPermission} />
+      {(locationPermission === 'blocked' || notificationPermission === 'blocked') && <Tap accessibilityLabel={t('openSettings')} style={{ minHeight: 44 }} onPress={settings}><AppText variant="button" style={{ color: colors.primary }}>{t('openSettings')}</AppText></Tap>}
+    </Enter>
+    <View style={{ flex: 1, minHeight: 12 }} />
+    <Enter index={3} style={{ gap: 12 }}>
+      <ActionButton variant="gradient" label={t(decided ? 'continueHome' : 'reachTurnOn')} loading={busy || asking} onPress={() => decided ? onFinish() : void ask()} />
+      <ActionButton variant="secondary" label={t('reachNotNow')} onPress={onFinish} />
+    </Enter>
+  </>;
+}
+
+function PermissionRow({ title, reason, Icon, permission }: { title: string; reason: string; Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; permission: PermissionResult | null }) {
+  const { t } = useTranslation();
+  const status = permission === null ? '' : t(permission === 'granted' ? 'reachOn' : 'reachOff');
+  return <View accessible accessibilityLabel={[title, reason, status].filter(Boolean).map(value => value.replace(/\.+$/, '')).join('. ')} style={[styles.switchRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+    <View style={{ width: 40, height: 40, backgroundColor: colors.accentSoft, ...corner(radius.sm), alignItems: 'center', justifyContent: 'center' }}><Icon size={22} strokeWidth={2} color={colors.primary} /></View>
+    <View style={{ flex: 1, gap: 4 }}><AppText variant="button">{title}</AppText><AppText variant="small" style={{ color: colors.muted }}>{reason}</AppText></View>
+    {permission && <View style={{ alignItems: 'center', gap: 4 }}>{permission === 'granted' && <IconCircleCheck size={22} color={colors.primary} />}<AppText variant="small" style={{ color: permission === 'granted' ? colors.primary : colors.muted }}>{status}</AppText></View>}
+  </View>;
 }
 
 function PreferenceSwitches({ draft, busy, onChange }: { draft: Preferences; busy: boolean; onChange: (key: Option, value: boolean) => void }) {

@@ -3,10 +3,12 @@ import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'rea
 import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
-import { ProfileProvider } from '@/features/profile/context';
+import '@/features/location/alert-area';
+import { registerPushToken } from '@/features/location/push-token';
+import { ProfileProvider, useProfile } from '@/features/profile/context';
 import * as SplashScreen from 'expo-splash-screen';
 import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
-import { SetupScreen } from '@/screens/setup';
+import { SetupScreen, type ReachPermissions } from '@/screens/setup';
 import { pageHeaderLayout } from '@/components/page-scroll-view';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -24,9 +26,25 @@ export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' 
 function FirstRunGate() {
   const { ready, preferences } = usePreferences();
   const session = useGuestSession();
+  const profile = useProfile();
+  const [reach, setReach] = useState<ReachPermissions>({});
   const router = useRouter();
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if ((reach.location || reach.notifications) && session.status === 'idle') void session.ensureGuest().catch(() => {});
+  }, [reach, session.status, session.ensureGuest]);
+  useEffect(() => {
+    if (!reach.notifications || !session.token) return;
+    setReach(value => ({ ...value, notifications: false }));
+    void registerPushToken(session.token).catch(() => {});
+  }, [reach.notifications, session.token]);
+  useEffect(() => {
+    if (!reach.location || !profile.ready) return;
+    const fix = reach.location;
+    setReach(value => ({ ...value, location: undefined }));
+    void profile.saveLocation(fix.coords.latitude, fix.coords.longitude, fix.coords.accuracy, new Date(fix.timestamp).toISOString()).catch(() => {});
+  }, [reach.location, profile.ready, profile.saveLocation]);
   useEffect(() => {
     const notification = (value: Notifications.NotificationResponse | null) => {
       const data = value?.notification.request.content.data;
@@ -61,7 +79,7 @@ function FirstRunGate() {
     if (session.status === 'error') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
-  return preferences.completed ? <Navigation /> : <SetupScreen onDone={target => setReturnTo(target ?? '/')} />;
+  return preferences.completed ? <Navigation /> : <SetupScreen onReach={permissions => setReach(value => ({ ...value, ...permissions }))} onDone={target => setReturnTo(target ?? '/')} />;
 }
 
 function GuestSessionError() {

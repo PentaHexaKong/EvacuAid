@@ -434,5 +434,18 @@
   "alertStepSiaga3": "Be ready to leave",
   "alertStepAwas1": "Leave now for the nearest gathering point",
   "alertStepAwas2": "Take only your emergency bag",
-  "alertStepAwas3": "Help others only if it is safe"
+  "alertStepAwas3": "Help others only if it is safe",
+  "reachTitle": "Stay reachable in an emergency",
+  "reachBody": "Two permissions let EvacuAid warn you where you are and help someone find you. You can change them any time in Settings.",
+  "reachLocationTitle": "Location",
+  "reachLocationReason": "So warnings match where you are, and a helper can find you fast.",
+  "reachNotificationsTitle": "Notifications",
+  "reachNotificationsReason": "So a warning reaches you even when the app is closed.",
+  "reachTurnOn": "Turn on",
+  "reachNotNow": "Not now",
+  "reachOn": "On",
+  "reachOff": "Off",
+  "reachPreciseOff": "Precise location is off. Helpers need it to find you.",
+  "alertAreaTitle": "Update my area for warnings",
+  "alertAreaDetail": "Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request."
 }

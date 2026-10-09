@@ -1,8 +1,12 @@
 import { speak } from '@/features/feedback/speech';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
+import * as Location from 'expo-location';
+import { ensureForeground, ensureNotifications } from '@/features/location/permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PreferencesProvider } from '@/features/preferences/context';
+import { PreferencesProvider, usePreferences } from '@/features/preferences/context';
+import * as GuestSession from '@/features/profile/session';
+import * as ProfileApi from '@/features/profile/api';
 import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
 import { SetupScreen } from './setup';
@@ -13,6 +17,10 @@ let mockIncomingContacts: { name: string | null }[] = [];
 let mockNotifications: boolean | undefined;
 jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility }) }));
 jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
+jest.mock('@/features/location/permissions', () => ({ ...jest.requireActual('@/features/location/permissions'), ensureForeground: jest.fn(), ensureNotifications: jest.fn() }));
+jest.mock('@/features/location/push-token', () => ({ prepareNotificationChannel: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('expo-location', () => ({ getCurrentPositionAsync: jest.fn(), Accuracy: { High: 4 } }));
+
 let mockLanguage = 'en';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
 let mockTopLevel: string | null = null;
@@ -77,7 +85,7 @@ test('onboarding walks welcome, help and an example warning, saving the chosen h
   await act(async () => {});
   expect(view.queryByRole('progressbar')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 1 });
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 1 });
   expect(view.getByRole('checkbox', { name: 'Standard' })).toHaveProp('accessibilityState', expect.objectContaining({ checked: true }));
   fireEvent.press(view.getByRole('checkbox', { name: 'Older adult' }));
   fireEvent.press(view.getByRole('checkbox', { name: 'Limited mobility' }));
@@ -88,10 +96,13 @@ test('onboarding walks welcome, help and an example warning, saving the chosen h
   fireEvent.press(view.getByRole('checkbox', { name: 'Stronger text contrast' }));
   expect(view.queryByRole('switch')).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
-  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 2, now: 2 });
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
   expect(view.getByText('Pack an emergency bag')).toBeTruthy();
   expect(view.queryByRole('button', { name: /Read the warning aloud/i })).toBeNull();
   await act(async () => fireEvent.press(view.getByRole('button', { name: 'Request help' })));
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
   expect(done).toHaveBeenCalledWith('/buddy');
   expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({ ...defaults, completed: true, largerText: true, strongerContrast: false });
   expect(JSON.parse((await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY))!)).toEqual(['ELDERLY', 'MOBILITY_LIMITATION']);
@@ -114,8 +125,42 @@ test('finishing onboarding from the warning step returns Home', async () => {
   await act(async () => {});
   fireEvent.press(view.getByRole('button', { name: 'Get started' }));
   fireEvent.press(view.getByRole('button', { name: 'Continue' }));
-  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Continue' })));
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
   expect(done).toHaveBeenCalledWith(undefined);
+});
+
+test('preferences re-sync keeps the readiness-gated setup on the reach step', async () => {
+  let connected = false;
+  const useGuestSession = GuestSession.useGuestSession;
+  jest.spyOn(GuestSession, 'useGuestSession').mockImplementation(() => {
+    const session = useGuestSession();
+    return connected ? { ...session, token: 'guest', user: { id: 'guest-id' } as ProfileApi.UserProfile, status: 'ready' } : session;
+  });
+  let preferences!: ReturnType<typeof usePreferences>;
+  function Gate() {
+    preferences = usePreferences();
+    return preferences.ready ? <SetupScreen /> : <View />;
+  }
+  const view = render(<PreferencesProvider><Gate /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  let resolve!: (value: ReturnType<typeof ProfileApi.preferencesToApi>) => void;
+  const pending = new Promise<ReturnType<typeof ProfileApi.preferencesToApi>>(done => { resolve = done; });
+  const request = jest.spyOn(ProfileApi, 'apiRequest').mockImplementation(() => pending);
+  connected = true;
+  view.rerender(<PreferencesProvider><Gate /></PreferencesProvider>);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/v1/users/guest-id/preferences', 'guest'));
+  expect(preferences.ready).toBe(true);
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 3 });
+  expect(view.getByRole('button', { name: 'Turn on' })).toBeTruthy();
+  await act(async () => { resolve(ProfileApi.preferencesToApi(defaults)); });
+  expect(view.getByRole('button', { name: 'Turn on' })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Get started' })).toBeNull();
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
 });
 
 test('Home shows the live alert level with its label and routes to a gathering point', () => {
@@ -478,4 +523,69 @@ test('Home error offers retry and stale data keeps its warning with the update t
   view.rerender(<OverviewScreen />);
   expect(view.getByRole('header', { name: 'Alert for extreme weather.' })).toBeTruthy();
   expect(view.getByText("Can't refresh right now. Last updated 17 Sep 2026 · 08:30 WIB.")).toBeTruthy();
+});
+
+test.each([5, 101])('reach asks in sequence and handles a %s m fix', async accuracy => {
+  jest.mocked(ensureForeground).mockResolvedValueOnce('granted');
+  jest.mocked(ensureNotifications).mockResolvedValueOnce('granted');
+  const fix = { coords: { latitude: 1, longitude: 2, accuracy }, timestamp: 1000 } as Location.LocationObject;
+  jest.mocked(Location.getCurrentPositionAsync).mockResolvedValueOnce(fix);
+  const reach = jest.fn();
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onReach={reach} onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Turn on' })));
+  expect(jest.mocked(ensureForeground).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(ensureNotifications).mock.invocationCallOrder[0]);
+  expect(reach).toHaveBeenCalledWith({ notifications: true });
+  expect(Location.getCurrentPositionAsync).toHaveBeenCalledWith({ accuracy: Location.Accuracy.High });
+  expect(reach).toHaveBeenCalledWith({ location: fix });
+  if (accuracy <= 100) {
+    expect(view.queryByRole('alert')).toBeNull();
+  } else {
+    expect(view.getByRole('alert')).toHaveTextContent('Precise location is off. Helpers need it to find you.');
+    const settings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    fireEvent.press(view.getByRole('button', { name: 'Open Settings' }));
+    expect(settings).toHaveBeenCalled();
+  }
+  expect(view.getByLabelText('Location. So warnings match where you are, and a helper can find you fast. On')).toHaveProp('accessible', true);
+  expect(view.getByLabelText('Notifications. So a warning reaches you even when the app is closed. On')).toHaveProp('accessible', true);
+  expect(done).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Go to Home' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+});
+
+test('reach offers settings for blocked permission and back returns to the warning', async () => {
+  jest.mocked(ensureForeground).mockResolvedValueOnce('blocked');
+  jest.mocked(ensureNotifications).mockResolvedValueOnce('denied');
+  const view = render(<PreferencesProvider><SetupScreen /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Turn on' })));
+  expect(view.getByRole('button', { name: 'Open Settings' })).toBeTruthy();
+  expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+  fireEvent.press(view.getByRole('button', { name: 'Back' }));
+  expect(view.getByText('Pack an emergency bag')).toBeTruthy();
+  expect(view.getByRole('progressbar')).toHaveProp('accessibilityValue', { min: 0, max: 3, now: 2 });
+});
+
+test('Not now finishes even while a permission request is pending', async () => {
+  let resolve!: (permission: 'granted') => void;
+  jest.mocked(ensureForeground).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  const done = jest.fn();
+  const view = render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+  await act(async () => {});
+  fireEvent.press(view.getByRole('button', { name: 'Get started' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Continue' }));
+  fireEvent.press(view.getByRole('button', { name: 'Turn on' }));
+  await act(async () => fireEvent.press(view.getByRole('button', { name: 'Not now' })));
+  expect(done).toHaveBeenCalledWith(undefined);
+  view.unmount();
+  await act(async () => resolve('granted'));
+  expect(ensureNotifications).not.toHaveBeenCalled();
 });

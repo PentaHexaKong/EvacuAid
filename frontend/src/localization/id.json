@@ -434,5 +434,18 @@
   "alertStepSiaga3": "Bersiap untuk berangkat",
   "alertStepAwas1": "Berangkat sekarang ke titik kumpul terdekat",
   "alertStepAwas2": "Bawa tas siaga saja",
-  "alertStepAwas3": "Bantu orang lain hanya jika aman"
+  "alertStepAwas3": "Bantu orang lain hanya jika aman",
+  "reachTitle": "Tetap bisa dihubungi saat darurat",
+  "reachBody": "Dua izin membantu EvacuAid memberi peringatan sesuai lokasimu dan memudahkan seseorang menemukanmu. Kamu bisa mengubahnya kapan saja di Pengaturan.",
+  "reachLocationTitle": "Lokasi",
+  "reachLocationReason": "Agar peringatan sesuai lokasimu, dan pendamping bisa cepat menemukanmu.",
+  "reachNotificationsTitle": "Notifikasi",
+  "reachNotificationsReason": "Agar peringatan sampai kepadamu meski aplikasi ditutup.",
+  "reachTurnOn": "Aktifkan",
+  "reachNotNow": "Nanti saja",
+  "reachOn": "Aktif",
+  "reachOff": "Nonaktif",
+  "reachPreciseOff": "Lokasi presisi belum aktif. Pendamping membutuhkannya untuk menemukanmu.",
+  "alertAreaTitle": "Perbarui areaku untuk peringatan",
+  "alertAreaDetail": "Menggunakan perkiraan lokasi hanya saat kamu berpindah sekitar 500 m. Tidak dibagikan dengan buddy di luar permintaan bantuan."
 }

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { alertAreaRunning, askAlwaysAndStart, stopAlertArea } from '@/features/location/alert-area';
 import { Alert, Linking, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -17,6 +18,8 @@ import { topAlert } from '@/features/alerts/alerts';
 import { alertItems } from '@/features/alerts/test-fixtures';
 jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ status: 'ready', items: jest.requireActual('@/features/alerts/test-fixtures').alertItems, stale: false }), findAlert: (id: string) => jest.requireActual('@/features/alerts/test-fixtures').alertItems.find((item: { id: string }) => item.id === id) }));
 import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
+
+jest.mock('@/features/location/alert-area', () => ({ alertAreaRunning: jest.fn().mockResolvedValue(false), askAlwaysAndStart: jest.fn(), stopAlertArea: jest.fn().mockResolvedValue(undefined) }));
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
 let mockMapProps: DiscoverMapProps;
@@ -482,4 +485,31 @@ test.each([false, true])('Discover offers buddy help only for support needs (has
   await waitFor(() => expect(needs.getByRole('button', { name: en.askBuddy })).toBeTruthy());
   fireEvent.press(needs.getByRole('button', { name: en.askBuddy }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+});
+
+test('the warnings area switch restores running state and stops before deleting location', async () => {
+  jest.mocked(alertAreaRunning).mockResolvedValueOnce(true);
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('switch', { name: 'Update my area for warnings' })).toHaveProp('value', true));
+  expect(view.getByText('Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request.')).toBeTruthy();
+  await act(async () => fireEvent(view.getByRole('switch', { name: 'Update my area for warnings' }), 'valueChange', false));
+  expect(stopAlertArea).toHaveBeenCalledTimes(1);
+  const call = jest.mocked(apiRequest).mock.calls.findIndex(([path, , init]) => path === '/v1/users/user-1/location' && init?.method === 'DELETE');
+  expect(call).toBeGreaterThanOrEqual(0);
+  expect(jest.mocked(stopAlertArea).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(apiRequest).mock.invocationCallOrder[call]);
+  expect(view.getByRole('switch', { name: 'Update my area for warnings' })).toHaveProp('value', false);
+});
+
+test('turning on warnings area uses guest credentials and offers Settings when blocked', async () => {
+  jest.mocked(askAlwaysAndStart).mockResolvedValueOnce('blocked');
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const settings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
+  await waitFor(() => expect(view.getByRole('switch', { name: 'Update my area for warnings' })).toBeTruthy());
+  await act(async () => fireEvent(view.getByRole('switch', { name: 'Update my area for warnings' }), 'valueChange', true));
+  expect(askAlwaysAndStart).toHaveBeenCalledWith('test-token', 'user-1');
+  const action = alert.mock.calls.at(-1)![2]!.find(item => item.text === 'Open Settings')!;
+  action.onPress?.();
+  expect(settings).toHaveBeenCalled();
+  expect(view.getByRole('switch', { name: 'Update my area for warnings' })).toHaveProp('value', false);
 });

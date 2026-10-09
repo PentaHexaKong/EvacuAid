@@ -1,3 +1,5 @@
+import { Linking } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useAccess } from '@/features/access/use-access';
 import { useContext, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
@@ -27,6 +29,7 @@ export const tabEnter = (from: number) => () => {
 
 export function HelperContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
   const { soundFree } = useAccess();
+  const { t } = useTranslation();
   const a = useBuddyActions({ token, userId, state });
   const { c, session, requester, attempt, active, issue, voice, native, catchNative, setLocalError } = a;
   const router = useRouter();
@@ -50,6 +53,7 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
   </>;
   const banner = issue && <Card tint="caution">
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
+    {native.settingsBlocked && <ActionButton compact variant="secondary" label={t('openSettings')} onPress={() => void Linking.openSettings()} />}
     <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
   </Card>;
   // While navigating, the turn banner takes the top of the screen, so the bar's title and buttons step aside.

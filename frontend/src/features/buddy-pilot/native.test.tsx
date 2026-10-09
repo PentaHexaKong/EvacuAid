@@ -151,3 +151,16 @@ test('cancelling speech aborts only recognition owned by this hook and ignores l
   expect(result.current.error).toBeNull();
   expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
 });
+
+
+test('both Buddy stop paths leave the alert area task and credentials alone', async () => {
+  jest.mocked(SecureStore.deleteItemAsync).mockClear();
+  jest.mocked(Location.stopLocationUpdatesAsync).mockClear();
+  jest.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+  const { result, rerender } = renderHook(({ active }: { active: boolean }) => useBuddyNative({ active, sessionId: 'request', token: 'token', onRefresh: jest.fn() }), { initialProps: { active: true } });
+  await act(async () => result.current.stopLocation());
+  rerender({ active: false });
+  await act(async () => {});
+  expect(jest.mocked(Location.stopLocationUpdatesAsync).mock.calls).toEqual([['evacuaid.buddy-location.v1'], ['evacuaid.buddy-location.v1']]);
+  expect(jest.mocked(SecureStore.deleteItemAsync).mock.calls).toEqual([['evacuaid.buddy-location-session.v1'], ['evacuaid.buddy-location-session.v1']]);
+});

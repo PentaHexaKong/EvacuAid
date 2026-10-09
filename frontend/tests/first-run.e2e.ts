@@ -24,7 +24,13 @@ test('deleting the profile returns to the welcome screen, where the language men
   await agent.act('open the language menu at the top of the screen and choose "English"');
   await expect(screen.getByText('Warnings that adapt to you.')).toBeVisible();
 
-  await screen.getByRole('button', 'Skip setup').tap();
+  await screen.getByRole('button', 'Get started').tap();
+  // The support step is taller than the screen.
+  await screen.scrollUntilVisible(screen.getByRole('button', 'Continue'));
+  await screen.getByRole('button', 'Continue').tap();
+  await screen.getByRole('button', 'Continue').tap();
+  await expect(screen.getByText('Stay reachable in an emergency')).toBeVisible();
+  await screen.getByRole('button', 'Not now').tap();
   await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 60_000 });
   await app.screenshot('home-new-guest');
 });

@@ -37,7 +37,7 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-localization',
     'expo-secure-store',
-    ['expo-location', { locationWhenInUsePermission: 'Allow EvacuAid to share your location during an accepted Buddy session.', locationAlwaysAndWhenInUsePermission: 'Allow EvacuAid to continue Buddy location sharing while your phone is locked.', isIosBackgroundLocationEnabled: true, isAndroidBackgroundLocationEnabled: true, isAndroidForegroundServiceEnabled: true }],
+    ['expo-location', { locationWhenInUsePermission: 'EvacuAid uses your location to show warnings for where you are, and to share it with your helper only during a help request.', locationAlwaysAndWhenInUsePermission: 'Allow Always so warnings follow you when you move. EvacuAid updates your area only after you move about 500 m.', isIosBackgroundLocationEnabled: true, isAndroidBackgroundLocationEnabled: true, isAndroidForegroundServiceEnabled: true }],
     'expo-notifications',
     ['expo-speech-recognition', { microphonePermission: 'Allow EvacuAid to hear a command when you tap the microphone.', speechRecognitionPermission: 'Allow EvacuAid to transcribe your spoken Buddy commands.' }],
     ['./plugins/with-splash-gradient', { image: './assets/brand/splash-gradient.png' }],
