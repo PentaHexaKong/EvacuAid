@@ -184,7 +184,7 @@ def evaluateRoute(routeId: str, route: RouteData, evidence: list[RouteEvidence |
         result.closestHazardDistanceM = min(result.closestHazardDistanceM, closest) if result.closestHazardDistanceM is not None else closest
     if normalizedEvidence:
         result.uncertainty = sum(1 if metric.exposure is None or (name == 'tsunami' and 'ELEVATION_DATA_UNKNOWN' in metric.reasonCodes) else 0.5 if metric.severityExposure is None else 0 for name, metric in result.hazards.items()) / len(result.hazards)
-        if any(metric.state == 'EXPOSED' for metric in result.hazards.values()):
+        if 'HAZARD_ZONE_EXIT' in hazardReasons or any(metric.state == 'EXPOSED' for metric in result.hazards.values()):
             result.hazardStatus = HazardStatus.EXPOSED
         elif any(metric.state == 'POTENTIALLY_EXPOSED' for metric in result.hazards.values()):
             result.hazardStatus = HazardStatus.POTENTIALLY_EXPOSED
