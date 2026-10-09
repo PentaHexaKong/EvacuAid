@@ -195,11 +195,12 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
         <AppText variant="figure">{formatDistance(response.route!.distanceM, locale)} · {t('minutes', { count: Math.max(1, Math.ceil(response.route!.durationSec / 60)) })}</AppText>
         <AppText variant="button">{t('walkTo', { name: destination?.name ?? '' })}</AppText>
       </View>
+      {/* The action sits above the notes so it clears the tab bar at the sheet's resting height. */}
+      <ActionButton variant="gradient" label={t('evacuateStart')} onPress={() => router.push({ pathname: '/evacuate', params: { shelterId: destination?.shelterId } })} />
       {evaluation && <View style={{ gap: 8 }}>
         <Evidence caution={evaluation.safetyStatus !== 'NO_KNOWN_HAZARD'}>{t(`hazard_${evaluation.safetyStatus}`)}</Evidence>
         <Evidence caution>{t(`routeAccess_${evaluation.accessibilityStatus}`)}</Evidence>
       </View>}
-      <ActionButton variant="gradient" label={t('evacuateStart')} onPress={() => router.push({ pathname: '/evacuate', params: { shelterId: destination?.shelterId } })} />
       <ActionButton variant="secondary" label={t('chooseAnotherShelter')} onPress={onChooseAnother} />
     </>;
   }
