@@ -45,7 +45,7 @@ export function BuddyAddScreen() {
     if (code === own) { setError(c('ownCode')); return; }
     pending.current = true; setBusy(true); setError(null);
     try {
-      await (direct ? buddyRequest(token, '/invitations/direct', 'POST', { code, relation, direction: 'OFFER_HELP' }) : buddyRequest(token, '/invitations/redeem', 'POST', { code }));
+      await (direct ? buddyRequest(token, '/invitations/direct', 'POST', { code, relation, direction: needs ? 'SEEK_HELP' : 'OFFER_HELP' }) : buddyRequest(token, '/invitations/redeem', 'POST', { code }));
       if (Platform.OS === 'ios') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.back();
     } catch (cause) {
@@ -55,7 +55,7 @@ export function BuddyAddScreen() {
   };
   return <ScrollView style={styles.page} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}>
     <View style={styles.header}><AppText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{c('addBuddy')}</AppText><Pressable accessibilityRole="button" accessibilityLabel={c('sheetClose')} style={styles.close} onPress={() => router.back()}><IconX size={22} color={colors.ink} /></Pressable></View>
-    <AppText style={{ color: colors.muted }}>{c('addBuddyBody')}</AppText>
+    <AppText style={{ color: colors.muted }}>{c(needs ? 'addBuddyBodyNeeds' : 'addBuddyBody')}</AppText>
     <View style={styles.codeBlock}>
       <AppText variant="eyebrow" style={{ color: colors.muted }}>{c('yourCode')}</AppText>
       <View style={styles.figure}>{own ? <AppText variant="figure" selectable numberOfLines={1} adjustsFontSizeToFit style={styles.code}>{own}</AppText> : <ActivityIndicator accessibilityLabel={c('checking')} color={colors.primary} />}</View>

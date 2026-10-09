@@ -60,7 +60,7 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
     {inSession ? <SessionView a={a} token={token} userId={userId} /> : <>
       <Segmented<Tab> value={tab} onChange={next => { setSwitched(true); setTab(next); }} options={[{ value: 'friends', label: c('friends') }, { value: 'auto', label: c('auto') }]} />
       <Animated.View key={tab} entering={switched ? tabEnter(reduceMotion ? 0 : tab === 'auto' ? TAB_SHIFT : -TAB_SHIFT) : undefined}>
-        {tab === 'friends' ? <FriendsView a={a} code={code} /> : <NearbyView a={a} helper onSimulate={simulate} />}
+        {tab === 'friends' ? <FriendsView a={a} code={code} /> : <NearbyView a={a} onSimulate={simulate} />}
       </Animated.View>
     </>}
   </Page>;
