@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'expo-router';
-import { compareAlerts } from '@/features/alerts/alerts';
+import { compareAlerts, LEVEL_ORDER } from '@/features/alerts/alerts';
 import { useAlerts } from '@/features/alerts/use-alerts';
 
 const presented = new Set<string>();
@@ -11,7 +11,9 @@ export function AlertGate() {
   const router = useRouter();
   useEffect(() => {
     if (pathname.startsWith('/emergency/')) return;
-    const item = [...alerts.items].filter(item => item.level !== 'waspada' && item.myResponse === null && !presented.has(item.id)).sort(compareAlerts)[0];
+    // Someone who already answered a warning is acting on it: only a more severe one may interrupt them again.
+    const answered = Math.max(0, ...alerts.items.filter(item => item.myResponse !== null).map(item => LEVEL_ORDER[item.level]));
+    const item = [...alerts.items].filter(item => item.level !== 'waspada' && item.myResponse === null && LEVEL_ORDER[item.level] > answered && !presented.has(item.id)).sort(compareAlerts)[0];
     if (!item) return;
     markAlertPresented(item.id);
     router.push({ pathname: '/emergency/[id]', params: { id: item.id } });
