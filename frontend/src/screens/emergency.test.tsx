@@ -15,7 +15,7 @@ let mockAccess = { voiceHome: false, listen: false, autoRead: false, soundFree: 
 let mockBuddy: string | null = null;
 let mockIncoming: { name: string }[] = [];
 let mockFocused = true;
-const mockRouter = { replace: jest.fn(), back: jest.fn() };
+const mockRouter = { canGoBack: jest.fn(), replace: jest.fn(), back: jest.fn() };
 const mockReload = jest.fn().mockResolvedValue(undefined);
 const mockHaptics = { tap: jest.fn(), alert: jest.fn() };
 const mockVoice = { listening: false, startListening: jest.fn(), stopListening: jest.fn(), cancelListening: jest.fn() };
@@ -44,6 +44,7 @@ jest.mock('expo-speech', () => ({ stop: jest.fn().mockResolvedValue(undefined), 
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockRouter.canGoBack.mockReturnValue(true);
   await AsyncStorage.clear();
   mockItem = { ...alertItems[0], myResponse: null };
   mockFocused = true;
@@ -72,7 +73,7 @@ test.each([null, 'Sari'])('buddy action shares caption and goes to help (%s)', a
   mockNeeds = ['MOBILITY_LIMITATION'];
   mockBuddy = buddy;
   const view = render(<EmergencyScreen />);
-  fireEvent.press(view.getByRole('button', { name: buddy ? "Ask Sari for help. Shares your location with Sari until you're safe" : "Find a helper nearby. Shares your location with nearby helpers until you're safe" }));
+  fireEvent.press(view.getByRole('button', { name: buddy ? "Ask Sari for help. Shares your location with Sari" : "Find a helper nearby. Shares your location with helpers nearby" }));
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', 'NEEDS_HELP');
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
   await waitFor(() => expect(applyResponse).toHaveBeenCalledWith('rain', 'NEEDS_HELP'));
@@ -135,6 +136,22 @@ test('ended warning reloads once and offers Close', async () => {
   expect(mockReload).toHaveBeenCalledTimes(1);
   fireEvent.press(view.getByRole('button', { name: 'Close' }));
   expect(mockRouter.back).toHaveBeenCalled();
+});
+test.each(['close', 'safe', 'blind evacuate', 'ended'] as const)('%s returns Home when there is no navigation history', async action => {
+  mockRouter.canGoBack.mockReturnValue(false);
+  if (action === 'ended') mockItem = undefined;
+  if (action === 'blind evacuate') {
+    mockNeeds = ['VISUAL_IMPAIRMENT'];
+    mockAccess = { voiceHome: true, listen: true, autoRead: false, soundFree: false };
+  }
+  const view = render(<EmergencyScreen />);
+  if (action === 'ended') await waitFor(() => expect(view.getByText('This warning has ended.')).toBeTruthy());
+  fireEvent.press(view.getByRole('button', { name: action === 'safe' ? "I'm safe" : action === 'blind evacuate' ? 'Start evacuation' : 'Close' }));
+  await act(async () => {});
+  expect(mockRouter.replace).toHaveBeenCalledWith('/');
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  if (action === 'safe' || action === 'blind evacuate') expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', action === 'safe' ? 'SAFE' : 'EVACUATING');
+  else expect(respondToAlert).not.toHaveBeenCalled();
 });
 test('response retries once then swallows failures', async () => {
   jest.mocked(respondToAlert).mockRejectedValue(new Error('offline'));

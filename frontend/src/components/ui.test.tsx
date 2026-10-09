@@ -54,7 +54,7 @@ test('access capabilities are safe without providers', () => {
 
 
 test('button detail is visible and included in its accessible label', () => {
-  const view = render(<ActionButton label="Ask Sari for help" detail="Shares your location with Sari until you're safe" />);
-  expect(view.getByRole('button', { name: "Ask Sari for help. Shares your location with Sari until you're safe" })).toBeTruthy();
-  expect(view.getByText("Shares your location with Sari until you're safe")).toBeTruthy();
+  const view = render(<ActionButton label="Ask Sari for help" detail="Shares your location with Sari" />);
+  expect(view.getByRole('button', { name: "Ask Sari for help. Shares your location with Sari" })).toBeTruthy();
+  expect(view.getByText("Shares your location with Sari")).toBeTruthy();
 });

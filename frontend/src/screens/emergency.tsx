@@ -118,7 +118,8 @@ export function EmergencyScreen() {
       }
     }
   };
-  const close = () => { markAlertPresented(id); active.current = false; cancelVoice(); router.back(); };
+  const dismiss = () => { if (router.canGoBack()) router.back(); else router.replace('/'); };
+  const close = () => { markAlertPresented(id); active.current = false; cancelVoice(); dismiss(); };
   const run = (action: EmergencyAction['id']) => {
     if (!active.current || !alert) return;
     haptics.tap();
@@ -134,7 +135,7 @@ export function EmergencyScreen() {
         const shelter = shelters?.[0];
         void speak(shelter ? `${t('homeNearest')}: ${shelter.name}, ${formatDistance(shelter.distanceM, i18n.language)}` : t('homeNearestDetail'), i18n.language).catch(() => {});
       }
-      router.back();
+      dismiss();
       if (action === 'safe') void always();
     }
   };
