@@ -6,6 +6,7 @@ from geoalchemy2.shape import to_shape
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
+from app import config
 from app.db.models.alert import AlertDelivery, AlertResponse
 from app.db.models.hazard import HazardRecord
 from app.db.models.user import User
@@ -52,7 +53,14 @@ async def respond(db, actor, alertId, response):
     return item(row, response)
 
 
+def payload(row):
+    status = row.evidenceMetadata['officialStatus']
+    return {'alertId': str(alertKey(row)), 'level': status.lower(), 'title': f'Peringatan {status}', 'body': f'{HAZARD_WORDS.get(row.hazardType, "Bahaya")} di area Anda. Buka EvacuAid untuk langkah selanjutnya.', 'interruptionLevel': 'time-sensitive'}
+
+
 async def enqueueAlerts(db):
+    if not config.ALERT_PUSH_ENABLED:
+        return
     now = datetime.now(timezone.utc)
     alerts = (await db.execute(hazardRepository.activeOfficialAlerts(('SIAGA', 'AWAS'), now))).scalars().all()
     for row in alerts:
@@ -61,11 +69,9 @@ async def enqueueAlerts(db):
         userIds = (await db.execute(candidates)).scalars().all()
         if not userIds:
             continue
-        statement = insert(AlertDelivery).values([{'alert_key': alertId, 'user_id': userId} for userId in userIds]).on_conflict_do_nothing(index_elements=['alert_key', 'user_id']).returning(AlertDelivery.user_id)
+        statement = insert(AlertDelivery).values([{'alert_key': alertId, 'user_id': userId, 'level': row.evidenceMetadata['officialStatus'].lower()} for userId in userIds]).on_conflict_do_nothing(index_elements=['alert_key', 'user_id', 'level']).returning(AlertDelivery.user_id)
         for userId in (await db.execute(statement)).scalars():
-            status = row.evidenceMetadata['officialStatus']
-            payload = {'alertId': str(alertId), 'level': status.lower(), 'title': f'Peringatan {status}', 'body': f'{HAZARD_WORDS.get(row.hazardType, "Bahaya")} di area Anda. Buka EvacuAid untuk langkah selanjutnya.', 'interruptionLevel': 'time-sensitive'}
-            await pilotService.event(db, userId, None, 'ALERT', payload)
+            await pilotService.event(db, userId, None, 'ALERT', payload(row))
 
 
 async def cleanup(db):

@@ -21,6 +21,7 @@ def upgrade() -> None:
     op.create_table('alert_deliveries',
         sa.Column('alert_key', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+        sa.Column('level', sa.String(16), primary_key=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False))
 
 

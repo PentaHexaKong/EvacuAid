@@ -25,4 +25,5 @@ class AlertDelivery(Base):
 
     alert_key: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    level: Mapped[str] = mapped_column(String(16), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

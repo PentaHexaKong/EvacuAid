@@ -9,6 +9,7 @@ from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, Polygon, mapping
 from sqlalchemy import func, select
 
+from app import config
 from app.db.models import BuddyRelationship, User
 from app.db.models.alert import AlertDelivery, AlertResponse
 from app.db.models.hazard import HazardRecord
@@ -165,6 +166,7 @@ async def test_worker_push_deduplicates_and_preserves_buddy_messages(dbSession, 
             calls.extend(json)
             return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
+    monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
     monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
     monkeypatch.setattr(pilotWorker.httpx, 'AsyncClient', Client)
     await pilotWorker.tick()
@@ -204,6 +206,7 @@ async def test_waspada_does_not_enqueue_alerts(dbSession, monkeypatch):
     async def no_network(*args, **kwargs):
         raise AssertionError('unexpected Expo HTTP call')
 
+    monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
     monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
     monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
     await pilotWorker.tick()
@@ -250,6 +253,7 @@ def worker_database(monkeypatch, db):
     async def database():
         yield db
 
+    monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
     monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
 
 
@@ -334,7 +338,7 @@ async def test_worker_cleans_old_alert_state(dbSession, monkeypatch):
     now = datetime.now(timezone.utc)
     old, recent = uuid.uuid4(), uuid.uuid4()
     for key, at in ((old, now - timedelta(days=31)), (recent, now - timedelta(days=29))):
-        dbSession.add(AlertDelivery(alert_key=key, user_id=user.id, created_at=at))
+        dbSession.add(AlertDelivery(alert_key=key, user_id=user.id, level='siaga', created_at=at))
         dbSession.add(AlertResponse(alert_key=key, user_id=user.id, response='SAFE', created_at=at, updated_at=at))
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
@@ -400,3 +404,99 @@ async def test_extreme_cap_alert_context_and_push(dbSession, monkeypatch):
     assert calls[0]['title'] == 'Peringatan SIAGA'
     assert (await dbSession.execute(select(func.count()).select_from(PilotInbox).where(PilotInbox.kind == 'ALERT'))).scalar_one() == 1
     assert (await dbSession.execute(select(func.count()).select_from(PilotOutbox))).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status', ['SIAGA', 'AWAS'])
+async def test_alert_push_disabled_preserves_api_and_later_delivery(dbSession, monkeypatch, status):
+    row = await warning(dbSession, status)
+    worker_database(monkeypatch, dbSession)
+    monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', False)
+
+    async def no_network(*args, **kwargs):
+        raise AssertionError('unexpected Expo HTTP call')
+
+    original_post = httpx.AsyncClient.post
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, headers = await guest(client, dbSession)
+        monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
+        await pilotWorker.tick()
+        await pilotWorker.tick()
+        for model in (PilotInbox, PilotOutbox, AlertDelivery):
+            assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 0
+        items = (await client.get('/v1/alerts', headers=headers)).json()['items']
+        assert len(items) == 1 and items[0]['level'] == status.lower()
+        monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', original_post)
+        response = await client.post(f'/v1/alerts/{alertService.alertKey(row)}/response', headers=headers, json={'response': 'SAFE'})
+        assert response.status_code == 200 and response.json()['myResponse'] == 'SAFE'
+    worker_database(monkeypatch, dbSession)
+    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
+    await pilotWorker.tick()
+    await pilotWorker.tick()
+    for model in (PilotInbox, PilotOutbox, AlertDelivery):
+        assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_queued_alert_uses_current_payload(dbSession, monkeypatch):
+    row = await warning(dbSession, 'SIAGA')
+    user = User(latitude=-6.2, longitude=106.8, locationObservedAt=datetime.now(timezone.utc))
+    dbSession.add(user)
+    await dbSession.commit()
+    worker_database(monkeypatch, dbSession)
+    await pilotWorker.tick()
+    outbox = (await dbSession.execute(select(PilotOutbox))).scalar_one()
+    inbox = await dbSession.get(PilotInbox, outbox.inbox_id)
+    assert inbox.payload['level'] == 'siaga'
+    row.evidenceMetadata = {'officialStatus': 'AWAS'}
+    row.hazardType = 'TSUNAMI'
+    outbox.next_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    await dbSession.commit()
+    monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', False)
+    calls = []
+
+    async def send(self, url, json):
+        calls.extend(json)
+        return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
+
+    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
+    await pilotWorker.tick()
+    assert len(calls) == 1 and outbox.sent_at is not None
+    assert calls[0]['title'] == 'Peringatan AWAS'
+    assert calls[0]['body'] == 'Tsunami di area Anda. Buka EvacuAid untuk langkah selanjutnya.'
+    assert calls[0]['data']['level'] == 'awas'
+    assert calls[0]['data']['alertId'] == str(alertService.alertKey(row))
+    assert calls[0]['interruptionLevel'] == 'time-sensitive' and calls[0]['priority'] == 'high'
+
+
+@pytest.mark.asyncio
+async def test_alert_escalation_delivers_once_per_level(dbSession, monkeypatch):
+    row = await warning(dbSession, 'SIAGA')
+    user = User(latitude=-6.2, longitude=106.8, locationObservedAt=datetime.now(timezone.utc))
+    dbSession.add(user)
+    await dbSession.commit()
+    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    await dbSession.commit()
+    worker_database(monkeypatch, dbSession)
+    calls = []
+
+    async def send(self, url, json):
+        calls.extend(json)
+        return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
+
+    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
+    await pilotWorker.tick()
+    await pilotWorker.tick()
+    assert len(calls) == 1
+    row.evidenceMetadata = {'officialStatus': 'AWAS'}
+    await dbSession.commit()
+    await pilotWorker.tick()
+    await pilotWorker.tick()
+    assert [message['data']['level'] for message in calls] == ['siaga', 'awas']
+    assert {message['data']['alertId'] for message in calls} == {str(alertService.alertKey(row))}
+    deliveries = (await dbSession.execute(select(AlertDelivery))).scalars().all()
+    assert {delivery.level for delivery in deliveries} == {'siaga', 'awas'}
+    assert len(deliveries) == 2
+    for model in (PilotInbox, PilotOutbox):
+        assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 2

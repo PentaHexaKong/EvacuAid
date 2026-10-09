@@ -29,18 +29,20 @@ async def tick():
             for row in rows:
                 inbox = await db.get(PilotInbox, row.inbox_id)
                 tokens = (await db.execute(select(PilotPushToken).where(PilotPushToken.user_id == inbox.user_id))).scalars().all()
+                payload = inbox.payload
                 if inbox.kind == 'ALERT':
                     alert = await alertService.activeAlert(db, inbox.payload.get('alertId'), ('SIAGA', 'AWAS'))
                     if alert is None or (not tokens and inbox.created_at < service.now() - timedelta(hours=2)):
                         row.sent_at = service.now()
                         continue
+                    payload = alertService.payload(alert)
                 if not tokens:
                     row.next_at = service.now() + timedelta(seconds=30)
                     continue
-                body = [{'to': token.token, 'title': inbox.payload.get('title', 'EvacuAid Buddy'), 'body': inbox.payload.get('body', 'Ada pembaruan Buddy. Buka aplikasi untuk melihat.'), 'sound': 'default', 'data': {**inbox.payload, 'inboxId': str(inbox.id)}} for token in tokens]
-                if 'interruptionLevel' in inbox.payload:
+                body = [{'to': token.token, 'title': payload.get('title', 'EvacuAid Buddy'), 'body': payload.get('body', 'Ada pembaruan Buddy. Buka aplikasi untuk melihat.'), 'sound': 'default', 'data': {**payload, 'inboxId': str(inbox.id)}} for token in tokens]
+                if 'interruptionLevel' in payload:
                     for message in body:
-                        message.update(interruptionLevel=inbox.payload['interruptionLevel'], priority='high')
+                        message.update(interruptionLevel=payload['interruptionLevel'], priority='high')
                 row.attempts += 1
                 try:
                     result = await client.post('https://exp.host/--/api/v2/push/send', json=body)

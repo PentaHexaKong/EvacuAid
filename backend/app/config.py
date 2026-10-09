@@ -36,6 +36,7 @@ USER_AGENT = os.getenv(
 DATABASE_URL = os.getenv(
     'DATABASE_URL', 'postgresql+asyncpg://evacuaid:change-me@postgres:5432/evacuaid'
 )
+ALERT_PUSH_ENABLED = os.getenv('ALERT_PUSH_ENABLED', 'false').lower() == 'true'
 REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
 CONTEXT_CACHE_TTL_SECONDS = int(os.getenv('CONTEXT_CACHE_TTL_SECONDS', '60'))
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://valhalla:8002').rstrip('/')
