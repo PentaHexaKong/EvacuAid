@@ -8,6 +8,8 @@ import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidan
 import { speak, stopSpeaking } from '@/features/feedback/speech';
 import { toCoordinates, type NavigationResponse } from './api';
 
+const STILL_MS = 10_000;
+
 export function useEvacuationGuidance(response: NavigationResponse | null, reroute: () => void) {
   const access = useAccess();
   const { c } = useBuddyCopy();
@@ -21,10 +23,15 @@ export function useEvacuationGuidance(response: NavigationResponse | null, rerou
     if (!active) return;
     let mounted = true;
     let watch: Location.LocationSubscription | undefined;
-    void Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5 }, fix => {
+    let last = 0;
+    const accept = (fix: Location.LocationObject) => {
+      last = Date.now();
       if (mounted) setPosition({ latitude: fix.coords.latitude, longitude: fix.coords.longitude, accuracyM: fix.coords.accuracy ?? Infinity, observedAt: new Date(Math.min(fix.timestamp, Date.now())).toISOString() });
-    }).then(subscription => { if (mounted) watch = subscription; else subscription.remove(); }).catch(() => {});
-    return () => { mounted = false; watch?.remove(); stopSpeaking(); };
+    };
+    // The watch only reports movement. Someone standing still would look lost after 30 s, so ask for a fresh fix while it is quiet.
+    const still = setInterval(() => { if (Date.now() - last >= STILL_MS) void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).then(accept).catch(() => {}); }, STILL_MS);
+    void Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5 }, accept).then(subscription => { if (mounted) watch = subscription; else subscription.remove(); }).catch(() => {});
+    return () => { mounted = false; clearInterval(still); watch?.remove(); stopSpeaking(); };
   }, [active]);
   const guidance = useRouteGuidance({ route, position, target: null, language, reroute, speak: text => speak(text, language).catch(() => {}), voiceEnabled: access.listen && !access.soundFree, haptics: true, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: () => {}, entranceNote: response?.destination?.entranceNote, destinationName: response?.destination?.name, caption: text => setCaption({ route, text }) });
   return { ...guidance, caption: caption?.route === route ? caption.text : null, position };
