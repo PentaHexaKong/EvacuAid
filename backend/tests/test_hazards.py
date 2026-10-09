@@ -394,9 +394,10 @@ def testOverlappingOriginHazardsExitTheirUnion():
     result = evaluateRoute('union', syntheticRoute(), [flood, fire], False)
     assert result.feasible
     assert 'HAZARD_ZONE_EXIT' in result.reasons
-    for name in ('flood', 'wildfire'):
+    # The exit time is for the union of the zones; each hazard keeps its own share of the route.
+    for name, ratio in (('flood', 0.4), ('wildfire', 0.6)):
         assert result.hazards[name].firstExitTimeSec == pytest.approx(60, abs=1)
-        assert result.hazards[name].intersectionRatio == pytest.approx(0.6, abs=0.001)
+        assert result.hazards[name].intersectionRatio == pytest.approx(ratio, abs=0.001)
 
 
 @pytest.mark.asyncio
@@ -409,3 +410,16 @@ async def testFloodEscapeAllowsSnappedStartInsideOriginZone():
     assert candidates[0].feasible
     assert 'HAZARD_ZONE_EXIT' in candidates[0].reasons
     assert 'ENDPOINT_HAZARD_CONNECTION_UNKNOWN' not in candidates[0].reasons
+
+
+@pytest.mark.asyncio
+async def testEscapeConnectorCannotLeaveAndReenterAConcaveOriginZone():
+    # A U-shaped zone: the origin sits in one arm and the route starts in the other, 67 m away across open ground.
+    u = {'type': 'Polygon', 'coordinates': [[[0, -0.001], [0.0008, -0.001], [0.0008, 0.001], [0.0006, 0.001], [0.0006, -0.0008], [0.0002, -0.0008], [0.0002, 0.001], [0, 0.001], [0, -0.001]]]}
+    item = syntheticEvidence(geometry=u)
+    class Provider:
+        async def routes(self, origin, destination, waypoints=None, maxCandidates=3):
+            return [syntheticRoute([[0.0007, 0], [0.0007, 0.01]])]
+    candidates = await evaluatedCandidates(Provider(), (0, 0.0001), (0.01, 0.0007), [item], False, 'SYNTHETIC_TEST')
+    assert not candidates[0].feasible
+    assert 'ENDPOINT_HAZARD_CONNECTION_UNKNOWN' in candidates[0].reasons

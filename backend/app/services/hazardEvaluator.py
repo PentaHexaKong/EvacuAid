@@ -201,7 +201,6 @@ def evaluateHazards(route, evidence: list[HazardEvidence], elevation=None) -> tu
                 result.firstExitDistanceM = exitDistance
                 result.firstExitTimeSec = route.durationSec * exitDistance / line.length if exitDistance is not None else None
                 result.reentered = reentered
-                result.intersectionRatio = line.intersection(originZone).length / line.length
             result.state = 'EXPOSED'
         if not feasible:
             reasons.extend(['AUTHORITATIVE_HAZARD_INTERSECTION', 'ROUTE_REJECTED_CRITICAL_HAZARD'])

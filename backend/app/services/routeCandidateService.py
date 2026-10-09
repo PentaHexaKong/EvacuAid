@@ -130,7 +130,8 @@ async def evaluatedCandidates(provider, origin, destination, evidence, mobilityR
                     continue
                 startConnector = LineString([actualStart, snappedStart])
                 endConnector = LineString([snappedEnd, actualEnd])
-                escapeConnector = item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and zone.covers(actualStart) and zone.covers(snappedStart)
+                # The whole connector must stay inside the zone: in a U-shaped zone both ends can be inside while the line between them leaves and re-enters.
+                escapeConnector = item.evidenceType != EvidenceType.CONFIRMED_CLOSURE and zone.covers(startConnector if startConnector.length > 0.01 else actualStart)
                 if (startConnector.length > 0.01 and startConnector.intersects(zone) and not escapeConnector) or (endConnector.length > 0.01 and endConnector.intersects(zone)):
                     result.feasible = False
                     result.reasons.extend(['ENDPOINT_HAZARD_CONNECTION_UNKNOWN', 'AUTHORITATIVE_HAZARD_INTERSECTION', 'ROUTE_REJECTED_CRITICAL_HAZARD'])
