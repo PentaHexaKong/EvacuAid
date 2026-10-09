@@ -502,5 +502,6 @@
   "evacuateArrived": "Saya sudah sampai dan aman",
   "evacuateNeedsLocation": "Panduan memerlukan lokasimu.",
   "evacuateNoRoute": "Rute jalan kaki yang aman tidak ditemukan.",
-  "evacuateSpokenStart": "Panduan menuju {{name}}, {{distance}}."
+  "evacuateSpokenStart": "Panduan menuju {{name}}, {{distance}}.",
+  "evacuateRouteOutdated": "Rute belum bisa diperbarui. Petunjuk ini mungkin sudah tidak sesuai."
 }

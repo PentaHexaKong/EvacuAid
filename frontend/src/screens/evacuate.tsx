@@ -58,8 +58,12 @@ export function EvacuateScreen() {
     } catch { setFailed(true); }
     finally { setSaving(false); }
   };
-  const unavailable = !response && (evacuation.phase === 'unavailable' || evacuation.phase === 'error');
-  const denied = !response && evacuation.phase === 'denied';
+  const failedRoute = evacuation.phase === 'unavailable' || evacuation.phase === 'error';
+  const unavailable = !response && failedRoute;
+  // Without location there is no guidance to trust, old route or not.
+  const denied = evacuation.phase === 'denied';
+  // Following the last route after a failed update is said out loud on screen, never silent.
+  const outdated = Boolean(response) && !fresh && failedRoute;
   const ready = Boolean(response?.route);
   return <ScrollView accessibilityViewIsModal style={{ flex: 1, backgroundColor: colors.canvas }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: insets.top, paddingBottom: insets.bottom + 12, gap: 16 }}>
     <View style={{ minHeight: 44 }}><Tap accessibilityLabel={t('evacuateStop')} onPress={stop} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><IconX size={24} color={colors.ink} /></Tap></View>
@@ -71,7 +75,8 @@ export function EvacuateScreen() {
     {response?.destination?.entranceNote && <Group><Row title={t('evacuateEntrance')} detail={response.destination.entranceNote} /></Group>}
     {guidance.caption && <AppText accessibilityLiveRegion="polite">{guidance.caption}</AppText>}
     {denied && <ActionButton variant="secondary" label={t('openSettings')} onPress={() => { void Linking.openSettings(); }} />}
-    {unavailable && <ActionButton variant="secondary" label={t('tryAgain')} onPress={() => { void evacuation.findRoute(shelterId); }} />}
+    {outdated && <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('evacuateRouteOutdated')}</AppText>}
+    {(unavailable || outdated) && <ActionButton variant="secondary" label={t('tryAgain')} onPress={() => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId); }} />}
     <View style={{ flex: 1 }} />
     <View style={{ gap: 12 }}>
       {failed && <AppText accessibilityRole="alert">{t('alertUnavailable')}</AppText>}
