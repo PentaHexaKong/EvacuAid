@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react-native';
 import { defaults } from '../preferences/storage';
 import type { AccessibilityItem, AccessibilityType } from '../profile/context';
-import { accessFor, type Access } from './access';
+import { accessFor, tabsFor, type Access } from './access';
 import { useAccess } from './use-access';
 
 let mockAccessibility: AccessibilityItem[] = [];
@@ -54,4 +54,14 @@ test('useAccess keeps its identity until needs or relevant switches change', () 
   view.rerender({});
   expect(view.result.current).not.toBe(visual);
   expect(view.result.current.captions).toBe(false);
+});
+
+test.each([
+  { needs: [], tabs: ['overview', 'discover', 'alerts', 'buddy'] },
+  { needs: ['VISUAL_IMPAIRMENT'], tabs: ['overview', 'alerts', 'buddy'] },
+  { needs: ['HEARING_IMPAIRMENT'], tabs: ['overview', 'discover', 'alerts', 'buddy'] },
+  { needs: ['MOBILITY_LIMITATION'], tabs: ['overview', 'discover', 'alerts', 'buddy'] },
+  { needs: ['ELDERLY'], tabs: ['overview', 'discover', 'alerts', 'buddy'] },
+])('ordered tabs for $needs', ({ needs, tabs }) => {
+  expect(tabsFor(accessFor(needs as AccessibilityType[], defaults))).toEqual(tabs);
 });

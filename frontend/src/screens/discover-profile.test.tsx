@@ -476,3 +476,16 @@ test.each([false, true])('other shelters keep stable accessibility groups only w
   expect(labels.map(label => String(label).slice(0, 7))).toEqual((stepFree ? [3, 5, 2, 6, 1, 4] : [1, 2, 3, 4, 5, 6]).map(index => `Point ${index}`));
   expect(view.getByText('Point 0')).toBeTruthy();
 });
+
+test.each([false, true])('Discover offers buddy help only for support needs (has origin: %s)', async hasOrigin => {
+  if (hasOrigin) evac({ phase: 'located', origin, shelters: [hall, school] });
+  const view = render(<ProfileProvider><DiscoverScreen /></ProfileProvider>);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/v1/users/user-1/accessibility', 'test-token'));
+  expect(view.queryByRole('button', { name: en.askBuddy })).toBeNull();
+  view.unmount();
+  (apiRequest as jest.Mock).mockImplementation(async (path: string) => path.endsWith('/accessibility') ? [{ type: 'MOBILITY_LIMITATION', severity: null }] : mockProfile);
+  const needs = render(<ProfileProvider><DiscoverScreen /></ProfileProvider>);
+  await waitFor(() => expect(needs.getByRole('button', { name: en.askBuddy })).toBeTruthy());
+  fireEvent.press(needs.getByRole('button', { name: en.askBuddy }));
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+});

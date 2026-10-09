@@ -20,6 +20,10 @@ import { TabHeader, TabScrollView } from '@/components/tab-shell';
 import { AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { SpeakButton } from '@/components/speak-button';
+import { incomingNamesSummary } from '@/features/buddy-pilot/incoming-contacts';
+import { useIncomingContacts } from '@/features/buddy-pilot/use-incoming-contacts';
+import { useProfile } from '@/features/profile/context';
+import { useGuestSession } from '@/features/profile/session';
 import { useBuddySpeech } from '@/features/buddy-pilot/native';
 import { homeCommand, type HomeCommand } from '@/features/voice/home-command';
 import { formatDistance } from '@/features/navigation/distance';
@@ -79,7 +83,8 @@ function useVoiceHome(readText: string, nearest: RefObject<string | null>, liste
   const say = (text: string) => { if (!listen || !focused) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
-    else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/discover'); }
+    // ponytail: interim until spoken evacuation guidance lands.
+    else if (command === 'nearest') { if (nearest.current) say(nearest.current); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
   const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
@@ -105,7 +110,12 @@ function NearestRow({ nearest, onPress }: { nearest: RefObject<string | null>; o
 
 export function OverviewScreen() {
   const access = useAccess();
+  const { accessibility } = useProfile();
+  const { token } = useGuestSession();
+  const hasNeeds = accessibility.length > 0;
+  const incomingContacts = useIncomingContacts(token, !hasNeeds);
   const { t, i18n } = useTranslation();
+  const peopleDetail = incomingNamesSummary(incomingContacts) || t('homePeopleRelyingDetail');
   const router = useRouter();
   // The hero follows the most severe alert, so a newer Normal notice never hides an active warning.
   const alert = topAlert;
@@ -136,7 +146,7 @@ export function OverviewScreen() {
     {/* Magic Tap (two-finger double-tap) reaches the element VoiceOver is on and then its ancestors, so it wraps the whole page. */}
     <View onMagicTap={voiceHome && access.listen ? voice.toggle : undefined}>
       <TabHeader><Logo height={32} color={ink} /></TabHeader>
-      <SettingsMenu notifications />
+      <SettingsMenu />
       <View style={styles.header}>
         <LinearGradient pointerEvents="none" colors={[stops[0], stops[0], stops[1], stops[2], colors.canvas]} locations={[0, 0.62, 0.78, 0.92, 1]} style={styles.sky} />
         <View style={{ gap: 10 }}>
@@ -168,13 +178,14 @@ export function OverviewScreen() {
           <NearestRow nearest={nearest} onPress={() => voice.run('nearest')} />
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconLifebuoy size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeAskHelp')} detail={t('homeAskHelpDetail')} trailing={chevron} onPress={() => voice.run('help')} />
         </Group> : <Group inset={0}>
-          <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />
+          {hasNeeds && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
+          {!hasNeeds && incomingContacts.length > 0 && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('homePeopleRelying')} detail={peopleDetail} accessibilityLabel={`${t('homePeopleRelying')}. ${peopleDetail}`} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMap size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickMap')} detail={t('quickMapDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/discover'); }} />
         </Group>}
         {collapsible && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}
         {(!collapsible || expanded) && <>
         <View style={{ gap: 12 }}>
-          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
+          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts-tab')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
           {listed.length
             ? <Group>{listed.map(item => <AlertRow key={item.id} alert={item} onPress={() => openAlert(item.id)} />)}</Group>
             : <AppText style={{ color: colors.muted }}>{t('homeNoOtherAlerts')}</AppText>}
