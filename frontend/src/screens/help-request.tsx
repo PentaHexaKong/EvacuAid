@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +53,6 @@ export function HelpRequestScreen() {
   const decline = async () => { if (attempt && await a.transition('decline', { attemptId: attempt.id })) router.back(); };
   const back = () => { haptics.tap(); router.back(); };
   return <LinearGradient colors={palette.stops as [string, string, ...string[]]} style={styles.fill}>
-    <Stack.Screen options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
     <ScrollView accessibilityViewIsModal contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
       {state.loading ? <ActivityIndicator accessibilityLabel={a.c('checking')} /> : attempt ? <>
         <View style={styles.top}><StatusChip dot tone={friend ? 'critical' : 'caution'} label={a.c(friend ? 'needsHelpChip' : 'nearbyEmergency')} /><Tap accessibilityLabel={t('helpRequestLater')} onPress={back} style={styles.close}><IconX size={24} color={palette.ink} /></Tap></View>

@@ -25,7 +25,6 @@ afterEach(() => jest.useRealTimers());
 test('accept sends consent directly and navigates into the session', async () => {
   const view = render(<HelpRequestScreen />);
   expect(mockRefresh).toHaveBeenCalledWith('request');
-  expect(mockOptions).toHaveBeenCalledWith({ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false });
   expect(view.getByText('Shares your location with Ari while you help')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: "I'll help Ari" }));
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith({ pathname: '/buddy', params: { requestId: 'request' } }));
