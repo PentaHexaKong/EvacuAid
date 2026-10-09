@@ -74,6 +74,7 @@ def parseCap(xml: str, now: datetime) -> list[HazardEvidence]:
         expires = timestamp(info.findtext('cap:expires', namespaces=ns))
         if expires <= now or effective > now:
             continue
+        officialStatus = config.BMKG_CAP_OFFICIAL_STATUS.get(info.findtext('cap:severity', namespaces=ns))
         for index, polygon in enumerate(info.findall('cap:area/cap:polygon', ns)):
             coordinates = []
             for point in (polygon.text or '').split():
@@ -84,6 +85,8 @@ def parseCap(xml: str, now: datetime) -> list[HazardEvidence]:
             if coordinates[-1] != coordinates[0]:
                 coordinates.append(coordinates[0])
             result.append(HazardEvidence(sourceId=stableId(f'{identifier}:{infoIndex}:{index}'), hazardType=HazardType.EXTREME_WEATHER, source='BMKG_CAP', authority=Authority.OFFICIAL, evidenceType=EvidenceType.ACTIVE_WARNING, geometry=normalizedGeometry({'type': 'Polygon', 'coordinates': [coordinates]}), observedAt=timestamp(root.findtext('cap:sent', namespaces=ns)), validFrom=effective, validUntil=expires, metadata={'attribution': 'BMKG', 'identifier': identifier, 'event': info.findtext('cap:event', namespaces=ns), 'capSeverity': info.findtext('cap:severity', namespaces=ns), 'capCertainty': info.findtext('cap:certainty', namespaces=ns), 'instruction': info.findtext('cap:instruction', namespaces=ns)}))
+            if officialStatus:
+                result[-1].metadata['officialStatus'] = officialStatus
     return result
 
 
