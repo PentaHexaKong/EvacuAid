@@ -14,7 +14,8 @@ import { ActionButton, AppText } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { DiscoverMap, type DiscoverMarker, type MapMode } from '@/components/discover-map';
 import { MAP_CONTROLS_BOX } from '@/components/map-framing';
-import { sampleAlerts, topAlert } from '@/features/content/samples';
+import { levelLabels, mapAlert, topAlert } from '@/features/alerts/alerts';
+import { useAlerts } from '@/features/alerts/use-alerts';
 import { useRecentHazards } from '@/features/hazards/use-recent-hazards';
 import { hazardZones, zoneRadii, type ZoneSource } from '@/features/hazards/zones';
 import type { Shelter } from '@/features/navigation/api';
@@ -89,7 +90,11 @@ function Explore() {
     const rank = (item: Shelter) => item.wheelchairAccessible === true ? 0 : item.wheelchairAccessible === null ? 1 : 2;
     otherShelters.sort((a, b) => rank(a) - rank(b));
   }
-  const alert = topAlert;
+  const alerts = useAlerts();
+  const items = alerts.items.map(item => mapAlert(item, t));
+  const top = topAlert(alerts.items);
+  const alert = top ? mapAlert(top, t) : undefined;
+  const level = alert?.level ?? 'normal';
   // "Show on the map" from a disaster's detail page passes its coordinates. The param can also arrive through a deep link, so it is
   // only honoured when it names a hazard already in the feed, and it never replaces what the map says about the user's own surroundings.
   const focused = useMemo(() => {
@@ -109,8 +114,8 @@ function Explore() {
   const locate = () => { if (mapFocus) router.setParams({ focus: '' }); evacuation.locate(); };
   const markers = useMemo<DiscoverMarker[]>(() => [
     ...shelters.map(item => ({ id: item.id, kind: 'destination' as const, title: item.name, coordinate: { latitude: item.latitude, longitude: item.longitude } })),
-    ...sampleAlerts.map(item => ({ id: item.id, kind: 'alert' as const, title: `${t(item.severity)}: ${t(item.title)}`, coordinate: item.coordinate })),
-  ], [shelters, t]);
+    ...items.map(item => ({ id: item.id, kind: 'alert' as const, title: `${t(levelLabels[item.level])}: ${t(item.title)}`, coordinate: item.coordinate })),
+  ], [shelters, alerts.items, t]);
 
   const openAlert = (id: string) => router.push({ pathname: '/alert/[id]', params: { id } });
   const selectShelter = (id: string) => {
@@ -118,7 +123,7 @@ function Explore() {
     if (evacuation.route) evacuation.clearRoute();
     sheet.current?.snapToIndex(0);
   };
-  const onMarker = (id: string) => (sampleAlerts.some(item => item.id === id) ? openAlert(id) : selectShelter(id));
+  const onMarker = (id: string) => (items.some(item => item.id === id) ? openAlert(id) : selectShelter(id));
   const route = (shelterId?: string) => {
     sheet.current?.snapToIndex(0);
     void evacuation.findRoute(shelterId);
@@ -137,17 +142,17 @@ function Explore() {
     <DiscoverMap items={markers} selected={destinationId ?? selected} onSelect={onMarker} route={evacuation.route?.coordinates} zones={impact.zones} mode={mode} onToggleMode={() => setMode(current => (current === '3d' ? '2d' : '3d'))} userLocation={evacuation.origin} focus={mapFocus} onLocate={locate} topInset={insets.top} bottomInset={snapPoints[1]} creditsInset={creditsInset} controlsStyle={controlsStyle} />
     {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
     <View pointerEvents="box-none" style={styles.sheetFrame}>
-    <BottomSheet ref={sheet} index={access.listFirst ? 2 : 1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={insets.top} backgroundComponent={SheetBackground} handleIndicatorStyle={{ backgroundColor: sky[alert.level].ink, opacity: 0.25, width: 40 }} accessible={false}>
+    <BottomSheet ref={sheet} index={access.listFirst ? 2 : 1} animatedPosition={sheetTop} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={insets.top} backgroundComponent={SheetBackground} handleIndicatorStyle={{ backgroundColor: sky[level].ink, opacity: 0.25, width: 40 }} accessible={false}>
       <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 + insets.bottom, gap: 28 }}>
         <View onLayout={event => setPrimaryHeight(Math.round(event.nativeEvent.layout.height))} style={{ gap: 16, paddingTop: 4 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.title)}. ${t(alert.severity)}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.alertChip, pressed && { opacity: 0.85 }]}>
-            <IconAlertTriangle size={22} color={sky[alert.level].ink} />
+          {alert && <Pressable accessibilityRole="button" accessibilityLabel={`${t(alert.title)}. ${t(levelLabels[alert.level])}`} accessibilityHint={t('openAlertHint')} onPress={() => openAlert(alert.id)} style={({ pressed }) => [styles.alertChip, pressed && { opacity: 0.85 }]}>
+            <IconAlertTriangle size={22} color={sky[level].ink} />
             <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="button" numberOfLines={2} style={{ color: sky[alert.level].ink }}>{t(alert.title)}</AppText>
-              <AppText variant="small" style={{ color: sky[alert.level].ink }}>{t(alert.severity)}</AppText>
+              <AppText variant="button" numberOfLines={2} style={{ color: sky[level].ink }}>{t(alert.title)}</AppText>
+              <AppText variant="small" style={{ color: sky[level].ink }}>{t(levelLabels[alert.level])}</AppText>
             </View>
-            <IconChevronRight size={20} color={sky[alert.level].ink} />
-          </Pressable>
+            <IconChevronRight size={20} color={sky[level].ink} />
+          </Pressable>}
           <Primary state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
         </View>
         {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
@@ -157,7 +162,7 @@ function Explore() {
         </View>}
         <View style={{ gap: 12 }}>
           <AppText variant="section" accessibilityRole="header">{t('nearbyAlerts')}</AppText>
-          <Group>{sampleAlerts.map(item => <Row key={item.id} title={t(item.title)} detail={`${t(item.severity)} · ${item.issued}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => openAlert(item.id)} />)}</Group>
+          <Group>{items.map(item => <Row key={item.id} title={t(item.title)} detail={[t(levelLabels[item.level]), item.issued].filter(Boolean).join(' · ')} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => openAlert(item.id)} />)}</Group>
         </View>
       </BottomSheetScrollView>
     </BottomSheet>
@@ -166,7 +171,8 @@ function Explore() {
 }
 
 function SheetBackground({ style }: BottomSheetBackgroundProps) {
-  const { stops } = sky[topAlert.level];
+  const { items } = useAlerts();
+  const { stops } = sky[topAlert(items)?.level ?? 'normal'];
   return <View pointerEvents="none" style={[style, styles.sheet]}>
     <LinearGradient colors={[stops[1], stops[2], colors.surface]} locations={[0, 0.5, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 168 }} />
   </View>;

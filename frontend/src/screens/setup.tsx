@@ -23,7 +23,7 @@ import { brand, colors, corner, radius, SystemReduceMotionContext } from '@/them
 import { duration, easeCss } from '@/theme/motion';
 import { selectLanguage } from '@/localization';
 import type { Language } from '@/localization/language';
-import { sampleAlerts } from '@/features/content/samples';
+import type { AlertViewModel } from '@/features/alerts/alerts';
 import { PreferencesPreview, usePreferences } from '@/features/preferences/context';
 import { defaults, type Preferences } from '@/features/preferences/storage';
 import { ONBOARDING_NEEDS_KEY, type AccessibilityType } from '@/features/profile/context';
@@ -223,7 +223,7 @@ function HelpStep({ draft, needs, busy, onNeeds, onChange, onNext, onLater, onBa
 
 function WarningStep({ busy, onFinish, onHelp, onBack }: { busy: boolean; onFinish: () => void; onHelp: () => void; onBack: () => void }) {
   const { t } = useTranslation();
-  const alert = sampleAlerts[0];
+  const alert: AlertViewModel = { id: 'preview', level: 'waspada', title: 'rainTitle', area: t('exampleArea'), issued: '17 Sep 2026 · 08:30 WIB', window: null, body: '', steps: ['rainStep1', 'rainStep2', 'rainStep3'], coordinate: { latitude: -6.2665, longitude: 106.809 } };
   return <>
     <StepHeader current={2} busy={busy} onBack={onBack} />
     <View style={{ gap: 10 }}>
@@ -233,7 +233,7 @@ function WarningStep({ busy, onFinish, onHelp, onBack }: { busy: boolean; onFini
     <Enter index={2} style={styles.warning}>
       <View style={styles.chips}><LevelChip level={alert.level} /></View>
       <AppText variant="section">{t(alert.title)}</AppText>
-      <AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{t(alert.area)} · {alert.issued}</AppText>
+      <AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{alert.area} · {alert.issued}</AppText>
       <View style={styles.rule} />
       <StepList steps={alert.steps.map(step => t(step))} />
     </Enter>

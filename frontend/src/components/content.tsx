@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import { AppText, Pill } from './ui';
 import { Row } from './grouped-list';
-import { levelLabels, type sampleAlerts } from '@/features/content/samples';
+import { levelLabels, type AlertViewModel } from '@/features/alerts/alerts';
 import { colors, radius, sky, type AlertLevel } from '@/theme';
 
 export function SampleNotice() {
@@ -30,9 +30,9 @@ export function LevelChip({ level }: { level: AlertLevel }) {
   </Pill>;
 }
 // One alert as a list row: level chip, title, area and time. Used by Home and the alerts sheet.
-export function AlertRow({ alert, onPress }: { alert: (typeof sampleAlerts)[number]; onPress: () => void }) {
+export function AlertRow({ alert, onPress }: { alert: AlertViewModel; onPress: () => void }) {
   const { t } = useTranslation();
-  return <Row title={<View style={{ gap: 6 }}><LevelChip level={alert.level} /><AppText variant="button">{t(alert.title)}</AppText></View>} detail={`${t(alert.area)} · ${alert.issued}`} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} accessibilityLabel={`${t(levelLabels[alert.level])}. ${t(alert.title)}. ${t(alert.area)}. ${alert.issued}`} onPress={onPress} />;
+  return <Row title={<View style={{ gap: 6 }}><LevelChip level={alert.level} /><AppText variant="button">{t(alert.title)}</AppText></View>} detail={[alert.area, alert.issued].filter(Boolean).join(' · ')} trailing={<IconChevronRight size={18} strokeWidth={2.25} color={colors.muted} />} accessibilityLabel={`${t(levelLabels[alert.level])}. ${t(alert.title)}. ${[alert.area, alert.issued].filter(Boolean).join('. ')}`} onPress={onPress} />;
 }
 
 const styles = StyleSheet.create({

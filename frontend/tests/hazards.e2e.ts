@@ -20,3 +20,13 @@ test('a disaster card opens its detail page with facts, safety steps and a way t
   await screen.getByRole('button', 'Back').tap();
   await expect(screen.getByText('Discover disaster')).toBeVisible();
 });
+
+test('Home shows the area warning status and the Alerts tab opens', { timeout: 300_000 }, async ({ app, agent, screen }) => {
+  await app.open();
+  await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 180_000 });
+  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await expect(screen.getByText(/^(Caution|Alert|Danger) for .+|^No warning for your area right now\.$/).first()).toBeVisible();
+  await screen.getByRole('tab', 'Alerts').tap();
+  await expect(screen.getByRole('heading', 'Alerts')).toBeVisible();
+  await expect(screen.getByText("Can't load warnings right now.")).not.toBeVisible();
+});

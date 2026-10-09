@@ -13,7 +13,9 @@ import { defaults, PREFERENCES_KEY } from '@/features/preferences/storage';
 import type { DiscoverMapProps } from '@/components/discover-map';
 import { apiRequest } from '@/features/profile/api';
 import { colors, sky, SystemReduceMotionContext } from '@/theme';
-import { topAlert } from '@/features/content/samples';
+import { topAlert } from '@/features/alerts/alerts';
+import { alertItems } from '@/features/alerts/test-fixtures';
+jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ status: 'ready', items: jest.requireActual('@/features/alerts/test-fixtures').alertItems, stale: false }), findAlert: (id: string) => jest.requireActual('@/features/alerts/test-fixtures').alertItems.find((item: { id: string }) => item.id === id) }));
 import type { EvacuationState } from '@/features/navigation/use-evacuation-route';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), dismissTo: jest.fn(), replace: jest.fn() };
@@ -106,35 +108,27 @@ test('Discover passes safe-area and sheet insets to the fullscreen map and opens
 
 test('the alert chip in the sheet header opens the current alert', () => {
   const view = render(<DiscoverScreen />);
-  fireEvent.press(view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` }));
+  fireEvent.press(view.getByRole('button', { name: `${en.alertHazardWeather}. ${en.levelSiaga}` }));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'rain' } });
 });
 
-test('the highest sample alert drives the unboxed sheet banner and wash', () => {
-  expect(topAlert).toMatchObject({ level: 'waspada', title: 'rainTitle' });
+test('the highest live alert drives the unboxed sheet banner and wash', () => {
+  expect(topAlert(alertItems)).toMatchObject({ level: 'siaga', hazardType: 'EXTREME_WEATHER' });
   const view = render(<DiscoverScreen />);
-  const banner = view.getByRole('button', { name: `${en.rainTitle}. ${en.cautionLabel}` });
+  const banner = view.getByRole('button', { name: `${en.alertHazardWeather}. ${en.levelSiaga}` });
   expect(banner).toHaveStyle({ minHeight: 52, paddingVertical: 10 });
   expect(banner).not.toHaveStyle({ backgroundColor: colors.cautionSoft });
   expect(banner).not.toHaveStyle({ borderWidth: 1 });
-  expect(view.getAllByText(en.rainTitle)[0]).toHaveStyle({ color: sky.waspada.ink });
-  expect(mockSheetProps.handleIndicatorStyle).toEqual({ backgroundColor: sky.waspada.ink, opacity: 0.25, width: 40 });
+  expect(view.getAllByText(en.alertHazardWeather)[0]).toHaveStyle({ color: sky.siaga.ink });
+  expect(mockSheetProps.handleIndicatorStyle).toEqual({ backgroundColor: sky.siaga.ink, opacity: 0.25, width: 40 });
   const gradient = view.UNSAFE_getAllByType(LinearGradient).find(item => item.props.locations?.join(',') === '0,0.5,1')!;
-  expect(gradient.props.colors).toEqual([sky.waspada.stops[1], sky.waspada.stops[2], colors.surface]);
+  expect(gradient.props.colors).toEqual([sky.siaga.stops[1], sky.siaga.stops[2], colors.surface]);
   expect(gradient.props.style).toEqual(expect.objectContaining({ top: 0, height: 168 }));
   expect(gradient.parent).toHaveStyle({ backgroundColor: colors.surface, overflow: 'hidden' });
 });
 
-test('topAlert is independent of the sample order', () => {
-  const spy = jest.spyOn(Array.prototype, 'reduce');
-  try {
-    jest.isolateModules(() => {
-      spy.mockImplementationOnce(function (this: unknown[], callback) { return [...this].reverse().reduce(callback); });
-      expect(jest.requireActual('@/features/content/samples').topAlert).toEqual(topAlert);
-    });
-  } finally {
-    spy.mockRestore();
-  }
+test('topAlert is independent of the feed order', () => {
+  expect(topAlert([...alertItems].reverse())).toEqual(topAlert(alertItems));
 });
 
 test('sheet credits ride peek and middle, stay at middle when expanded and resync after layout', () => {
@@ -299,11 +293,11 @@ test('a network error shows the connection message and a missing session asks fo
 
 test('notification details stay in the sheet and onward actions dismiss it', () => {
   const view = render(<View><AlertsScreen sheet /></View>);
-  fireEvent.press(view.getByText(jest.requireActual('../localization/en.json').rainTitle));
+  fireEvent.press(view.getByText(jest.requireActual('../localization/en.json').alertHazardWeather));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alerts/[id]', params: { id: 'rain' } });
   view.rerender(<View><AlertScreen sheet /></View>);
-  expect(view.getByText('Caution')).toBeTruthy();
-  for (const step of ['Pack an emergency bag', 'Charge your phone', 'Follow official updates']) expect(view.getByText(step)).toBeTruthy();
+  expect(view.getByText('Alert')).toBeTruthy();
+  for (const step of ['Check your route to the nearest gathering point', 'Tell the people who rely on you', 'Be ready to leave']) expect(view.getByText(step)).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Request help' }));
   expect(mockRouter.dismissTo).toHaveBeenLastCalledWith({ pathname: '/buddy', params: undefined });
   fireEvent.press(view.getByRole('button', { name: 'Find gathering point' }));

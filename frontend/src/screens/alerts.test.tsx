@@ -2,7 +2,11 @@ import { AccessibilityInfo } from 'react-native';
 import * as Speech from 'expo-speech';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AlertsScreen, AlertScreen } from './alerts';
-import { levelLabels, sampleAlerts } from '@/features/content/samples';
+import { levelLabels, mapAlert } from '@/features/alerts/alerts';
+import { alertItems } from '@/features/alerts/test-fixtures';
+import type { TFunction } from 'i18next';
+const sampleAlerts = alertItems.map(item => mapAlert(item, ((key: string) => id[key as keyof typeof id] ?? key) as TFunction));
+jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ status: 'ready', items: jest.requireActual('@/features/alerts/test-fixtures').alertItems, stale: false }), findAlert: (id: string) => jest.requireActual('@/features/alerts/test-fixtures').alertItems.find((item: { id: string }) => item.id === id) }));
 import id from '@/localization/id.json';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() };
@@ -15,7 +19,7 @@ test.each([false, true])('each alert exposes its level and opens the matching ro
   const view = render(<AlertsScreen sheet={sheet} />);
   expect(view.getAllByRole('button')).toHaveLength(sampleAlerts.length);
   sampleAlerts.forEach(alert => {
-    const label = `${id[levelLabels[alert.level]]}. ${id[alert.title]}. ${id[alert.area]}. ${alert.issued}`;
+    const label = `${id[levelLabels[alert.level]]}. ${id[alert.title as keyof typeof id]}. ${alert.area}. ${alert.issued}`;
     const row = view.getByRole('button', { name: label });
     expect(row.props.accessibilityLabel).toContain(id[levelLabels[alert.level]]);
     fireEvent.press(row);
@@ -40,8 +44,8 @@ test('detail auto reads the title and numbered first step on open', async () => 
   const view = render(<AlertScreen />);
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
   const text = jest.mocked(Speech.speak).mock.calls[0][0];
-  expect(text).toContain(id[sampleAlerts[0].title]);
-  expect(text).toContain(`1. ${id[sampleAlerts[0].steps[0]]}`);
+  expect(text).toContain(id[sampleAlerts[0].title as keyof typeof id]);
+  expect(text).toContain(`1. ${id[sampleAlerts[0].steps[0] as keyof typeof id]}`);
   expect(view.getByRole('button', { name: 'Berhenti' })).toBeTruthy();
 });
 
