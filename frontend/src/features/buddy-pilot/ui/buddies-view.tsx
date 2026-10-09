@@ -40,10 +40,14 @@ export function BuddiesView({ a }: { a: BuddyActions }) {
     <ReceivedInvites a={a} />
     {redeemed.map(item => <Card key={item.id} tint="info">
       <StatusChip label={c('friendRequest')} tone="info" />
-      <View style={buddyStyles.row}><PersonAvatar name={item.redeemerName} size={48} /><AppText variant="section" style={buddyStyles.grow}>{item.redeemerName ?? c('name')}</AppText></View>
+      <View style={buddyStyles.row}><PersonAvatar name={item.redeemerName} size={48} /><View style={[buddyStyles.grow, { gap: 4 }]}>
+        <AppText variant="section">{item.redeemerName ?? c('name')}</AppText>
+        {/* The owner checks this ID with the person before confirming, so a forwarded link cannot add a stranger. */}
+        {item.redeemerUserId && <AppText variant="small" selectable style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>ID {item.redeemerUserId.slice(-8)}</AppText>}
+      </View></View>
       <View style={buddyStyles.actions}>
         <View style={buddyStyles.grow}><ActionButton variant="secondary" label={c('declineShort')} loading={state.busy} onPress={() => { void state.run(`/invitations/${item.id}`, undefined, 'DELETE'); }} /></View>
-        <View style={buddyStyles.grow}><ActionButton label={c('confirmBuddy')} loading={state.busy} onPress={() => confirm(c('confirmPerson'), () => { void state.run(`/invitations/${item.id}/confirm`, {}); }, item.redeemerName ?? c('name'))} /></View>
+        <View style={buddyStyles.grow}><ActionButton label={c('confirmBuddy')} loading={state.busy} onPress={() => confirm(c('confirmPerson'), () => { void state.run(`/invitations/${item.id}/confirm`, {}); }, `${item.redeemerName ?? c('name')} · ID ${item.redeemerUserId?.slice(-8) ?? ''}`)} /></View>
       </View>
     </Card>)}
 

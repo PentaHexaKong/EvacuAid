@@ -65,6 +65,7 @@ export function BuddyAddScreen() {
     <View style={styles.field}>
       <AppText variant="button">{c('code')}</AppText>
       <Field accessibilityLabel={c('code')} placeholder="K7Q2-M9XD" value={code} onChangeText={value => { setCode(formatCode(value)); setError(null); }} autoCapitalize="characters" autoCorrect={false} maxLength={64} textContentType="none" returnKeyType="send" onSubmitEditing={() => { void submit(); }} invalid={!!error} editable={!busy} />
+      {!!params.code && <AppText variant="small" style={{ color: colors.muted }}>{c('codeFromLink')}</AppText>}
       {error && <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{error}</AppText>}
     </View>
     <View style={styles.field}>

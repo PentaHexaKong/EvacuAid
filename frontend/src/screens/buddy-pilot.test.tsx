@@ -132,6 +132,8 @@ test('a redeemed invitation shows as a friend request that confirms only after t
   const view = render(<BuddyPilotScreen />);
   expect(view.getByText('Wants to be your Buddy')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Confirm' }));
+  expect(view.getByText('ID 12345678')).toBeTruthy();
+  expect(alert).toHaveBeenCalledWith('Confirm this person', 'Baim Pratama · ID 12345678', expect.any(Array));
   expect(mockRun).not.toHaveBeenCalled();
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
   expect(mockRun).toHaveBeenCalledWith('/invitations/inv-1/confirm', {});
