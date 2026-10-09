@@ -83,7 +83,8 @@ function useVoiceHome(readText: string, nearest: RefObject<string | null>, liste
   const say = (text: string) => { if (!listen || !focused) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
-    else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/discover'); }
+    // ponytail: interim until spoken evacuation guidance lands.
+    else if (command === 'nearest') { if (nearest.current) say(nearest.current); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
   const voice = useBuddySpeech({ language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
@@ -184,7 +185,7 @@ export function OverviewScreen() {
         {collapsible && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}
         {(!collapsible || expanded) && <>
         <View style={{ gap: 12 }}>
-          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
+          <View style={styles.sectionHeader}><AppText variant="section" accessibilityRole="header" style={{ flexShrink: 1 }}>{t(level === 'normal' ? 'homeRecentAlert' : 'homeOtherAlerts')}</AppText><Tap onPress={() => router.navigate('/alerts-tab')} style={{ minHeight: 44, paddingHorizontal: 8 }}><AppText variant="button" style={{ color: colors.primary }}>{t('homeSeeAll')}</AppText></Tap></View>
           {listed.length
             ? <Group>{listed.map(item => <AlertRow key={item.id} alert={item} onPress={() => openAlert(item.id)} />)}</Group>
             : <AppText style={{ color: colors.muted }}>{t('homeNoOtherAlerts')}</AppText>}

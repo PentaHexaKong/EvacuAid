@@ -175,7 +175,7 @@ test('Home links the header alert and lists only the other alerts below', () => 
   fireEvent.press(view.getByLabelText(/^Normal\. Water on local roads\./));
   expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/alert/[id]', params: { id: 'water' } });
   fireEvent.press(view.getByRole('button', { name: 'See all' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts-tab');
 });
 
 test.each(['id', 'en'])('support-needs Home has two quick rows, help and the map, and no alerts tile (%s)', language => {
@@ -338,7 +338,7 @@ test('spoken commands on the voice Home read the alert, open the gathering point
     expect(jest.mocked(speak).mock.calls.at(-1)![0]).toContain('Heavy rain and strong winds');
     act(() => mockOnCommand('titik kumpul terdekat'));
     expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Nearest gathering point: Aula Kelurahan, 250 m');
-    expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
     // Help wins even when the sentence also names a gathering point, and it goes to Buddy, which confirms before sending.
     act(() => mockOnCommand('tolong, di mana titik kumpul'));
     expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
@@ -374,7 +374,7 @@ test.each([false, true])('the voice Home stays silent without listening, includi
   expect(view.queryByText('Other alerts')).toBeNull();
   expect(view.UNSAFE_getAllByType(View).some(node => node.props.onMagicTap)).toBe(false);
   fireEvent.press(view.getByRole('button', { name: 'Nearest gathering point' }));
-  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/discover');
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
   fireEvent.press(view.getByRole('button', { name: 'Ask for help' }));
   expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
   fireEvent(view.getByText('Ask for help'), 'magicTap');
@@ -433,4 +433,17 @@ test('helper Home names people relying on them and opens Buddy', () => {
   view.rerender(<OverviewScreen />);
   expect(view.queryByText('People who rely on you')).toBeNull();
   expect(view.getByText('Get help')).toBeTruthy();
+});
+
+
+test('the voice Home nearest row speaks the shelter without navigation', () => {
+  mockVoiceHome = true;
+  mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
+  try {
+    const view = render(<OverviewScreen />);
+    jest.mocked(speak).mockClear();
+    fireEvent.press(view.getByRole('button', { name: /Nearest gathering point/ }));
+    expect(speak).toHaveBeenCalledWith('Nearest gathering point: Aula Kelurahan, 250 m', 'en');
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  } finally { mockShelters = null; }
 });
