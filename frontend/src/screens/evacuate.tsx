@@ -12,6 +12,7 @@ import { applyResponse } from '@/features/alerts/use-alerts';
 import { speak } from '@/features/feedback/speech';
 import { useGuestSession } from '@/features/profile/session';
 import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
+import type { NavigationResponse } from '@/features/navigation/api';
 import { useEvacuationGuidance } from '@/features/navigation/use-evacuation-guidance';
 import { formatDistance } from '@/features/navigation/distance';
 import { colors } from '@/theme';
@@ -24,7 +25,11 @@ export function EvacuateScreen() {
   const access = useAccess();
   const { token } = useGuestSession();
   const evacuation = useEvacuationRoute();
-  const response = evacuation.phase === 'ready' ? evacuation.route?.response ?? null : null;
+  const fresh = evacuation.phase === 'ready' ? evacuation.route?.response ?? null : null;
+  // A reroute clears the route while it loads and can fail close to the door. Keep guiding on the last good one meanwhile.
+  const [last, setLast] = useState<NavigationResponse | null>(null);
+  if (fresh && fresh !== last) setLast(fresh);
+  const response = fresh ?? last;
   const guidance = useEvacuationGuidance(response, () => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId); });
   const findRoute = useRef(evacuation.findRoute);
   const started = useRef(false);
@@ -53,8 +58,8 @@ export function EvacuateScreen() {
     } catch { setFailed(true); }
     finally { setSaving(false); }
   };
-  const unavailable = evacuation.phase === 'unavailable' || evacuation.phase === 'error';
-  const denied = evacuation.phase === 'denied';
+  const unavailable = !response && (evacuation.phase === 'unavailable' || evacuation.phase === 'error');
+  const denied = !response && evacuation.phase === 'denied';
   const ready = Boolean(response?.route);
   return <ScrollView accessibilityViewIsModal style={{ flex: 1, backgroundColor: colors.canvas }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: insets.top, paddingBottom: insets.bottom + 12, gap: 16 }}>
     <View style={{ minHeight: 44 }}><Tap accessibilityLabel={t('evacuateStop')} onPress={stop} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><IconX size={24} color={colors.ink} /></Tap></View>

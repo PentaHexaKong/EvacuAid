@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { useAccess } from '@/features/access/use-access';
 import type { BuddyRoute, Position } from '@/features/buddy-pilot/api';
 import { useBuddyCopy } from '@/features/buddy-pilot/copy';
+import { distanceM } from '@/features/buddy-pilot/navigation';
 import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
 import { speak, stopSpeaking } from '@/features/feedback/speech';
 import { toCoordinates, type NavigationResponse } from './api';
@@ -33,6 +34,9 @@ export function useEvacuationGuidance(response: NavigationResponse | null, rerou
     void Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5 }, accept).then(subscription => { if (mounted) watch = subscription; else subscription.remove(); }).catch(() => {});
     return () => { mounted = false; clearInterval(still); watch?.remove(); stopSpeaking(); };
   }, [active]);
-  const guidance = useRouteGuidance({ route, position, target: null, language, reroute, speak: text => speak(text, language).catch(() => {}), voiceEnabled: access.listen && !access.soundFree, haptics: true, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: () => {}, entranceNote: response?.destination?.entranceNote, destinationName: response?.destination?.name, caption: text => setCaption({ route, text }) });
+  // Within sight of the destination a new route adds nothing, and the router cannot plan a few metres.
+  const destination = response?.destination;
+  const close = Boolean(position && destination && distanceM(position, destination) <= 30);
+  const guidance = useRouteGuidance({ route, position, target: null, language, reroute: () => { if (!close) reroute(); }, speak: text => speak(text, language).catch(() => {}), voiceEnabled: access.listen && !access.soundFree, haptics: true, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: () => {}, entranceNote: response?.destination?.entranceNote, destinationName: response?.destination?.name, caption: text => setCaption({ route, text }) });
   return { ...guidance, caption: caption?.route === route ? caption.text : null, position };
 }

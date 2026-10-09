@@ -105,3 +105,13 @@ test('a failed SAFE response keeps guidance open for retry', async () => {
   expect(mockRouter.replace).not.toHaveBeenCalled();
   expect(applyResponse).not.toHaveBeenCalled();
 });
+
+test('a failed reroute keeps guiding on the last good route', () => {
+  const view = render(<EvacuateScreen />);
+  expect(view.getByRole('header', { name: 'Turn left' })).toBeTruthy();
+  mockPhase = 'unavailable';
+  view.rerender(<EvacuateScreen />);
+  expect(view.getByRole('header', { name: 'Turn left' })).toBeTruthy();
+  expect(view.queryByText('No safe walking route was found.')).toBeNull();
+  expect(view.getByRole('button', { name: "I've arrived, I'm safe" })).toBeTruthy();
+});
