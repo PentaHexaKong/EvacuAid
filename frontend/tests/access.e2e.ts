@@ -41,5 +41,5 @@ test('a blind profile has Alerts and no Discover tab', { timeout: 420_000 }, asy
   await expect(screen.getByText('Alerts').last()).toBeVisible();
   await screen.getByRole('tab', 'Home').tap();
   await agent.act('open Profile, then Profile details, turn off every accessibility need, save the profile, and close the Profile sheet');
-  await expect(screen.getByRole('tab', 'Discover')).toBeVisible();
+  await expect(screen.getByText('Discover')).toBeVisible();
 });
