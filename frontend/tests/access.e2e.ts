@@ -6,7 +6,7 @@ test('an older adult with a mobility need gets a simpler Home and step-free safe
   // A dev build downloads its bundle from Metro on every fresh launch.
   await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 180_000 });
   // A saved language preference wins over the device language, so switch it in the app when it is not English yet.
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
 
   await agent.act('open Profile, then Profile details, turn on "Older adult" and "Mobility limitation" (leave any other needs as they are), save the profile, and close the Profile sheet');
 
@@ -28,4 +28,18 @@ test('an older adult with a mobility need gets a simpler Home and step-free safe
 
   await agent.act('open Profile, then Profile details, turn off every accessibility need, save the profile, and close the Profile sheet');
   await expect(screen.getByRole('button', /^More information/)).not.toBeVisible();
+});
+
+test('a blind profile has Alerts and no Discover tab', { timeout: 420_000 }, async ({ app, agent, screen }) => {
+  await app.open();
+  await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 180_000 });
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await agent.act('open Profile, then Profile details, turn off every accessibility need except "Visual impairment", turn on "Visual impairment", save the profile, and close the Profile sheet');
+  await expect(screen.getByRole('tab', 'Discover')).not.toBeVisible();
+  await expect(screen.getByRole('tab', 'Alerts')).toBeVisible();
+  await screen.getByRole('tab', 'Alerts').tap();
+  await expect(screen.getByText('Alerts').last()).toBeVisible();
+  await screen.getByRole('tab', 'Home').tap();
+  await agent.act('open Profile, then Profile details, turn off every accessibility need, save the profile, and close the Profile sheet');
+  await expect(screen.getByRole('tab', 'Discover')).toBeVisible();
 });

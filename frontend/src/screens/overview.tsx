@@ -20,6 +20,10 @@ import { TabHeader, TabScrollView } from '@/components/tab-shell';
 import { AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { SpeakButton } from '@/components/speak-button';
+import { incomingNamesSummary } from '@/features/buddy-pilot/incoming-contacts';
+import { useIncomingContacts } from '@/features/buddy-pilot/use-incoming-contacts';
+import { useProfile } from '@/features/profile/context';
+import { useGuestSession } from '@/features/profile/session';
 import { useBuddySpeech } from '@/features/buddy-pilot/native';
 import { homeCommand, type HomeCommand } from '@/features/voice/home-command';
 import { formatDistance } from '@/features/navigation/distance';
@@ -105,7 +109,12 @@ function NearestRow({ nearest, onPress }: { nearest: RefObject<string | null>; o
 
 export function OverviewScreen() {
   const access = useAccess();
+  const { accessibility } = useProfile();
+  const { token } = useGuestSession();
+  const hasNeeds = accessibility.length > 0;
+  const incomingContacts = useIncomingContacts(token, !hasNeeds);
   const { t, i18n } = useTranslation();
+  const peopleDetail = incomingNamesSummary(incomingContacts) || t('homePeopleRelyingDetail');
   const router = useRouter();
   // The hero follows the most severe alert, so a newer Normal notice never hides an active warning.
   const alert = topAlert;
@@ -136,7 +145,7 @@ export function OverviewScreen() {
     {/* Magic Tap (two-finger double-tap) reaches the element VoiceOver is on and then its ancestors, so it wraps the whole page. */}
     <View onMagicTap={voiceHome && access.listen ? voice.toggle : undefined}>
       <TabHeader><Logo height={32} color={ink} /></TabHeader>
-      <SettingsMenu notifications />
+      <SettingsMenu />
       <View style={styles.header}>
         <LinearGradient pointerEvents="none" colors={[stops[0], stops[0], stops[1], stops[2], colors.canvas]} locations={[0, 0.62, 0.78, 0.92, 1]} style={styles.sky} />
         <View style={{ gap: 10 }}>
@@ -168,7 +177,8 @@ export function OverviewScreen() {
           <NearestRow nearest={nearest} onPress={() => voice.run('nearest')} />
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconLifebuoy size={22} strokeWidth={2} color={colors.primary} /></View>} title={t('homeAskHelp')} detail={t('homeAskHelpDetail')} trailing={chevron} onPress={() => voice.run('help')} />
         </Group> : <Group inset={0}>
-          <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />
+          {hasNeeds && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickHelp')} detail={t('quickHelpDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
+          {!hasNeeds && incomingContacts.length > 0 && <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconUsers size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('homePeopleRelying')} detail={peopleDetail} accessibilityLabel={`${t('homePeopleRelying')}. ${peopleDetail}`} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/buddy'); }} />}
           <Row leading={<View style={[styles.tile, { backgroundColor: colors.accentSoft }]}><IconMap size={20} strokeWidth={2.25} color={colors.primary} /></View>} title={t('quickMap')} detail={t('quickMapDetail')} trailing={chevron} onPress={() => { haptics.tap(); router.navigate('/discover'); }} />
         </Group>}
         {collapsible && <Group><Row title={t('homeMore')} detail={t('homeMoreDetail')} accessibilityState={{ expanded }} trailing={expanded ? <IconChevronUp size={18} strokeWidth={2.25} color={colors.muted} /> : <IconChevronDown size={18} strokeWidth={2.25} color={colors.muted} />} onPress={() => setExpanded(value => !value)} /></Group>}

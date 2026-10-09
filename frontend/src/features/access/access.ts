@@ -29,3 +29,7 @@ export function accessFor(needs: readonly AccessibilityType[], preferences: Pick
     largeTargets: elderly,
   };
 }
+
+export function tabsFor(access: Pick<Access, 'voiceHome'>): ('overview' | 'discover' | 'alerts' | 'buddy')[] {
+  return access.voiceHome ? ['overview', 'alerts', 'buddy'] : ['overview', 'discover', 'alerts', 'buddy'];
+}

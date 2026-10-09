@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import IconAlertTriangle from '@tabler/icons-react-native/IconAlertTriangle';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
+import IconUsers from '@tabler/icons-react-native/IconUsers';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
 import { ActionButton, AppText } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
@@ -19,6 +20,7 @@ import { hazardZones, zoneRadii, type ZoneSource } from '@/features/hazards/zone
 import type { Shelter } from '@/features/navigation/api';
 import { useEvacuationRoute, type EvacuationState } from '@/features/navigation/use-evacuation-route';
 import { formatDistance } from '@/features/navigation/distance';
+import { useProfile } from '@/features/profile/context';
 import { useGuestSession } from '@/features/profile/session';
 import { useAccess } from '@/features/access/use-access';
 import { useHaptics } from '@/features/feedback/haptics';
@@ -174,6 +176,9 @@ type PrimaryProps = { state: EvacuationState; focus: Shelter | null; locale: str
 
 function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAnother }: PrimaryProps) {
   const { t } = useTranslation();
+  const router = useRouter();
+  const { accessibility } = useProfile();
+  const askBuddy = accessibility.length > 0 && <ActionButton variant="secondary" label={t('askBuddy')} icon={<IconUsers size={20} color={colors.primary} />} onPress={() => router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } })} />;
   const { phase, route } = state;
   if (phase === 'ready' && route) {
     const { response } = route;
@@ -208,6 +213,7 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
   if (!state.origin) return <>
     <Heading title={t('findShelterTitle')} body={t('findShelterBody')} />
     <ActionButton variant="gradient" label={busy ? busyLabel : t('findRouteToShelter')} loading={busy} onPress={() => onRoute()} />
+    {askBuddy}
   </>;
   if (state.shelters && !state.shelters.length) return <>
     <Heading title={t('noSheltersTitle')} body={t('noSheltersBody')} />
@@ -227,6 +233,7 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
       </AppText>
     </View>
     <ActionButton variant="gradient" label={busy ? busyLabel : t(isNearest ? 'routeToShelter' : 'routeHere')} loading={busy} onPress={() => onRoute(isNearest ? undefined : focus.id)} />
+    {askBuddy}
   </>;
 }
 

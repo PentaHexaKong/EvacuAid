@@ -8,6 +8,11 @@ import { ONBOARDING_NEEDS_KEY } from '@/features/profile/context';
 import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
 
+let mockAccessibility: { type: string; severity: null }[] = [];
+let mockIncomingContacts: { name: string | null }[] = [];
+let mockNotifications: boolean | undefined;
+jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility }) }));
+jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
 let mockLanguage = 'en';
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() };
 // topAlert's own ranking is covered in discover-profile.test; here each level is pinned to test what Home renders.
@@ -28,13 +33,13 @@ jest.mock('expo-router', () => {
 });
 jest.mock('expo-router/react-navigation', () => ({ ...jest.requireActual('expo-router/react-navigation'), useHeaderHeight: () => 100 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => (mockLanguage === 'id' ? jest.requireActual('../localization/id.json') : jest.requireActual('../localization/en.json'))[key] ?? key, i18n: { language: mockLanguage } }) }));
-jest.mock('@/components/settings-menu', () => ({ SettingsMenu: () => null }));
+jest.mock('@/components/settings-menu', () => ({ SettingsMenu: ({ notifications }: { notifications?: boolean }) => { mockNotifications = notifications; return null; } }));
 jest.mock('@/localization', () => ({ selectLanguage: jest.fn() }));
 const { selectLanguage } = jest.requireMock('@/localization') as { selectLanguage: jest.Mock };
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 
-beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en'; await AsyncStorage.clear(); });
+beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en'; mockAccessibility = []; mockIncomingContacts = []; await AsyncStorage.clear(); });
 
 test('preferences preview is local, cancel does not save, and failed saves remain retryable', async () => {
   const done = jest.fn();
@@ -173,8 +178,9 @@ test('Home links the header alert and lists only the other alerts below', () => 
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/alerts');
 });
 
-test.each(['id', 'en'])('Home has two quick rows, help and the map, and no alerts tile (%s)', language => {
+test.each(['id', 'en'])('support-needs Home has two quick rows, help and the map, and no alerts tile (%s)', language => {
   mockLanguage = language;
+  mockAccessibility = [{ type: 'MOBILITY_LIMITATION', severity: null }];
   const view = render(<OverviewScreen />);
   const [help, map, alerts] = language === 'id' ? ['Minta bantuan', 'Peta Risiko', 'Peringatan'] : ['Get help', 'Risk map', 'Alerts'];
   fireEvent.press(view.getByRole('button', { name: help }));
@@ -403,4 +409,28 @@ test('leaving the voice Home while listening cancels recognition without stoppin
   expect(mockStopListening).not.toHaveBeenCalled();
   act(() => mockOnCommand('help me'));
   expect(mockRouter.navigate).not.toHaveBeenCalled();
+});
+
+test('helper Home shows the map without Get help or a notification bell', () => {
+  const view = render(<OverviewScreen />);
+  expect(view.queryByText('Get help')).toBeNull();
+  expect(view.queryByText('People who rely on you')).toBeNull();
+  expect(view.getByText('Risk map')).toBeTruthy();
+  expect(mockNotifications).toBeUndefined();
+});
+
+test('helper Home names people relying on them and opens Buddy', () => {
+  mockIncomingContacts = [{ name: 'Ari' }, { name: 'Budi' }, { name: 'Citra' }];
+  const view = render(<OverviewScreen />);
+  const row = view.getByRole('button', { name: 'People who rely on you. Ari, Budi, +1' });
+  fireEvent.press(row);
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith('/buddy');
+  expect(view.queryByText('Get help')).toBeNull();
+  mockIncomingContacts = [{ name: null }];
+  view.rerender(<OverviewScreen />);
+  expect(view.getByRole('button', { name: 'People who rely on you. See who might need you' })).toBeTruthy();
+  mockAccessibility = [{ type: 'HEARING_IMPAIRMENT', severity: null }];
+  view.rerender(<OverviewScreen />);
+  expect(view.queryByText('People who rely on you')).toBeNull();
+  expect(view.getByText('Get help')).toBeTruthy();
 });
