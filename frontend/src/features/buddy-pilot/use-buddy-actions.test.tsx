@@ -1,18 +1,19 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
-import { Alert, Linking } from 'react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo, Alert, Linking } from 'react-native';
 import { buddyRequest } from './api';
 import { useBuddyNative } from './native';
 import { useBuddyActions } from './use-buddy-actions';
 
+const obtainLocation = jest.fn();
 const enableLocation = jest.fn().mockResolvedValue(undefined);
 jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.fn() }));
-let mockParams: { help?: string } = {};
+let mockParams: { help?: string; consented?: string } = {};
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
-jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
+jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [{ type: 'MOBILITY_LIMITATION' }] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
 jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
 jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: () => ({ speak: jest.fn(), error: null }) }));
-jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, foregroundOnly: false, location: null, obtainLocation: jest.fn(), enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
+jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, foregroundOnly: false, location: null, obtainLocation, enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
 
 const session = (status: string) => ({ id: 'session', status, requesterUserId: 'requester', attempts: [] });
 const state = (status: string) => ({ session: session(status), error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() }) as never;
@@ -20,7 +21,7 @@ const state = (status: string) => ({ session: session(status), error: null, loca
 const approach = { routeStatus: 'READY', leg: 'TO_REQUESTER', destination: null, route: { geometry: { type: 'LineString', coordinates: [[106.81, -6.21], [106.8, -6.2]] }, distanceM: 1000, durationSec: 600, profile: 'WALKING', maneuvers: [] }, evaluation: null, selectionReasonCodes: [] };
 const routeCalls = () => jest.mocked(buddyRequest).mock.calls.filter(([, path]) => path === '/requests/session/route');
 
-beforeEach(() => { mockParams = {}; enableLocation.mockClear(); jest.mocked(buddyRequest).mockReset().mockResolvedValue(approach); });
+beforeEach(() => { mockParams = {}; obtainLocation.mockReset().mockResolvedValue({ latitude: -6.2, longitude: 106.8, accuracyM: 10, observedAt: '2026-10-10T00:00:00Z' }); enableLocation.mockClear(); jest.mocked(buddyRequest).mockReset().mockResolvedValue(approach); });
 
 test('requester starts sharing once the session is accepted, and only once', async () => {
   const { rerender } = renderHook(({ status }: { status: string }) => useBuddyActions({ token: 'token', userId: 'requester', state: state(status) }), { initialProps: { status: 'WAITING' } });
@@ -120,4 +121,75 @@ test.each(['WAITING', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'COMPLETI
     expect(alert).toHaveBeenCalledTimes(1);
     expect(alert).toHaveBeenCalledWith('askBuddyTitle', 'acceptBody', expect.any(Array));
   } finally { alert.mockRestore(); }
+});
+
+
+test.each([true, false])('consented emergency help sends directly with a Buddy (%s)', async hasBuddy => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const idle = { session: null, loading: false, error: null, locations: [], contacts: hasBuddy ? [{ level: 'SECONDARY', buddyUserId: 'other' }, { level: 'PRIMARY', buddyUserId: 'buddy' }] : [], availability: null, refresh: jest.fn(), run: jest.fn().mockResolvedValue(session('WAITING')), dismissSession: jest.fn() };
+  mockParams = { help: 'emergency', consented: '1' };
+  try {
+    const view = renderHook(() => useBuddyActions({ token: 'token', userId: 'me', state: idle as never }));
+    await waitFor(() => expect(idle.refresh).toHaveBeenCalledWith('session'));
+    expect(idle.run).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: hasBuddy ? 'buddy' : null, supportNeeds: ['MOBILITY_LIMITATION'], sharingConsent: true, idempotencyKey: expect.any(String) }));
+    if (!hasBuddy) expect(idle.run).toHaveBeenCalledWith('/requests/session/nearby', expect.objectContaining({ accuracyM: 10 }));
+    expect(alert).not.toHaveBeenCalled();
+    view.rerender({});
+    expect(idle.run).toHaveBeenCalledTimes(hasBuddy ? 1 : 2);
+  } finally { alert.mockRestore(); }
+});
+
+test('consented emergency help offers 112 when location cannot be obtained', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  obtainLocation.mockRejectedValue(new Error('Location denied'));
+  const idle = { session: null, loading: false, error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() };
+  mockParams = { help: 'emergency', consented: '1' };
+  try {
+    const view = renderHook(() => useBuddyActions({ token: 'token', userId: 'me', state: idle as never }));
+    await waitFor(() => expect(view.result.current.issue).toBe('Location denied'));
+    expect(alert).toHaveBeenCalledWith('locationMissing', 'Location denied', expect.any(Array));
+    expect(alert.mock.calls[0][2]!.map(button => button.text)).toEqual(['cancel', 'call112']);
+    expect(open).not.toHaveBeenCalled();
+    expect(idle.run).not.toHaveBeenCalled();
+    alert.mock.calls[0][2]![1].onPress!();
+    expect(open).toHaveBeenCalledWith('tel:112');
+  } finally { alert.mockRestore(); open.mockRestore(); }
+});
+
+test('requester automatically searches nearby once per fallback session across refreshes and in-flight rerenders', async () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  let finish!: (value: ReturnType<typeof session>) => void;
+  const idle = { loading: false, error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn().mockImplementation(() => new Promise(resolve => { finish = resolve; })), dismissSession: jest.fn() };
+  try {
+    const view = renderHook(({ id }: { id: string }) => useBuddyActions({ token: 'token', userId: 'requester', state: { ...idle, session: { ...session('FALLBACK_REQUIRED'), id } } as never }), { initialProps: { id: 'session' } });
+    await waitFor(() => expect(idle.run).toHaveBeenCalledTimes(1));
+    expect(idle.run).toHaveBeenCalledWith('/requests/session/nearby', expect.objectContaining({ accuracyM: 10 }));
+    expect(announce).toHaveBeenCalledWith('fallbackSearchingNoName');
+    expect(view.result.current.sessionStatus).toBe('fallbackSearchingNoName');
+    view.rerender({ id: 'session' });
+    expect(idle.run).toHaveBeenCalledTimes(1);
+    await act(async () => finish(session('WAITING')));
+    view.rerender({ id: 'session' });
+    expect(idle.run).toHaveBeenCalledTimes(1);
+    view.rerender({ id: 'next' });
+    await waitFor(() => expect(idle.run).toHaveBeenCalledTimes(2));
+  } finally { announce.mockRestore(); }
+});
+
+test.each([['UNANSWERED', 'requester'], ['FALLBACK_REQUIRED', 'helper']])('%s does not automatically search for %s', async (status, userId) => {
+  const selected = { ...session(status), helperName: 'Sari' };
+  const idle = { loading: false, error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn(), session: selected };
+  renderHook(() => useBuddyActions({ token: 'token', userId, state: idle as never }));
+  await act(async () => {});
+  expect(idle.run).not.toHaveBeenCalled();
+});
+
+
+test('fallback status names the Buddy from the offer when no assigned helper name is available', async () => {
+  const idle = { loading: false, error: null, locations: [], contacts: [{ buddyUserId: 'buddy', name: 'Sari' }], availability: null, refresh: jest.fn(), run: jest.fn().mockResolvedValue(null), dismissSession: jest.fn(), session: { ...session('FALLBACK_REQUIRED'), attempts: [{ helperUserId: 'buddy' }] } };
+  const view = renderHook(() => useBuddyActions({ token: 'token', userId: 'requester', state: idle as never }));
+  await waitFor(() => expect(idle.run).toHaveBeenCalledTimes(1));
+  expect(view.result.current.sessionStatus).toBe('fallbackSearching');
+  expect(view.result.current.statusText).toContain('fallbackSearching');
 });

@@ -36,5 +36,5 @@ export function readableIssue(raw: string | null | undefined, c: (key: 'location
 export function useBuddyCopy() {
   const { t, i18n } = useTranslation();
   const index = i18n.language.startsWith('id') ? 0 : 1;
-  return { event: (kind: string) => copy[eventKeys[kind] ?? 'request'][index], support: (value: string) => t(`accessibility_${value}`, { defaultValue: value }), language: index === 0 ? 'id-ID' : 'en-US', c: (key: keyof typeof copy, values?: Record<string, string>) => copy[key][index].replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? ''), status: (value: string) => statuses[value]?.[index] ?? value };
+  return { event: (kind: string) => copy[eventKeys[kind] ?? 'request'][index], support: (value: string) => t(`accessibility_${value}`, { defaultValue: value }), language: index === 0 ? 'id-ID' : 'en-US', c: (key: keyof typeof copy | 'fallbackSearching' | 'fallbackSearchingNoName', values?: Record<string, string>) => key === 'fallbackSearching' || key === 'fallbackSearchingNoName' ? t(`buddy.${key}`, values) : copy[key][index].replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? ''), status: (value: string) => statuses[value]?.[index] ?? value };
 }

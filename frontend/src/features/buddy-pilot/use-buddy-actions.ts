@@ -20,7 +20,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
   const { soundFree } = useAccess();
-  const params = useLocalSearchParams<{ requestId?: string; help?: string }>();
+  const params = useLocalSearchParams<{ requestId?: string; help?: string; consented?: string }>();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (state.session?.status !== 'WAITING') return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [state.session?.status]);
   const [consent, setConsent] = useState(false);
@@ -42,7 +42,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const native = useBuddyNative({ token, sessionId: session?.id ?? null, active, language: language.startsWith('id') ? 'id' : 'en', onRefresh: id => { void state.refresh(id); } });
   const partner = requester ? session?.helperName : session?.requesterName;
   const partnerLocation = state.locations.find(item => item.userId !== userId);
-  const statusText = [session ? status(session.status) : c('empty'), partner, partnerLocation ? `${c('updated')}: ${new Date(partnerLocation.observedAt).toLocaleTimeString(language)}. ${partnerLocation.stale ? c('stale') : native.location ? `${Math.round(distanceM(native.location, partnerLocation))} m` : ''}` : session && active ? c('locationMissing') : ''].filter(Boolean).join('. ');
+  const fallbackName = session?.helperName ?? state.contacts.find(item => item.buddyUserId === session?.attempts[session.attempts.length - 1]?.helperUserId)?.name;
+  const sessionStatus = requester && session?.status === 'FALLBACK_REQUIRED' ? fallbackName ? c('fallbackSearching', { name: fallbackName }) : c('fallbackSearchingNoName') : session ? status(session.status) : c('empty');
+  const statusText = [sessionStatus, partner, partnerLocation ? `${c('updated')}: ${new Date(partnerLocation.observedAt).toLocaleTimeString(language)}. ${partnerLocation.stale ? c('stale') : native.location ? `${Math.round(distanceM(native.location, partnerLocation))} m` : ''}` : session && active ? c('locationMissing') : ''].filter(Boolean).join('. ');
   const confirm = (label: string, action: () => void, body = label, yes = c('yes')) => Alert.alert(label, body, [{ text: c('cancel'), style: 'cancel' }, { text: yes, onPress: action }]);
   const catchNative = (action: () => Promise<unknown>) => { setLocalError(null); void action().catch(cause => setLocalError(cause instanceof Error ? cause.message : c('requestFailed'))); };
   const autoShared = useRef<string | null>(null);
@@ -96,20 +98,13 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   useEffect(() => {
     if (!session || lastStatus.current === `${session.id}:${session.status}`) return;
     lastStatus.current = `${session.id}:${session.status}`;
-    if (preferences.voiceEnabled && !soundFree) void voice.speak(status(session.status));
-    else AccessibilityInfo.announceForAccessibility(status(session.status));
-  }, [session, preferences.voiceEnabled, soundFree, status, voice]);
+    if (preferences.voiceEnabled && !soundFree) void voice.speak(sessionStatus);
+    else AccessibilityInfo.announceForAccessibility(sessionStatus);
+  }, [session, preferences.voiceEnabled, soundFree, sessionStatus, voice]);
   const refreshState = state.refresh;
   useEffect(() => { if (params.requestId) void refreshState(params.requestId); }, [params.requestId, refreshState]);
   // Home's "Ask for help" arrives as ?help=<timestamp>; each new value asks once, after the Buddy list has loaded.
   const askedFor = useRef<string | null>(null);
-  const askFromHome = useEffectEvent(() => askForHelp());
-  useEffect(() => {
-    if (!params.help || askedFor.current === params.help || state.loading || state.error || (session && !terminalStatuses.has(session.status))) return;
-    askedFor.current = params.help;
-    if (session) state.dismissSession();
-    askFromHome();
-  }, [params.help, state.loading, state.error, session, state.dismissSession]);
   const availabilityPosition = useEffectEvent(() => native.obtainLocation());
   const availabilityFailure = useEffectEvent((cause: unknown) => {
     if ((cause as ApiError)?.status === 409) { void refreshState(); return; }
@@ -136,10 +131,19 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (result) { idempotency.current = null; await state.refresh(result.id); }
   };
   const askNearby = () => confirm(c('searchNearbyTitle'), () => { void startNearby(true); }, c('searchNearbyBody'), c('searchShort'));
-  const startNearby = async (voiceConfirmed = false) => {
+  const nearbyPending = useRef(false);
+  const fallbackSearched = useRef(new Set<string>());
+  const startNearby = async (voiceConfirmed = false, offer112 = false) => {
+    if (nearbyPending.current) return;
     if (!consent && !voiceConfirmed) { setLocalError(c('consentRequired')); return; }
+    nearbyPending.current = true;
     try {
-      const position = await native.obtainLocation();
+      let position: Position;
+      try { position = await native.obtainLocation(); }
+      catch (cause) {
+        if (offer112) Alert.alert(c('locationMissing'), readableIssue(cause instanceof Error ? cause.message : c('locationMissing'), c) ?? c('locationMissing'), [{ text: c('cancel'), style: 'cancel' }, { text: c('call112'), onPress: () => { void Linking.openURL('tel:112'); } }]);
+        throw cause;
+      }
       if (session && !terminalStatuses.has(session.status)) { await transition('nearby', position); return; }
       idempotency.current ??= `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
       const created = await state.run<Session>('/requests', { helperUserId: null, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current, ...position });
@@ -149,7 +153,26 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
         await state.refresh(created.id);
       }
     } catch (cause) { setLocalError(cause instanceof Error ? cause.message : c('locationMissing')); }
+    finally { nearbyPending.current = false; }
   };
+  const askFromHome = useEffectEvent(() => {
+    if (params.consented !== '1') { askForHelp(); return; }
+    const contact = state.contacts.find(item => item.level === 'PRIMARY') ?? state.contacts[0];
+    idempotency.current = null;
+    if (contact) void sendRequest(contact.buddyUserId); else void startNearby(true, true);
+  });
+  useEffect(() => {
+    if (!params.help || askedFor.current === params.help || state.loading || state.error || (session && !terminalStatuses.has(session.status))) return;
+    askedFor.current = params.help;
+    if (session) state.dismissSession();
+    askFromHome();
+  }, [params.help, params.consented, state.loading, state.error, session, state.dismissSession]);
+  const searchFallback = useEffectEvent(() => { void startNearby(true); });
+  useEffect(() => {
+    if (!requester || session?.status !== 'FALLBACK_REQUIRED' || fallbackSearched.current.has(session.id) || nearbyPending.current) return;
+    fallbackSearched.current.add(session.id);
+    searchFallback();
+  }, [requester, session]);
   const requestRoute = async (leg: 'TO_REQUESTER' | 'TO_SHELTER', position?: Position) => {
     if (!session || routeBusy) return;
     setRouteBusy(true); setLocalError(null);
@@ -181,7 +204,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
   const guidance = useRouteGuidance({ route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, haptics: preferences.vibrationEnabled, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, session, active, route, requesterPoint, requester, native, partner, statusText, voice, attempt, issue, confirm, catchNative, transition, askForHelp, askNearby, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, session, active, route, requesterPoint, requester, native, partner, sessionStatus, statusText, voice, attempt, issue, confirm, catchNative, transition, askForHelp, askNearby, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;

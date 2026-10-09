@@ -1,4 +1,8 @@
 {
+  "buddy": {
+    "fallbackSearching": "{{name}} belum menjawab. Mencari pendamping di sekitar.",
+    "fallbackSearchingNoName": "Belum ada jawaban. Mencari pendamping di sekitar."
+  },
   "listen": "Dengarkan",
   "stopListening": "Berhenti",
   "overview": "Beranda",
