@@ -177,7 +177,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
   return { ...(settingsBlocked ? { settingsBlocked: true } : {}), error, tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
 }
 
-export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en'; onCommand: (transcript: string) => void }) {
+export function useBuddySpeech({ language, onCommand, stopSpeechOnUnmount = true }: { language: 'id' | 'en'; onCommand: (transcript: string) => void; stopSpeechOnUnmount?: boolean }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Recognition events reach every mounted listener; Home and Buddy each act only on the speech they started.
@@ -204,7 +204,7 @@ export function useBuddySpeech({ language, onCommand }: { language: 'id' | 'en';
   };
   const cancelListening = useCallback(() => { if (!mine.current) return; mine.current = false; setListening(false); ExpoSpeechRecognitionModule.abort(); }, []);
   const speak = (text: string) => speakAloud(text, language);
-  useEffect(() => () => { if (mine.current) ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
+  useEffect(() => () => { if (mine.current) ExpoSpeechRecognitionModule.abort(); if (stopSpeechOnUnmount) void Speech.stop(); }, [stopSpeechOnUnmount]);
   return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), cancelListening, speak };
 }
 

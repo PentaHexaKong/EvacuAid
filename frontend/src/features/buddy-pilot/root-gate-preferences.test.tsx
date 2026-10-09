@@ -11,6 +11,7 @@ const mockProfileReady = true;
 const mockSaveLocation = jest.fn().mockResolvedValue(undefined);
 const mockRegisterPush = jest.fn().mockResolvedValue(undefined);
 const mockReplace = jest.fn();
+jest.mock('@/features/alerts/alert-gate', () => ({ AlertGate: () => null, markAlertPresented: jest.fn() }));
 jest.mock('expo-router', () => {
   const Stack = ({ children }: { children: React.ReactNode }) => children;
   Stack.Screen = function Screen() { return null; };

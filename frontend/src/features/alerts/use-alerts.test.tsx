@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 import { fetchAlerts } from './api';
-import { findAlert, resetAlerts, useAlerts } from './use-alerts';
+import { applyResponse, findAlert, resetAlerts, useAlerts } from './use-alerts';
 import { alertItems } from './test-fixtures';
 
 let mockToken = 'guest-0';
@@ -82,4 +82,14 @@ test('a location change drops the old area and its in-flight response, and a fai
   await act(async () => { finishOld(good); });
   expect(result.current.status).toBe('error');
   expect(result.current.items).toEqual([]);
+});
+
+
+test('applies a response to every shared reader immediately', async () => {
+  const { result } = renderHook(() => [useAlerts(), useAlerts()]);
+  await waitFor(() => expect(result.current[0].status).toBe('ready'));
+  act(() => applyResponse('rain', 'SAFE'));
+  expect(result.current[0].items[0].myResponse).toBe('SAFE');
+  expect(result.current[1].items[0].myResponse).toBe('SAFE');
+  expect(findAlert('rain')?.myResponse).toBe('SAFE');
 });

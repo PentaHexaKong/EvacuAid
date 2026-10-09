@@ -4,6 +4,10 @@ export type AlertItem = { id: string; level: 'waspada' | 'siaga' | 'awas'; hazar
 export type AlertsResponse = { items: AlertItem[]; location: { observedAt: string | null } };
 export type AlertsOutcome = { status: 'ready'; data: AlertsResponse } | { status: 'no-location' };
 
+export async function respondToAlert(token: string, id: string, response: NonNullable<AlertItem['myResponse']>): Promise<AlertItem> {
+  return apiRequest<AlertItem>(`/v1/alerts/${encodeURIComponent(id)}/response`, token, { method: 'POST', body: JSON.stringify({ response }) });
+}
+
 export async function fetchAlerts(token: string): Promise<AlertsOutcome> {
   try {
     return { status: 'ready', data: await apiRequest<AlertsResponse>('/v1/alerts', token) };

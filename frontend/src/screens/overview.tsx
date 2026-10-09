@@ -40,7 +40,7 @@ const vibratedAlerts = new Set<string>();
 const spokenAlerts = new Set<string>();
 const SKY_OVERSCROLL = 600;
 // One plain next step per warning level; Normal has nothing to act on.
-const GUIDANCE = { waspada: 'guidanceWaspada', siaga: 'guidanceSiaga', awas: 'guidanceAwas' } as const;
+export const GUIDANCE = { waspada: 'guidanceWaspada', siaga: 'guidanceSiaga', awas: 'guidanceAwas' } as const;
 
 // Faded words sit at 75% of the level's ink; contrast.test.ts holds them to 3:1 (large text) on every sky.
 export const HEADLINE_FADE = 'BF';
@@ -48,7 +48,7 @@ const lowerFirst = (value: string) => value.charAt(0).toLocaleLowerCase() + valu
 const upperFirst = (value: string) => value.charAt(0).toLocaleUpperCase() + value.slice(1);
 
 // Ducat-style sentence: the level and hazard in full ink, connecting words faded. The time sits on its own line below.
-function Headline({ template, parts, ink }: { template: string; parts: Record<'level' | 'hazard', string>; ink: string }) {
+export function Headline({ template, parts, ink }: { template: string; parts: Record<'level' | 'hazard', string>; ink: string }) {
   const pieces = template.split(/\{\{(\w+)\}\}/);
   return <AppText variant="title" accessibilityRole="header" style={{ color: ink + HEADLINE_FADE }}>
     {pieces.map((piece, index) => {
@@ -164,6 +164,8 @@ export function OverviewScreen() {
               <Headline template={t('homeHeadlineNoWindow')} ink={ink} parts={{ level: t(levelLabels[level]), hazard: lowerFirst(t(alert.title)) }} />
               {alert.window && <AppText variant="button" style={{ color: ink }}>{upperFirst(alert.window)}</AppText>}
               <AppText style={{ color: ink }}>{t(GUIDANCE[alert.level])}</AppText>
+              {item?.myResponse === 'SAFE' && <AppText variant="small" style={{ color: ink }}>{t('homeMarkedSafe')}</AppText>}
+              {item?.myResponse === 'EVACUATING' && <AppText variant="small" style={{ color: ink }}>{t('homeMarkedEvacuating')}</AppText>}
               <Tap onPress={() => openAlert(alert.id)} style={styles.readLink}><AppText variant="button" style={{ color: ink }}>{t('homeReadAlert')}</AppText><IconArrowRight size={18} strokeWidth={2.25} color={ink} /></Tap>
             </>}
           {!alert && calmText && alerts.status !== 'error' && <AppText style={{ color: ink }}>{calmText}</AppText>}

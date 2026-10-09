@@ -1,5 +1,5 @@
 import { apiRequest } from '@/features/profile/api';
-import { fetchAlerts } from './api';
+import { fetchAlerts, respondToAlert } from './api';
 
 jest.mock('@/features/profile/api', () => ({ apiRequest: jest.fn() }));
 test('fetches with guest token and maps only location-required conflicts', async () => {
@@ -12,4 +12,12 @@ test('fetches with guest token and maps only location-required conflicts', async
   const other = Object.assign(new Error('other conflict'), { status: 409 });
   jest.mocked(apiRequest).mockRejectedValueOnce(other);
   await expect(fetchAlerts('guest')).rejects.toBe(other);
+});
+
+
+test('posts the response and returns the updated alert', async () => {
+  const item = { id: 'warning', myResponse: 'SAFE' };
+  jest.mocked(apiRequest).mockResolvedValueOnce(item);
+  await expect(respondToAlert('guest', 'warning', 'SAFE')).resolves.toEqual(item);
+  expect(apiRequest).toHaveBeenLastCalledWith('/v1/alerts/warning/response', 'guest', { method: 'POST', body: '{"response":"SAFE"}' });
 });

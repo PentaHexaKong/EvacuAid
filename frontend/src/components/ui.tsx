@@ -57,16 +57,16 @@ function buttonPalette(variant: ButtonVariant, pressed: boolean, focused: boolea
   return { background: pressed ? colors.ink : colors.primary, text: colors.surface, spinner: colors.surface, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
 }
 
-export function ActionButton({ label, onPress, icon, variant = 'primary', disabled = false, loading = false, compact = false }: { label: string; onPress?: () => void; icon?: ReactNode; variant?: ButtonVariant; disabled?: boolean; loading?: boolean; compact?: boolean }) {
+export function ActionButton({ label, detail, onPress, icon, variant = 'primary', disabled = false, loading = false, compact = false }: { label: string; detail?: string; onPress?: () => void; icon?: ReactNode; variant?: ButtonVariant; disabled?: boolean; loading?: boolean; compact?: boolean }) {
   const [focused, setFocused] = useState(false);
   const press = usePressScale(0.96);
   const { largeTargets } = useAccess();
   const palette = buttonPalette(variant, press.pressed, focused);
   const showGradient = variant === 'gradient' && !press.pressed;
-  return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || loading, busy: loading }} disabled={disabled || loading} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+  return <Pressable {...press.handlers} accessibilityRole="button" accessibilityLabel={detail ? `${label}. ${detail}` : label} accessibilityState={{ disabled: disabled || loading, busy: loading }} disabled={disabled || loading} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
     <Animated.View style={[styles.button, compact && styles.buttonCompact, largeTargets && { minHeight: compact ? 52 : 60 }, { backgroundColor: palette.background, borderColor: palette.border, borderWidth: palette.borderWidth }, disabled && styles.disabled, press.style]}>
       {showGradient && <LinearGradient pointerEvents="none" colors={[colors.gradientTop, colors.primary]} style={StyleSheet.absoluteFill} />}
-      <View style={[styles.buttonContent, compact && styles.buttonContentCompact]}>{loading ? <ActivityIndicator color={palette.spinner} /> : icon}<AppText variant="button" style={{ color: palette.text, flexShrink: 1, textAlign: 'center' }}>{label}</AppText></View>
+      <View style={[styles.buttonContent, compact && styles.buttonContentCompact]}>{loading ? <ActivityIndicator color={palette.spinner} /> : icon}{detail ? <View style={{ flexShrink: 1, gap: 4 }}><AppText variant="button" style={{ color: palette.text, textAlign: 'center' }}>{label}</AppText><AppText variant="small" style={{ color: palette.text, opacity: 0.8, textAlign: 'center' }}>{detail}</AppText></View> : <AppText variant="button" style={{ color: palette.text, flexShrink: 1, textAlign: 'center' }}>{label}</AppText>}</View>
     </Animated.View>
   </Pressable>;
 }
