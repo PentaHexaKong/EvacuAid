@@ -18,12 +18,12 @@ from tests.test_hazards import syntheticEvidence
 NOW = datetime(2026, 10, 2, 12, tzinfo=timezone.utc)
 
 
-def capXml(status='Actual', msgType='Alert', expires='2026-10-02T13:00:00+00:00'):
+def capXml(status='Actual', msgType='Alert', expires='2026-10-02T13:00:00+00:00', severity='Severe'):
     return f'''<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
     <identifier>SYNTHETIC_TEST_CAP</identifier><status>{status}</status><msgType>{msgType}</msgType>
     <sent>2026-10-02T11:00:00+00:00</sent><info><event>SYNTHETIC_TEST_RAIN</event>
     <effective>2026-10-02T11:00:00+00:00</effective><expires>{expires}</expires>
-    <severity>Severe</severity><certainty>Likely</certainty>
+    {f'<severity>{severity}</severity>' if severity is not None else ''}<certainty>Likely</certainty>
     <area><polygon>-6.2,106.8 -6.2,106.9 -6.1,106.9 -6.1,106.8 -6.2,106.8</polygon></area>
     </info></alert>'''
 
@@ -37,6 +37,15 @@ def testCapPreservesActiveGeometryAndValidityWithoutInventedSeverity():
     assert item.metadata['capSeverity'] == 'Severe'
     assert item.severity is None and item.confidence is None
     assert not item.hard()
+
+
+@pytest.mark.parametrize('severity,status', [('Extreme', 'SIAGA'), ('Severe', 'WASPADA'), ('Moderate', 'WASPADA'), ('Minor', None), ('Unknown', None), (None, None)])
+def testCapOfficialStatusNeverUsesEvacuationLevel(severity, status):
+    item = parseCap(capXml(severity=severity), NOW)[0]
+    assert item.metadata.get('officialStatus') == status
+    assert item.metadata.get('officialStatus') != 'AWAS'
+    if status is None:
+        assert 'officialStatus' not in item.metadata
 
 
 @pytest.mark.parametrize('status,msgType,expires', [('Test', 'Alert', '2026-10-02T13:00:00Z'), ('Actual', 'Cancel', '2026-10-02T13:00:00Z'), ('Actual', 'Alert', '2026-10-02T11:59:00Z')])

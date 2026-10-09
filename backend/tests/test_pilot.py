@@ -222,7 +222,7 @@ async def test_two_leg_navigation_uses_maneuvers_and_requester_mobility(dbSessio
     dbSession.add(request)
     await dbSession.flush()
     for user in (owner, helper):
-        dbSession.add(PilotLocation(request_id=request.id, user_id=user.id, latitude=-6.2, longitude=106.8, accuracy_m=5, observed_at=datetime.now(timezone.utc)))
+        dbSession.add(PilotLocation(request_id=request.id, user_id=user.id, latitude=-6.201 if user is owner else -6.2, longitude=106.801 if user is owner else 106.8, accuracy_m=5, observed_at=datetime.now(timezone.utc)))
     await dbSession.commit()
     profiles = []
 
@@ -233,7 +233,10 @@ async def test_two_leg_navigation_uses_maneuvers_and_requester_mobility(dbSessio
     async def hazards(geometry):
         return 'UNKNOWN', ['HAZARD_DATA_UNAVAILABLE']
 
-    monkeypatch.setattr(pilotNavigation.ValhallaRoutingProvider, 'route', route)
+    async def routes(self, origin, destination, profile, **kwargs):
+        return [await route(self, origin, destination, profile)]
+
+    monkeypatch.setattr(pilotNavigation.ValhallaRoutingProvider, 'routes', routes)
     monkeypatch.setattr(pilotNavigation, 'routeHazards', hazards)
     result = await pilotNavigation.session_route(dbSession, request, helper.id, SessionRoute(leg='TO_REQUESTER', profile='WALKING'))
     assert profiles == ['WHEELCHAIR']
@@ -268,7 +271,10 @@ async def test_requester_sees_helper_approach_route(dbSession, monkeypatch):
     async def hazards(geometry):
         return 'UNKNOWN', []
 
-    monkeypatch.setattr(pilotNavigation.ValhallaRoutingProvider, 'route', route)
+    async def routes(self, origin, destination, profile, **kwargs):
+        return [await route(self, origin, destination, profile)]
+
+    monkeypatch.setattr(pilotNavigation.ValhallaRoutingProvider, 'routes', routes)
     monkeypatch.setattr(pilotNavigation, 'routeHazards', hazards)
     result = await pilotNavigation.session_route(dbSession, request, owner.id, SessionRoute(leg='TO_REQUESTER', profile='WALKING'))
     assert result['routeStatus'] == 'READY'

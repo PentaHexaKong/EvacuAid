@@ -13,6 +13,7 @@ from app.db.session import get_session
 from app.db.models import BuddyRelationship, User, UserAccessibility
 from app.db.models.pilot import PilotAttempt, PilotAvailability, PilotInbox, PilotInvitation, PilotLocation, PilotMessage, PilotPushToken, PilotRequest
 from app.models.pilot import AttemptAction, AvailabilityUpdate, InviteDirect, InviteRedeem, MessageCreate, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
+from app.services import alertService
 from app.services import pilotService as service
 from app.services.buddyService import relationshipResponse
 from app.utils.geo import calculate_distance_meters
@@ -208,7 +209,8 @@ async def contacts(db: AsyncSession = Depends(get_session), actor=Depends(curren
 async def incoming_contacts(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
     rows = (await db.execute(select(BuddyRelationship, User.name).join(User, User.id == BuddyRelationship.userId).where(BuddyRelationship.buddyUserId == actor.id, BuddyRelationship.status == 'ACTIVE'))).all()
     needs = await user_needs(db, [row.userId for row, name in rows])
-    return [{**relationshipResponse(row).model_dump(), 'name': name, 'needs': needs[row.userId], 'relation': row.relation} for row, name in rows]
+    responses = await alertService.latestResponses(db, [row.userId for row, name in rows])
+    return [{**relationshipResponse(row).model_dump(), 'name': name, 'needs': needs[row.userId], 'relation': row.relation, 'latestAlertResponse': responses.get(row.userId)} for row, name in rows]
 
 
 @router.delete('/contacts/{contact_id}')
@@ -383,7 +385,7 @@ async def decline(request_id: uuid.UUID, payload: AttemptAction, db: AsyncSessio
 
 @router.get('/inbox')
 async def inbox(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
-    rows = (await db.execute(select(PilotInbox).where(PilotInbox.user_id == actor.id).order_by(PilotInbox.created_at.desc()).limit(100))).scalars()
+    rows = (await db.execute(select(PilotInbox).where(PilotInbox.user_id == actor.id, PilotInbox.kind != 'ALERT').order_by(PilotInbox.created_at.desc()).limit(100))).scalars()
     return [{'id': row.id, 'requestId': row.request_id, 'kind': row.kind, 'payload': row.payload, 'read': row.read, 'createdAt': row.created_at} for row in rows]
 
 
