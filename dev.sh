@@ -23,7 +23,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 echo "Starting backend..."
-docker compose --profile routing up -d $BUILD
+docker compose --profile routing --profile hazards up -d $BUILD
 for _ in $(seq 60); do curl -fs http://localhost:8000/health >/dev/null && break; sleep 2; done
 curl -fs http://localhost:8000/health >/dev/null || { echo "Backend not healthy after 2 min. Check: docker compose logs backend" >&2; exit 1; }
 echo "Backend ready on :8000"

@@ -341,3 +341,62 @@ async def test_worker_cleans_old_alert_state(dbSession, monkeypatch):
     await pilotWorker.tick()
     assert [row.alert_key for row in (await dbSession.execute(select(AlertDelivery))).scalars()] == [recent]
     assert [row.alert_key for row in (await dbSession.execute(select(AlertResponse))).scalars()] == [recent]
+
+
+@pytest.mark.asyncio
+async def test_extreme_cap_alert_context_and_push(dbSession, monkeypatch):
+    from app.routers import context as contextRouter
+    from app.services.bmkg_service import BmkgFetchResult
+    from app.services.cacheService import CacheService, getCache
+    from app.services.hazardContextService import officialWarningForLocation
+    from app.services.hazardProviders import parseCap
+    from app.services.petabencana_service import PetaBencanaFetchResult
+
+    now = datetime.now(timezone.utc)
+    xml = f'''<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+    <identifier>SYNTHETIC_TEST_EXTREME_CAP</identifier><status>Actual</status><msgType>Alert</msgType>
+    <sent>{(now - timedelta(minutes=5)).isoformat()}</sent><info><severity>Extreme</severity>
+    <effective>{(now - timedelta(minutes=5)).isoformat()}</effective><expires>{(now + timedelta(hours=1)).isoformat()}</expires>
+    <area><polygon>-6.21,106.79 -6.21,106.81 -6.19,106.81 -6.19,106.79 -6.21,106.79</polygon></area>
+    </info></alert>'''
+    evidence = parseCap(xml, now)
+    await hazardRepository.replaceSource(dbSession, 'BMKG_CAP', evidence)
+    await dbSession.commit()
+    app = api(dbSession)
+    app.include_router(contextRouter.router)
+    app.dependency_overrides[getCache] = lambda: CacheService(None)
+
+    async def weather(adm4):
+        return BmkgFetchResult(None, 'SYNTHETIC_TEST_UNAVAILABLE')
+
+    async def reports():
+        return PetaBencanaFetchResult([])
+
+    monkeypatch.setattr(contextRouter, 'fetch_weather', weather)
+    monkeypatch.setattr(contextRouter, 'fetch_reports', reports)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        user, headers = await guest(client, dbSession)
+        alerts = (await client.get('/v1/alerts', headers=headers)).json()['items']
+        assert len(alerts) == 1 and alerts[0]['level'] == 'siaga' and alerts[0]['source'] == 'BMKG_CAP'
+        warning = await officialWarningForLocation(dbSession, user.latitude, user.longitude)
+        assert warning.status.value == 'SIAGA'
+        response = await client.get('/v1/context', headers=headers)
+        assert response.status_code == 200
+        assert response.json()['event']['official_status'] == 'SIAGA'
+        assert response.json()['action']['recommended_action'] == 'FOLLOW_OFFICIAL_INSTRUCTION'
+    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    await dbSession.commit()
+    worker_database(monkeypatch, dbSession)
+    calls = []
+
+    async def send(self, url, json):
+        calls.extend(json)
+        return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
+
+    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
+    await pilotWorker.tick()
+    await pilotWorker.tick()
+    assert len(calls) == 1 and calls[0]['data']['alertId'] == alerts[0]['id']
+    assert calls[0]['title'] == 'Peringatan SIAGA'
+    assert (await dbSession.execute(select(func.count()).select_from(PilotInbox).where(PilotInbox.kind == 'ALERT'))).scalar_one() == 1
+    assert (await dbSession.execute(select(func.count()).select_from(PilotOutbox))).scalar_one() == 1
