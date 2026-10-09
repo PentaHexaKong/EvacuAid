@@ -123,7 +123,8 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     providerFailed = False
     for shelter, _, shelterReasons in viable:
         try:
-            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), (shelter.latitude, shelter.longitude), evidence, mobilityRequired, str(shelter.id), session=session, profile='WHEELCHAIR' if mobilityRequired else payload.profile)
+            destination = (shelter.entranceLatitude, shelter.entranceLongitude) if shelter.entranceLatitude is not None and shelter.entranceLongitude is not None else (shelter.latitude, shelter.longitude)
+            routes = await evaluatedCandidates(routing, (originLatitude, originLongitude), destination, evidence, mobilityRequired, str(shelter.id), session=session, profile='WHEELCHAIR' if mobilityRequired else payload.profile)
         except RoutingUnavailable:
             providerFailed = True
             rejected.append(RejectedShelter(shelterId=shelter.id, reasonCodes=['ROUTING_PROVIDER_UNAVAILABLE']))
@@ -154,7 +155,7 @@ async def navigationForUser(session: AsyncSession, payload: NavigationCreate, pr
     route.profile = 'WHEELCHAIR' if mobilityRequired else 'PEDESTRIAN'
     reasons = shelterReasons + evaluation.reasonCodes + selectionReasons(selected, ranked)
     logEvaluation('ready', startedAt, evaluations, selected)
-    return NavigationResponse(routeStatus=NavigationStatus.READY, destination=NavigationDestination(shelterId=selectedShelter.id, name=selectedShelter.name, latitude=selectedShelter.latitude, longitude=selectedShelter.longitude), route=route, evaluation=evaluation, selectionReasonCodes=reasons, rejectedCandidates=rejected, evaluatedCandidates=candidateEvaluations)
+    return NavigationResponse(routeStatus=NavigationStatus.READY, destination=NavigationDestination(shelterId=selectedShelter.id, name=selectedShelter.name, latitude=selectedShelter.latitude, longitude=selectedShelter.longitude, entranceNote=selectedShelter.entranceNote, entranceLatitude=selectedShelter.entranceLatitude, entranceLongitude=selectedShelter.entranceLongitude), route=route, evaluation=evaluation, selectionReasonCodes=reasons, rejectedCandidates=rejected, evaluatedCandidates=candidateEvaluations)
 
 
 async def previewNavigation(session: AsyncSession, payload: NavigationPreviewCreate, provider: ValhallaRoutingProvider | None = None) -> NavigationPreviewResponse:

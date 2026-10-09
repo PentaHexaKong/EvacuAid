@@ -24,7 +24,12 @@ async def main() -> None:
             if (await session.execute(select(Shelter.id).where(Shelter.name == name))).first() is not None:
                 print(f'skip {name}')
                 continue
-            await shelterService.createShelter(session, ShelterCreate(name=name, latitude=latitude, longitude=longitude, shelterType='GATHERING_POINT', status=status, wheelchairAccessible=wheelchairAccessible, capacity=capacity, currentOccupancy=currentOccupancy, source='DEMO_FIXTURE'))
+            entrance = {}
+            if name == 'Titik Kumpul Contoh A':
+                entrance = dict(entranceLatitude=-6.20095, entranceLongitude=106.8020, entranceNote='North gate, ramp on the left')
+            elif name == 'Titik Kumpul Contoh B':
+                entrance = dict(entranceLatitude=-6.1950, entranceLongitude=106.81505, entranceNote='East gate, entrance straight ahead')
+            await shelterService.createShelter(session, ShelterCreate(name=name, latitude=latitude, longitude=longitude, shelterType='GATHERING_POINT', status=status, wheelchairAccessible=wheelchairAccessible, capacity=capacity, currentOccupancy=currentOccupancy, source='DEMO_FIXTURE', **entrance))
             print(f'created {name}')
     await engine.dispose()
 
