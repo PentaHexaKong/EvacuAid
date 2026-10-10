@@ -463,5 +463,6 @@
   "reachOff": "Off",
   "reachPreciseOff": "Precise location is off. Helpers need it to find you.",
   "alertAreaTitle": "Update my area for warnings",
-  "alertAreaDetail": "Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request."
+  "alertAreaDetail": "Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request.",
+  "helpRequestRefused": "That didn't go through. Check your connection and location, then try again."
 }

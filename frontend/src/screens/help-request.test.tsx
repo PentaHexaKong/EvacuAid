@@ -94,3 +94,11 @@ test('answer later closes and failed acceptance stays', async () => {
   expect(mockBack).toHaveBeenCalledTimes(1);
   expect(mockTransition).toHaveBeenCalledTimes(1);
 });
+
+test('a refused accept stays on the takeover and says so', async () => {
+  mockTransition.mockResolvedValue(false);
+  const view = render(<HelpRequestScreen />);
+  fireEvent.press(view.getByRole('button', { name: /^I'll help/ }));
+  await waitFor(() => expect(view.getByRole('alert')).toHaveTextContent("That didn't go through. Check your connection and location, then try again."));
+  expect(mockReplace).not.toHaveBeenCalled();
+});
