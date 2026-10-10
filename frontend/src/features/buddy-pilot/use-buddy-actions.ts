@@ -17,7 +17,7 @@ import { distanceM } from '@/features/buddy-pilot/navigation';
 import { usesMapbox } from '@/components/map-engine';
 import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
 
-export function useBuddyActions({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
+export function useBuddyActions({ token, userId, state, manageBackground = true }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot>; manageBackground?: boolean }) {
   const { c, status, language, support, event } = useBuddyCopy();
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
@@ -41,7 +41,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const route = routeResult?.sessionId === session?.id && (!session?.selectedShelterId || routeResult?.value.leg === 'TO_REQUESTER' || routeResult?.value.destination?.shelterId === session.selectedShelterId) ? routeResult?.value : null;
   const requesterPoint = state.locations.find(item => item.userId === session?.requesterUserId && !item.stale && item.accuracyM <= 30) ?? null;
   const requester = session?.requesterUserId === userId;
-  const native = useBuddyNative({ token, sessionId: session?.id ?? null, active, language: language.startsWith('id') ? 'id' : 'en', onRefresh: id => { void state.refresh(id); } });
+  const native = useBuddyNative({ token, sessionId: session?.id ?? null, active, manageBackground, language: language.startsWith('id') ? 'id' : 'en', onRefresh: id => { void state.refresh(id); } });
   const partner = requester ? session?.helperName : session?.requesterName;
   const partnerLocation = state.locations.find(item => item.userId !== userId);
   const fallbackName = session?.helperName ?? state.contacts.find(item => item.buddyUserId === session?.attempts[session.attempts.length - 1]?.helperUserId)?.name;
