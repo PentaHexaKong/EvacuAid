@@ -322,3 +322,104 @@ async def testRouteSnappingCannotSkipCriticalOriginConnector():
     candidates = await evaluatedCandidates(Provider(), (0, 0.0001), (0, 0.01), [item], False, 'SYNTHETIC_TEST')
     assert not any(item.feasible for item in candidates)
     assert 'ENDPOINT_HAZARD_CONNECTION_UNKNOWN' in candidates[0].reasons
+
+
+@pytest.mark.parametrize('hazard', list(HazardType))
+def testCriticalOriginZoneCanExit(hazard):
+    item = syntheticEvidence(hazard=hazard, geometry=tsunamiZone().geometry)
+    if hazard == HazardType.EARTHQUAKE:
+        item.metadata['confirmedDamage'] = True
+    result = evaluateRoute('escape', syntheticRoute(), [item], False)
+    assert result.feasible
+    assert 'HAZARD_ZONE_EXIT' in result.reasons
+    assert 'ROUTE_REJECTED_CRITICAL_HAZARD' not in result.reasons
+    assert result.hazardStatus.value == 'EXPOSED'
+    if hazard.value.lower() in result.hazards:
+        metrics = result.hazards[hazard.value.lower()]
+        assert metrics.firstExitDistanceM == pytest.approx(445.3, abs=2)
+        assert metrics.firstExitTimeSec == pytest.approx(40, abs=1)
+        assert metrics.reentered is False
+        assert metrics.intersectionRatio == pytest.approx(0.4, abs=0.001)
+
+
+def testFloodOriginZoneDestinationInsideRejected():
+    item = syntheticEvidence(geometry=tsunamiZone().geometry)
+    result = evaluateRoute('trapped', syntheticRoute([[0, 0], [0.003, 0]]), [item], False)
+    assert not result.feasible
+    assert 'DESTINATION_IN_CRITICAL_HAZARD' in result.reasons
+    assert 'HAZARD_ZONE_NOT_EXITED' in result.reasons
+    assert destinationExcluded(0, 0.003, [item])
+
+
+def testFloodOriginZoneReentryRejected():
+    item = syntheticEvidence(geometry=tsunamiZone().geometry)
+    route = syntheticRoute([[0, 0], [0, 0.002], [0.003, 0.002], [0.003, 0], [0.01, 0]])
+    result = evaluateRoute('reentry', route, [item], False)
+    assert not result.feasible
+    assert 'HAZARD_ZONE_REENTRY' in result.reasons
+    assert 'HAZARD_ZONE_EXIT' not in result.reasons
+    assert result.hazards['flood'].reentered
+
+
+@pytest.mark.parametrize('hazard', [HazardType.FLOOD, HazardType.TSUNAMI])
+def testEscapeCannotCrossSeparateHardZone(hazard):
+    first = syntheticEvidence(hazard=hazard, geometry=tsunamiZone().geometry)
+    second = syntheticEvidence(hazard=hazard, geometry={'type': 'Polygon', 'coordinates': [[[0.006, -0.001], [0.008, -0.001], [0.008, 0.001], [0.006, 0.001], [0.006, -0.001]]]})
+    result = evaluateRoute('secondZone', syntheticRoute(), [first, second], False)
+    assert not result.feasible
+    assert 'AUTHORITATIVE_HAZARD_INTERSECTION' in result.reasons
+    assert 'ROUTE_REJECTED_CRITICAL_HAZARD' in result.reasons
+
+
+def testFloodZoneCannotBeCrossedFromOutside():
+    result = evaluateRoute('cross', syntheticRoute(), [syntheticEvidence()], False)
+    assert not result.feasible
+    assert 'AUTHORITATIVE_HAZARD_INTERSECTION' in result.reasons
+    assert 'ROUTE_REJECTED_CRITICAL_HAZARD' in result.reasons
+    assert not any(reason.startswith('HAZARD_ZONE_') for reason in result.reasons)
+
+
+@pytest.mark.parametrize('hazard', [HazardType.FLOOD, HazardType.TSUNAMI])
+def testConfirmedClosureAtOriginCannotEscape(hazard):
+    item = syntheticEvidence(hazard=hazard, kind=EvidenceType.CONFIRMED_CLOSURE, geometry=tsunamiZone().geometry)
+    result = evaluateRoute('closureOrigin', syntheticRoute(), [item], False)
+    assert not result.feasible
+    assert 'CONFIRMED_INFRASTRUCTURE_CLOSURE' in result.reasons
+    assert 'HAZARD_ZONE_EXIT' not in result.reasons
+
+
+def testOverlappingOriginHazardsExitTheirUnion():
+    flood = syntheticEvidence(geometry=tsunamiZone().geometry)
+    fire = syntheticEvidence(hazard=HazardType.WILDFIRE, geometry={'type': 'Polygon', 'coordinates': [[[-0.001, -0.001], [0.006, -0.001], [0.006, 0.001], [-0.001, 0.001], [-0.001, -0.001]]]})
+    result = evaluateRoute('union', syntheticRoute(), [flood, fire], False)
+    assert result.feasible
+    assert 'HAZARD_ZONE_EXIT' in result.reasons
+    # The exit time is for the union of the zones; each hazard keeps its own share of the route.
+    for name, ratio in (('flood', 0.4), ('wildfire', 0.6)):
+        assert result.hazards[name].firstExitTimeSec == pytest.approx(60, abs=1)
+        assert result.hazards[name].intersectionRatio == pytest.approx(ratio, abs=0.001)
+
+
+@pytest.mark.asyncio
+async def testFloodEscapeAllowsSnappedStartInsideOriginZone():
+    item = syntheticEvidence(geometry=tsunamiZone().geometry)
+    class Provider:
+        async def routes(self, origin, destination, waypoints=None, maxCandidates=3):
+            return [syntheticRoute([[0.0001, 0], [0.01, 0]])]
+    candidates = await evaluatedCandidates(Provider(), (0, 0), (0, 0.01), [item], False, 'SYNTHETIC_TEST')
+    assert candidates[0].feasible
+    assert 'HAZARD_ZONE_EXIT' in candidates[0].reasons
+    assert 'ENDPOINT_HAZARD_CONNECTION_UNKNOWN' not in candidates[0].reasons
+
+
+@pytest.mark.asyncio
+async def testEscapeConnectorCannotLeaveAndReenterAConcaveOriginZone():
+    # A U-shaped zone: the origin sits in one arm and the route starts in the other, 67 m away across open ground.
+    u = {'type': 'Polygon', 'coordinates': [[[0, -0.001], [0.0008, -0.001], [0.0008, 0.001], [0.0006, 0.001], [0.0006, -0.0008], [0.0002, -0.0008], [0.0002, 0.001], [0, 0.001], [0, -0.001]]]}
+    item = syntheticEvidence(geometry=u)
+    class Provider:
+        async def routes(self, origin, destination, waypoints=None, maxCandidates=3):
+            return [syntheticRoute([[0.0007, 0], [0.0007, 0.01]])]
+    candidates = await evaluatedCandidates(Provider(), (0, 0.0001), (0.01, 0.0007), [item], False, 'SYNTHETIC_TEST')
+    assert not candidates[0].feasible
+    assert 'ENDPOINT_HAZARD_CONNECTION_UNKNOWN' in candidates[0].reasons
