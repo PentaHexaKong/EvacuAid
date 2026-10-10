@@ -32,9 +32,12 @@ test('requester starts sharing once the session is accepted, and only once', asy
   expect(enableLocation).toHaveBeenCalledTimes(1);
 });
 
-test('helper is not auto-shared on acceptance', async () => {
-  renderHook(() => useBuddyActions({ token: 'token', userId: 'helper', state: state('ACCEPTED') }));
+test('helper is not auto-shared on acceptance, but reads its own position once for the map', async () => {
+  const { rerender } = renderHook(({ status }: { status: string }) => useBuddyActions({ token: 'token', userId: 'helper', state: state(status) }), { initialProps: { status: 'ACCEPTED' } });
+  await waitFor(() => expect(obtainLocation).toHaveBeenCalledTimes(1));
+  rerender({ status: 'EN_ROUTE' });
   await new Promise(resolve => setImmediate(resolve));
+  expect(obtainLocation).toHaveBeenCalledTimes(1);
   expect(enableLocation).not.toHaveBeenCalled();
 });
 
