@@ -40,7 +40,7 @@ if (!TaskManager.isTaskDefined(TASK)) TaskManager.defineTask<{ locations: Locati
   }
 });
 
-export function useBuddyNative({ sessionId, active, token, onRefresh, language = 'en' }: { sessionId: string | null; active: boolean | undefined; token: string | null; language?: 'id' | 'en'; onRefresh: (requestId?: string) => void }) {
+export function useBuddyNative({ sessionId, active, token, onRefresh, language = 'en', manageBackground = true }: { sessionId: string | null; active: boolean | undefined; token: string | null; language?: 'id' | 'en'; manageBackground?: boolean; onRefresh: (requestId?: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [settingsBlocked, setSettingsBlocked] = useState(false);
   const [tracking, setTracking] = useState(false);
@@ -69,7 +69,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     watch.current?.remove();
     watch.current = null;
     setTracking(false);
-    await stopBackground();
+    if (manageBackground) await stopBackground();
     if (token && sessionId && active) await buddyRequest(token, path(sessionId), 'DELETE');
   };
   const enableLocation = async () => {
@@ -96,12 +96,13 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
         void buddyRequest(token, path(sessionId), 'PUT', next).catch(cause => {
           fail(cause);
           if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) {
-            watch.current?.remove(); watch.current = null; setTracking(false); void stopBackground().catch(fail);
+            watch.current?.remove(); watch.current = null; setTracking(false); if (manageBackground) void stopBackground().catch(fail);
           }
         });
       });
       if (generation.current !== run) { watch.current?.remove(); watch.current = null; ensureCurrent(); }
       setTracking(true);
+      if (!manageBackground) return;
       await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, sessionId }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
       const permission = await ensureBackground();
@@ -137,7 +138,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     return () => { received.remove(); response.remove(); };
   }, []);
   useEffect(() => {
-    if (active === undefined) return;
+    if (!manageBackground || active === undefined) return;
     let cancelled = false;
     const restoreGeneration = ++generation.current;
     if (!active || !sessionId || !token) { watch.current?.remove(); watch.current = null; void stopBackground().then(() => setTracking(false)).catch(fail); }
@@ -163,7 +164,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     }).catch(fail);
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh.current(); });
     return () => { generation.current += 1; cancelled = true; listener.remove(); watch.current?.remove(); watch.current = null; };
-  }, [active, sessionId, token]);
+  }, [active, sessionId, token, manageBackground]);
   useEffect(() => {
     if (!tracking || !active || !sessionId || !token) return;
     const timer = setInterval(() => {

@@ -20,7 +20,7 @@ export function HelpRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token, user } = useGuestSession();
   const state = useBuddyPilot(token);
-  const a = useBuddyActions({ token: token ?? '', userId: user?.id ?? '', state });
+  const a = useBuddyActions({ token: token ?? '', userId: user?.id ?? '', state, manageBackground: false });
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -72,6 +72,12 @@ export function HelpRequestScreen() {
           <View style={{ gap: 6 }}><ActionButton variant="gradient" label={t('helpRequestAccept', { name })} loading={state.busy} onPress={() => { haptics.tap(); void accept(); }} /><AppText variant="small" style={[styles.text, { color: palette.ink }]}>{t('helpRequestConsent', { name })}</AppText></View>
           <ActionButton variant="secondary" label={t('helpRequestDecline')} loading={state.busy} onPress={() => { haptics.tap(); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
         </View>
+      </> : !session && state.error ? <>
+        <View style={styles.fill} />
+        <AppText accessibilityRole="alert" style={[styles.text, { color: palette.ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>
+        <View style={styles.fill} />
+        <ActionButton variant="gradient" label={t('tryAgain')} onPress={() => { void refresh(id); }} />
+        <ActionButton variant="secondary" label={t('helpRequestClose')} onPress={back} />
       </> : <>
         <View style={styles.fill} />
         <AppText variant="title" accessibilityRole="header" style={[styles.text, { color: palette.ink }]}>{t('helpRequestEnded')}</AppText>
