@@ -2,6 +2,8 @@ import { useAccess } from '@/features/access/use-access';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, AppState, Linking } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { confirmCommand } from '@/features/voice/confirm-command';
+import { useVoicePrompt } from '@/features/voice/use-voice-prompt';
 import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
@@ -19,7 +21,7 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   const { c, status, language, support, event } = useBuddyCopy();
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();
-  const { soundFree } = useAccess();
+  const { soundFree, voiceHome, listen } = useAccess();
   const params = useLocalSearchParams<{ requestId?: string; help?: string; consented?: string }>();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { if (state.session?.status !== 'WAITING') return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [state.session?.status]);
@@ -84,23 +86,59 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (contact) { idempotency.current = null; confirm(c('askBuddyTitle', { name }), () => { void sendRequest(contact.buddyUserId); }, c('acceptBody', { name }), c('request')); }
     else Alert.alert(c('emptyTitle'), c('noBuddyHelp'), [{ text: c('cancel'), style: 'cancel' }, { text: c('call112'), onPress: () => { void Linking.openURL('tel:112'); } }]);
   };
-  const voice = useBuddySpeech({ language: language.startsWith('id') ? 'id' : 'en', onCommand: transcript => {
+  const first = state.contacts.find(item => item.level === 'PRIMARY') ?? state.contacts[0];
+  const voiceStatusText = session ? statusText : first ? c('voiceBuddyIdleBuddy', { name: first.name ?? c('name') }) : c('voiceBuddyIdleNone');
+  const pendingConfirmation = useRef<{ action: () => Promise<unknown>; cancelled: boolean } | null>(null);
+  const voice = useBuddySpeech({ stopSpeechOnUnmount: !voiceHome, language: language.startsWith('id') ? 'id' : 'en', onCommand: transcript => {
+    if (voiceHome) {
+      if (!prompt.focused || !listen || soundFree) return;
+      voice.cancelListening();
+      const pending = pendingConfirmation.current;
+      if (pending) {
+        pendingConfirmation.current = null;
+        if (confirmCommand(transcript) === 'yes') {
+          void pending.action().then(done => { if (pending.cancelled && done) void prompt.say(c('voiceBuddyCancelled')); }).catch(() => setLocalError(c('requestFailed')));
+        } else void prompt.say(c('voiceBuddyKept'));
+        return;
+      }
+    }
     const command = transcript.toLocaleLowerCase();
-    if (/status|posisi/.test(command)) void voice.speak(statusText);
-    else if (/ulang|repeat/.test(command)) void voice.speak(route ? currentInstruction.current || c('noRoute') : c('noRoute'));
-    else if (/batal|akhiri|cancel|end/.test(command) && session) confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
-    else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
-    else if (/terdekat|nearby/.test(command)) askNearby();
-    else if (/bantuan|help/.test(command) && !session) askForHelp();
-    else void voice.speak(c('unknownCommand'));
+    if (/status|posisi/.test(command)) void (voiceHome ? prompt.say(voiceStatusText) : voice.speak(statusText));
+    else if (/ulang|repeat/.test(command)) void (voiceHome ? prompt.say(route ? currentInstruction.current || c('noRoute') : c('noRoute')) : voice.speak(route ? currentInstruction.current || c('noRoute') : c('noRoute')));
+    else if (/batal|akhiri|cancel|end/.test(command) && session) voiceHome ? askSpoken(c('voiceBuddyCancelAsk'), () => transition('interrupt'), true) : confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
+    else if (voiceHome && /\b(met|bertemu|here)\b|arrived with me/.test(command) && requester && session?.status === 'ARRIVED' && !session.meetingConfirmed) askSpoken(c('voiceBuddyMeetAsk'), () => transition('confirm-meeting'));
+    else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) voiceHome ? askSpoken(c('voiceBuddyCompleteAsk'), () => transition('confirm-complete')) : confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
+    else if (/terdekat|nearby/.test(command)) {
+      if (voiceHome && session && terminalStatuses.has(session.status)) state.dismissSession();
+      voiceHome ? askSpoken(c('voiceBuddyNearbyAsk'), () => startNearby(true)) : askNearby();
+    }
+    else if ((/bantuan|help/.test(command) || (voiceHome && /tolong/.test(command))) && (!session || (voiceHome && terminalStatuses.has(session.status)))) {
+      if (session) state.dismissSession();
+      voiceHome ? first ? askSpoken(c('voiceBuddyHelpAsk', { name: first.name ?? c('name') }), () => sendRequest(first.buddyUserId)) : void prompt.say(c('noBuddyHelp')) : askForHelp();
+    }
+    else void (voiceHome ? prompt.say(c('unknownCommand')) : voice.speak(c('unknownCommand')));
   } });
+  const prompt = useVoicePrompt(voice, voiceHome && listen && !soundFree, language);
+  const askSpoken = (text: string, action: () => Promise<unknown>, cancelled = false) => {
+    pendingConfirmation.current = { action, cancelled };
+    void prompt.say(text, () => { void prompt.listen(); });
+  };
+  useEffect(() => { if (!prompt.focused || !listen || soundFree) pendingConfirmation.current = null; }, [prompt.focused, listen, soundFree]);
+  const voiceStatusKey = session ? `${session.id}:${session.status}` : JSON.stringify([first?.buddyUserId, first?.name]);
+  const readVoiceStatus = useEffectEvent(() => { if (!pendingConfirmation.current && !voice.listening) void prompt.say(voiceStatusText); });
+  useEffect(() => { if (voiceHome && listen && !soundFree && prompt.focused) readVoiceStatus(); }, [voiceHome, listen, soundFree, prompt.focused, voiceStatusKey]);
+  const toggleVoice = () => {
+    if (!listen || soundFree || !prompt.focused) return;
+    if (voice.listening) voice.stopListening();
+    else { prompt.cancel(); void prompt.listen(); }
+  };
   const lastStatus = useRef<string | null>(null);
   useEffect(() => {
-    if (!session || lastStatus.current === `${session.id}:${session.status}`) return;
+    if (voiceHome || !session || lastStatus.current === `${session.id}:${session.status}`) return;
     lastStatus.current = `${session.id}:${session.status}`;
     if (preferences.voiceEnabled && !soundFree) void voice.speak(sessionStatus);
     else AccessibilityInfo.announceForAccessibility(sessionStatus);
-  }, [session, preferences.voiceEnabled, soundFree, sessionStatus, voice]);
+  }, [session, preferences.voiceEnabled, soundFree, sessionStatus, voice, voiceHome]);
   const refreshState = state.refresh;
   useEffect(() => { if (params.requestId) void refreshState(params.requestId); }, [params.requestId, refreshState]);
   // Home's "Ask for help" arrives as ?help=<timestamp>; each new value asks once, after the Buddy list has loaded.
@@ -203,9 +241,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
   };
   const attempt = session?.attempts.find(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > now && session?.status === 'WAITING');
   const issue = readableIssue(state.error ?? localError ?? native.error ?? voice.error, c);
-  const guidance = useRouteGuidance({ entranceNote: route?.destination?.entranceNote, destinationName: route?.destination?.name, route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voice.speak, voiceEnabled: preferences.voiceEnabled && !soundFree, haptics: preferences.vibrationEnabled, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
+  const guidance = useRouteGuidance({ entranceNote: route?.destination?.entranceNote, destinationName: route?.destination?.name, route: active ? route ?? null : null, position: native.location, target: requesterPoint, language: language.startsWith('id') ? 'id' : 'en', reroute: () => { if (route) void requestRoute(route.leg); }, speak: voiceHome ? prompt.say : voice.speak, voiceEnabled: voiceHome ? listen && !soundFree && prompt.focused : preferences.voiceEnabled && !soundFree, haptics: preferences.vibrationEnabled, cue: text => c('inMeters', { m: String(CUE_M), text: text.charAt(0).toLocaleLowerCase() + text.slice(1) }), onInstruction: text => { currentInstruction.current = text ?? c('stale'); } });
 
-  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, session, active, route, requesterPoint, requester, native, partner, sessionStatus, statusText, voice, attempt, issue, confirm, catchNative, transition, askForHelp, askNearby, startNearby, requestRoute, sendMessage };
+  return { state, c, status, language, support, event, accessibility, preferences, helperRoute, consent, setConsent, chat, setChat, setLocalError, shelters, setShelters, selectedShelter, setSelectedShelter, wheelchair, setWheelchair, routeBusy, guidance, navigating, startNavigation, stopNavigation, session, active, route, requesterPoint, requester, native, partner, sessionStatus, statusText, voiceStatusText, toggleVoice, readVoiceStatus: () => { void prompt.say(voiceStatusText); }, voice, attempt, issue, confirm, catchNative, transition, askForHelp, askNearby, startNearby, requestRoute, sendMessage };
 }
 
 export type BuddyActions = ReturnType<typeof useBuddyActions>;

@@ -1,12 +1,15 @@
+import * as Speech from 'expo-speech';
 import { Children } from 'react';
 import { buddyStyles } from '@/features/buddy-pilot/ui/parts';
-import { Alert, AppState, View } from 'react-native';
+import { AccessibilityInfo, Alert, AppState, View } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { RouteView } from '@/features/buddy-pilot/ui/route-view';
 import { BuddyPilotScreen } from './buddy-pilot';
 
 const mockRun = jest.fn();
 const mockRefresh = jest.fn();
+const mockDismissSession = jest.fn();
+let mockLocations: unknown[] = [];
 const mockSpeak = jest.fn();
 const mockEnableNotifications = jest.fn().mockResolvedValue(undefined);
 const mockStartListening = jest.fn();
@@ -33,7 +36,7 @@ jest.mock('expo-router', () => {
     Menu: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel: string }) => <View accessibilityLabel={accessibilityLabel}>{children}</View>,
     MenuAction: ({ children, onPress }: { children: string; onPress: () => void }) => <Pressable accessibilityRole="menuitem" accessibilityLabel={children} onPress={onPress} />,
   });
-  return { useRouter: () => ({ push: mockPush }), useFocusEffect: (callback: () => void) => useEffect(callback, [callback]), useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
+  return { useIsFocused: () => mockFocused, useRouter: () => ({ push: mockPush }), useFocusEffect: (callback: () => void) => useEffect(callback, [callback]), useLocalSearchParams: () => mockParams, Stack: { Toolbar } };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'private', user: { id: 'helper' } }) }));
@@ -48,15 +51,15 @@ jest.mock('@gorhom/bottom-sheet', () => {
 jest.mock('@/features/buddy-pilot/native', () => ({
   useInboxNotifications: () => {},
   useBuddyNative: () => ({ location: mockLocation, tracking: false, error: null, enableNotifications: mockEnableNotifications, enableLocation: async () => {}, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
-  useBuddySpeech: ({ onCommand }: { onCommand: (command: string) => void }) => { mockCommand = onCommand; return { speak: mockSpeak, error: null, listening: mockListening, startListening: mockStartListening, stopListening: mockStopListening }; },
+  useBuddySpeech: ({ onCommand }: { onCommand: (command: string) => void }) => { mockCommand = onCommand; return { speak: mockSpeak, error: null, listening: mockListening, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockStopListening }; },
 }));
 jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
 jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyCode: jest.requireActual('@/features/buddy-pilot/use-buddy-pilot').useBuddyCode, useBuddyPilot: () => ({
   contacts: mockContacts, invitations: mockInvitations, incomingContacts: mockIncomingContacts, received: mockReceived, inbox: [], availability: mockAvailability, session: mockSession,
-  messages: [], locations: [], error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh,
+  messages: [], locations: mockLocations, dismissSession: mockDismissSession, error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh,
 }) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
+beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockLocations = []; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
 
 test('a person with no Buddy can search nearby, add a Buddy or call 112, with no helper controls', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -195,9 +198,13 @@ test('an active session with a known position becomes a full-screen map with the
 });
 
 
+let mockListen = true;
 let mockSoundFree = false;
-jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ soundFree: mockSoundFree }) }));
-beforeEach(() => { mockSoundFree = false; });
+let mockVoiceHome = false;
+let mockFocused = true;
+jest.mock('expo-speech', () => ({ stop: jest.fn(() => Promise.resolve()), speak: jest.fn() }));
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ soundFree: mockSoundFree, voiceHome: mockVoiceHome, listen: mockListen && !mockSoundFree }) }));
+beforeEach(() => { mockListen = true; mockSoundFree = false; mockVoiceHome = false; mockFocused = true; jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false); });
 test.each([false, true])('voice controls and status speech follow soundFree (%s)', soundFree => {
   mockSoundFree = soundFree;
   mockSession = { id: 'voice', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina', status: 'ACCEPTED', supportNeeds: [], attempts: [] };
@@ -352,4 +359,237 @@ test('a person with support needs accepts a helper\'s offer and cancels an invit
   fireEvent.press(view.getByRole('button', { name: 'Cancel' }));
   expect(mockRun).toHaveBeenCalledWith('/invitations/asked', undefined, 'DELETE');
   expect(view.queryByText('Your code')).toBeNull();
+});
+
+test.each([false, true])('voice Buddy idle shows status and the mic with Buddy=%s', async hasBuddy => {
+  mockVoiceHome = true;
+  if (hasBuddy) mockContacts = [{ id: 'trusted', buddyUserId: 'buddy', name: 'Sari', level: 'PRIMARY' }];
+  const view = render(<BuddyPilotScreen />);
+  expect(view.getByText('Buddy status')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Tap to speak' })).toBeTruthy();
+  expect(view.getByText(hasBuddy ? 'Sari is your Buddy. Say “help” to ask them.' : 'You have no Buddy yet. Say “nearby” to find a helper near you.')).toBeTruthy();
+  expect(view.queryByLabelText('More')).toBeNull();
+  expect(view.queryByText('My Buddies')).toBeNull();
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  view.rerender(<BuddyPilotScreen />);
+  expect(Speech.speak).toHaveBeenCalledTimes(1);
+  mockContacts = [{ id: 'changed', buddyUserId: 'other', name: 'Nina', level: 'PRIMARY' }];
+  view.rerender(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  mockFocused = false;
+  view.rerender(<BuddyPilotScreen />);
+  expect(mockStopListening).toHaveBeenCalled();
+});
+
+test.each(['yes', 'no'])('voice Buddy cancel asks before %s and has no cancel control or contact rows', async answer => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'WAITING', attempts: [] };
+  mockContacts = [{ id: 'trusted', buddyUserId: 'buddy', name: 'Sari', level: 'PRIMARY' }];
+  mockRun.mockResolvedValue({ id: 'live' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  expect(view.queryByRole('button', { name: 'End session' })).toBeNull();
+  expect(view.queryByText('Sari')).toBeNull();
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  expect(mockSpeak).not.toHaveBeenCalled();
+  act(() => mockCommand('cancel'));
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith('Cancel your help request? Say yes or no.', expect.any(Object)));
+  expect(mockStartListening).not.toHaveBeenCalled();
+  await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+  expect(mockStartListening).toHaveBeenCalledTimes(1);
+  await act(async () => mockCommand(answer));
+  if (answer === 'yes') {
+    expect(mockRun).toHaveBeenCalledWith('/requests/live/interrupt', {});
+    await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith('Your request is cancelled.', expect.any(Object)));
+  } else {
+    expect(mockRun).not.toHaveBeenCalled();
+    await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith('Okay, your request stays active.', expect.any(Object)));
+  }
+  expect(alert).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
+
+test('voice Buddy touch still opens the help dialog', async () => {
+  mockVoiceHome = true;
+  mockContacts = [{ id: 'trusted', buddyUserId: 'buddy', name: 'Sari', level: 'PRIMARY' }];
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Ask Sari for help' }));
+  expect(alert).toHaveBeenCalledWith('Ask Sari for help?', expect.any(String), expect.any(Array));
+  expect(mockRun).not.toHaveBeenCalled();
+  await act(async () => {});
+  alert.mockRestore();
+});
+
+test.each(['help', 'nearby', 'complete'])('voice Buddy %s shares or completes only after yes', async command => {
+  mockVoiceHome = true;
+  mockContacts = [{ id: 'trusted', buddyUserId: 'buddy', name: 'Sari', level: 'PRIMARY' }];
+  if (command === 'complete') mockSession = { id: 'live', requesterUserId: 'helper', status: 'COMPLETION_PENDING', attempts: [] };
+  mockRun.mockResolvedValue({ id: 'live' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  act(() => mockCommand(command));
+  const question = command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : command === 'nearby' ? 'Search for helpers nearby and share your location? Say yes or no.' : 'Confirm you are safe and finished? Say yes or no.';
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(question, expect.any(Object)));
+  expect(mockRun).not.toHaveBeenCalled();
+  await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+  await act(async () => mockCommand('ya'));
+  if (command === 'complete') expect(mockRun).toHaveBeenCalledWith('/requests/live/confirm-complete', {});
+  else expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: command === 'help' ? 'buddy' : null, sharingConsent: true }));
+  expect(alert).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
+
+
+test.each([
+  ['ARRIVED', 'Confirm we have met', 'confirm-meeting'],
+  ['COMPLETION_PENDING', 'Confirm assistance completed', 'confirm-complete'],
+])('voice Buddy requester retains the required touch action at %s', async (status, label, transition) => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status, meetingConfirmed: false, attempts: [] };
+  mockRun.mockResolvedValue({ id: 'live' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: label }));
+  expect(alert).toHaveBeenCalledWith(label, label, expect.any(Array));
+  expect(mockRun).not.toHaveBeenCalled();
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(mockRun).toHaveBeenCalledWith(`/requests/live/${transition}`, {});
+  alert.mockRestore();
+});
+
+test.each(['helper', 'confirmed'])('voice Buddy does not offer meeting confirmation for %s', async reason => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: reason === 'helper' ? 'other' : 'helper', status: 'ARRIVED', meetingConfirmed: reason === 'confirmed', attempts: [] };
+  const view = render(<BuddyPilotScreen />);
+  expect(view.queryByRole('button', { name: 'Confirm we have met' })).toBeNull();
+  await act(async () => mockCommand('met'));
+  expect(mockRun).not.toHaveBeenCalled();
+});
+
+test.each(['listen off', 'soundFree'])('voice Buddy retains touch cancellation with %s', async reason => {
+  mockVoiceHome = true;
+  mockListen = reason !== 'listen off';
+  mockSoundFree = reason === 'soundFree';
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'WAITING', attempts: [] };
+  mockRun.mockResolvedValue({ id: 'live' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'End session' }));
+  expect(alert).toHaveBeenCalledWith('End session', 'Location sharing stops. This does not declare that either person is safe.', expect.any(Array));
+  await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+  expect(mockRun).toHaveBeenCalledWith('/requests/live/interrupt', {});
+  expect(Speech.speak).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
+
+test.each(['met', 'bertemu', 'sudah bertemu', 'here', 'arrived with me'])('voice meeting command %s asks and waits for yes', async command => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'ARRIVED', meetingConfirmed: false, attempts: [] };
+  mockRun.mockResolvedValue({ id: 'live' });
+  render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  act(() => mockCommand(command));
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith('Confirm you have met? Say yes or no.', expect.any(Object)));
+  expect(mockRun).not.toHaveBeenCalled();
+  await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+  await act(async () => mockCommand('iya'));
+  expect(mockRun).toHaveBeenCalledWith('/requests/live/confirm-meeting', {});
+});
+
+test('voice meeting confirmation no keeps the request active', async () => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'ARRIVED', attempts: [] };
+  render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  act(() => mockCommand('met'));
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+  act(() => mockCommand('tidak'));
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith('Okay, your request stays active.', expect.any(Object)));
+  expect(mockRun).not.toHaveBeenCalled();
+});
+
+test('GPS updates preserve a pending spoken confirmation and full status is read on demand', async () => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', helperName: 'Sari', status: 'ARRIVED', attempts: [] };
+  mockLocation = { latitude: -6.2, longitude: 106.8 };
+  mockLocations = [{ userId: 'partner', latitude: -6.21, longitude: 106.81, observedAt: '2026-10-10T00:00:00Z', stale: false }];
+  mockRun.mockResolvedValue({ id: 'live' });
+  const view = render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  act(() => mockCommand('cancel'));
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  const stops = mockStopListening.mock.calls.length;
+  mockLocations = [{ userId: 'partner', latitude: -6.22, longitude: 106.82, observedAt: '2026-10-10T00:01:00Z', stale: false }];
+  view.rerender(<BuddyPilotScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(2);
+  expect(mockStopListening).toHaveBeenCalledTimes(stops);
+  mockSession = { id: 'live', requesterUserId: 'helper', helperName: 'Sari', status: 'EVACUATING', attempts: [] };
+  view.rerender(<BuddyPilotScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(2);
+  await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+  await act(async () => mockCommand('yes'));
+  expect(mockRun).toHaveBeenCalledWith('/requests/live/interrupt', {});
+  fireEvent.press(view.getByRole('button', { name: 'Read status aloud' }));
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(expect.stringContaining('Updated:'), expect.any(Object)));
+  expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain('m');
+  act(() => mockCommand('status'));
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(5));
+  expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain('Updated:');
+});
+
+test('automatic Buddy status changes speak once and are dropped during recognition', async () => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'ARRIVED', attempts: [] };
+  const view = render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'EVACUATING', attempts: [] };
+  view.rerender(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  mockListening = true;
+  view.rerender(<BuddyPilotScreen />);
+  const stops = mockStopListening.mock.calls.length;
+  mockSession = { id: 'live', requesterUserId: 'helper', status: 'COMPLETION_PENDING', attempts: [] };
+  view.rerender(<BuddyPilotScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(2);
+  expect(mockStopListening).toHaveBeenCalledTimes(stops);
+  mockListening = false;
+  view.rerender(<BuddyPilotScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(2);
+});
+
+test.each(['COMPLETED', 'INTERRUPTED', 'UNANSWERED'])('terminal voice Buddy session %s can be dismissed', async status => {
+  mockVoiceHome = true;
+  mockSession = { id: 'live', requesterUserId: 'helper', status, attempts: [] };
+  const view = render(<BuddyPilotScreen />);
+  fireEvent.press(view.getByRole('button', { name: 'Back to Buddy' }));
+  expect(mockDismissSession).toHaveBeenCalledTimes(1);
+  expect(mockRun).not.toHaveBeenCalled();
+  mockSession = null;
+  view.rerender(<BuddyPilotScreen />);
+  expect(view.getByRole('button', { name: 'Find help nearby' })).toBeTruthy();
+  await act(async () => {});
+});
+
+test.each(['COMPLETED', 'INTERRUPTED', 'UNANSWERED'])('help and nearby can restart after terminal session %s', async status => {
+  mockVoiceHome = true;
+  mockContacts = [{ id: 'trusted', buddyUserId: 'buddy', name: 'Sari', level: 'PRIMARY' }];
+  mockSession = { id: 'live', requesterUserId: 'helper', status, attempts: [] };
+  mockRun.mockResolvedValue({ id: 'new' });
+  render(<BuddyPilotScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  for (const command of ['help', 'nearby']) {
+    act(() => mockCommand(command));
+    await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : 'Search for helpers nearby and share your location? Say yes or no.', expect.any(Object)));
+    expect(mockDismissSession).toHaveBeenCalledTimes(command === 'help' ? 1 : 2);
+    await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
+    await act(async () => mockCommand('yes'));
+    expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: command === 'help' ? 'buddy' : null }));
+  }
 });

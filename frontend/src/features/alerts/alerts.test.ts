@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import { alertItems } from './test-fixtures';
-import { formatAlertTime, mapAlert, topAlert } from './alerts';
+import { alertsSpokenSummary, formatAlertTime, mapAlert, topAlert } from './alerts';
 import en from '@/localization/en.json';
 
 const t = ((key: string, params?: Record<string, string>) => Object.entries(params ?? {}).reduce((text, [name, value]) => text.replace(`{{${name}}}`, value), en[key as keyof typeof en] ?? key)) as TFunction;
@@ -39,4 +39,20 @@ test.each([
 });
 test('same-day expiry keeps the issue timestamp in full-date form', () => {
   expect(mapAlert(alertItems[0], t, Date.parse('2026-09-17T01:30:00Z'))).toMatchObject({ issued: '17 Sep 2026 · 08:30 WIB', window: 'Until 11:30 WIB' });
+});
+
+const spokenT = ((key: string, params?: Record<string, string | number>) => {
+  const resolved = key === 'alertsSpokenCount' ? Number(params?.count) === 1 ? 'alertsSpokenCount_one' : 'alertsSpokenCount_other' : key;
+  return Object.entries(params ?? {}).reduce((text, [name, value]) => text.replace(`{{${name}}}`, String(value)), en[resolved as keyof typeof en] ?? resolved);
+}) as TFunction;
+
+test('spoken summary handles none and one warning with area and end time', () => {
+  expect(alertsSpokenSummary([], spokenT)).toBe(en.alertsEmpty);
+  expect(alertsSpokenSummary([alertItems[0]], spokenT)).toBe('1 warning. Alert: Extreme weather in Example area, until 11:30.');
+});
+
+test('spoken summary orders severity without mutating items and falls back for missing area or end time', () => {
+  const items = [{ ...alertItems[1], area: null }, { ...alertItems[0], level: 'awas' as const, validUntil: null }];
+  expect(alertsSpokenSummary(items, spokenT)).toBe('2 warnings. Danger: Extreme weather in Example area. Caution: Flooding in Your area.');
+  expect(items[0].id).toBe('water');
 });

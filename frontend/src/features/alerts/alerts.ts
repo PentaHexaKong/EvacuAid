@@ -25,3 +25,12 @@ export function mapAlert(item: AlertItem, t: TFunction, now = Date.now()): Alert
   const stepLevel = item.level.charAt(0).toUpperCase() + item.level.slice(1);
   return { id: item.id, level: item.level, title, area, issued: item.issuedAt ? formatAlertTimestamp(item.issuedAt) : null, window: item.validUntil ? t('alertUntil', { time: formatAlertTime(item.validUntil, now) }) : null, body: t('alertBody', { level: t(levelLabels[item.level]), hazard: lowerFirst(t(title)), area: item.area ?? t('alertAreaYoursInline') }), steps: [1, 2, 3].map(index => `alertStep${stepLevel}${index}`), coordinate: { latitude: item.latitude, longitude: item.longitude } };
 }
+
+export function alertsSpokenSummary(items: AlertItem[], t: TFunction): string {
+  if (!items.length) return t('alertsEmpty');
+  return [t('alertsSpokenCount', { count: items.length }), ...[...items].sort(compareAlerts).map(item => {
+    const alert = mapAlert(item, t);
+    const time = alert.window?.match(/\d{2}:\d{2}/)?.[0];
+    return t('alertsSpokenItem', { level: t(levelLabels[alert.level]), hazard: t(alert.title), area: alert.area, until: time ? `, ${t('alertUntil', { time }).toLocaleLowerCase()}` : '' });
+  })].join(' ');
+}
