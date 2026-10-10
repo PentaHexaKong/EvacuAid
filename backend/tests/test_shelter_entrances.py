@@ -17,8 +17,8 @@ from app.models.shelter import ShelterCreate
 from app.models.user import UserCreate
 from app.repositories import shelterRepository
 from app.routers.shelters import router as sheltersRouter
-from app.services import navigationService, pilotNavigation, shelterService, user_service
-from tests.test_pilot_navigation import sessionFixture, routeWithManeuvers
+from app.services import navigationService, buddyNavigation, shelterService, user_service
+from tests.test_buddy_navigation import sessionFixture, routeWithManeuvers
 
 
 ENTRANCE = {'entranceLatitude': 0.00005, 'entranceLongitude': 0.01, 'entranceNote': 'North gate, ramp on the left'}
@@ -130,8 +130,8 @@ async def testRoutingUsesEntranceOrCentre(dbSession, monkeypatch, entrance, pilo
         for key, value in entrance.items():
             setattr(shelter, key, value)
         await dbSession.commit()
-        monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-        response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+        monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+        response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     else:
         shelter = await shelterService.createShelter(dbSession, shelterPayload(**entrance))
         user = await user_service.create_user(dbSession, UserCreate(name='SYNTHETIC_TEST_USER'))

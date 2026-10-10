@@ -2,13 +2,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.db.models.pilot import PilotLocation, PilotRequest
+from app.db.models.buddySession import BuddyLocation, BuddyRequest
 from app.models.hazard import EvidenceType
-from app.models.pilot import SessionRoute
+from app.models.buddyRequest import SessionRoute
 from app.models.shelter import ShelterCreate
 from app.models.user import UserCreate
 from app.repositories import hazardRepository
-from app.services import navigationService, pilotNavigation, shelterService, user_service
+from app.services import navigationService, buddyNavigation, shelterService, user_service
 from app.services.petabencana_service import PetaBencanaFetchResult
 from tests.test_hazard_navigation import noReports
 from tests.test_hazards import syntheticEvidence, syntheticRoute
@@ -17,11 +17,11 @@ from tests.test_hazards import syntheticEvidence, syntheticRoute
 async def sessionFixture(db, leg):
     requester = await user_service.create_user(db, UserCreate(name='SYNTHETIC_TEST_REQUESTER'))
     helper = await user_service.create_user(db, UserCreate(name='SYNTHETIC_TEST_HELPER'))
-    request = PilotRequest(requester_id=requester.id, helper_id=helper.id, status='ACCEPTED' if leg == 'TO_REQUESTER' else 'ARRIVED', pilot=True, idempotency_key='SYNTHETIC_TEST_ROUTE', sharing_consent=True, meeting_confirmed=leg == 'TO_SHELTER')
+    request = BuddyRequest(requester_id=requester.id, helper_id=helper.id, status='ACCEPTED' if leg == 'TO_REQUESTER' else 'ARRIVED', is_buddy=True, idempotency_key='SYNTHETIC_TEST_ROUTE', sharing_consent=True, meeting_confirmed=leg == 'TO_SHELTER')
     db.add(request)
     await db.flush()
     for user, longitude in ((helper, 0), (requester, 0.01)):
-        db.add(PilotLocation(request_id=request.id, user_id=user.id, latitude=0, longitude=longitude, accuracy_m=5, observed_at=datetime.now(timezone.utc)))
+        db.add(BuddyLocation(request_id=request.id, user_id=user.id, latitude=0, longitude=longitude, accuracy_m=5, observed_at=datetime.now(timezone.utc)))
     if leg == 'TO_SHELTER':
         await shelterService.createShelter(db, ShelterCreate(name='SYNTHETIC_TEST_SHELTER', latitude=0, longitude=0.01, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST'))
     await db.commit()
@@ -66,8 +66,8 @@ async def testSessionRouteSelectsGeneratedDetour(dbSession, monkeypatch, leg, ki
     await dbSession.commit()
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
     provider = Provider()
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert response['route']['geometry']['coordinates'][1] == [0, 0.003]
     assert 'HAZARD_DETOUR_GENERATED' in response['evaluation']['reasonCodes']
@@ -85,8 +85,8 @@ async def testSessionRouteAllCandidatesBlocked(dbSession, monkeypatch, leg):
     await hazardRepository.saveEvidence(dbSession, [syntheticEvidence()])
     await dbSession.commit()
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: Provider(False))
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: Provider(False))
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'UNAVAILABLE'
     assert response['leg'] == leg
     assert 'NO_FEASIBLE_ROUTE' in response['selectionReasonCodes']
@@ -117,10 +117,10 @@ async def testSessionRouteHazardStateUnavailableFallsBack(dbSession, monkeypatch
     monkeypatch.setattr(navigationService, 'routeEvidence', evidence)
     if failureStage == 'corridor':
         monkeypatch.setattr(hazardRepository, 'activeEvidence', unavailable)
-    monkeypatch.setattr(pilotNavigation, 'routeHazards', hazards)
+    monkeypatch.setattr(buddyNavigation, 'routeHazards', hazards)
     provider = Provider()
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert 'HAZARD_STATE_UNAVAILABLE' in response['evaluation']['reasonCodes']
     assert response['evaluation']['safetyStatus'] == 'UNKNOWN'
@@ -148,8 +148,8 @@ async def testSessionRouteCorridorFailureRejectsKnownHardConstraint(dbSession, m
 
     monkeypatch.setattr(hazardRepository, 'activeEvidence', evidence)
     provider = Provider()
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'UNAVAILABLE'
     assert response['leg'] == leg
     assert 'NO_FEASIBLE_ROUTE' in response['selectionReasonCodes']
@@ -185,8 +185,8 @@ async def testSessionRouteDegradedSafetyStatus(dbSession, monkeypatch, leg, fail
     if failureStage == 'corridor':
         monkeypatch.setattr(hazardRepository, 'activeEvidence', unavailable)
     monkeypatch.setattr(navigationService, 'fetch_reports', fetchReports)
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: Provider())
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: Provider())
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert response['evaluation']['safetyStatus'] == ('POTENTIALLY_EXPOSED' if reports else 'UNKNOWN')
     assert 'HAZARD_STATE_UNAVAILABLE' in response['evaluation']['reasonCodes']
@@ -216,8 +216,8 @@ async def testSessionRouteCorridorFailureTriesNextShelter(dbSession, monkeypatch
     monkeypatch.setattr(hazardRepository, 'activeEvidence', evidence)
     monkeypatch.setattr(navigationService, 'fetch_reports', fetchReports)
     provider = Provider()
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert response['destination']['shelterId'] == safe.id
     assert request.selected_shelter_id == safe.id
@@ -244,8 +244,8 @@ async def testSessionRouteSkipsCriticalShelterAndBlockedDestination(dbSession, m
         return await original(origin, destination, **kwargs)
 
     monkeypatch.setattr(provider, 'routes', routes)
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert response['destination']['shelterId'] == safe.id
     assert (0, 0.005) not in destinations
@@ -257,8 +257,8 @@ async def testSessionRouteSkipsCriticalShelterAndBlockedDestination(dbSession, m
 async def testSessionRouteRetainsManeuversRequirement(dbSession, monkeypatch):
     request, actor, payload = await sessionFixture(dbSession, 'TO_REQUESTER')
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: Provider(maneuvers=False))
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: Provider(maneuvers=False))
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'UNAVAILABLE'
     assert response['selectionReasonCodes'] == ['MANEUVERS_UNAVAILABLE']
 
@@ -271,8 +271,8 @@ async def testSessionShelterRouteReturnsFloodEscape(dbSession, monkeypatch):
     await dbSession.commit()
     monkeypatch.setattr(navigationService.externalDataService, 'storedReports', noReports)
     provider = Provider()
-    monkeypatch.setattr(pilotNavigation, 'ValhallaRoutingProvider', lambda: provider)
-    response = await pilotNavigation.session_route(dbSession, request, actor, payload)
+    monkeypatch.setattr(buddyNavigation, 'ValhallaRoutingProvider', lambda: provider)
+    response = await buddyNavigation.session_route(dbSession, request, actor, payload)
     assert response['routeStatus'] == 'READY'
     assert response['evaluation']['safetyStatus'] == 'EXPOSED'
     assert 'HAZARD_ZONE_EXIT' in response['evaluation']['reasonCodes']

@@ -41,9 +41,9 @@ async def delete_guest_account(
     actor: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    from app.services import pilotService
-    await pilotService.lock_users(session, [actor.id])
-    if await pilotService.occupied(session, actor.id):
+    from app.services import buddyRequestService
+    await buddyRequestService.lock_users(session, [actor.id])
+    if await buddyRequestService.occupied(session, actor.id):
         raise HTTPException(status_code=409, detail='interrupt active assistance before deleting guest')
     await session.delete(actor)
     await session.commit()

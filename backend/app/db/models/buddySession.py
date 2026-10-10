@@ -6,10 +6,10 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.models.buddy import AssistanceRequest as PilotRequest
+from app.db.models.buddy import AssistanceRequest as BuddyRequest
 
 
-class PilotInvitation(Base):
+class BuddyInvitation(Base):
     __tablename__ = 'pilot_invitations'
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), index=True)
@@ -22,7 +22,7 @@ class PilotInvitation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class PilotAvailability(Base):
+class BuddyAvailability(Base):
     __tablename__ = 'pilot_availability'
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     opted_in: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -32,7 +32,7 @@ class PilotAvailability(Base):
     accuracy_m: Mapped[float | None] = mapped_column(Float)
 
 
-class PilotAttempt(Base):
+class BuddyAttempt(Base):
     __tablename__ = 'pilot_attempts'
     __table_args__ = (Index('uq_pilot_pending_attempt', 'request_id', unique=True, postgresql_where=text("status = 'PENDING'")), Index('ix_pilot_pending_attempt_helper', 'helper_id', postgresql_where=text("status = 'PENDING'")))
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
@@ -43,7 +43,7 @@ class PilotAttempt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class PilotInbox(Base):
+class BuddyInbox(Base):
     __tablename__ = 'pilot_inbox'
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
@@ -54,7 +54,7 @@ class PilotInbox(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class PilotOutbox(Base):
+class BuddyOutbox(Base):
     __tablename__ = 'pilot_outbox'
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     inbox_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('pilot_inbox.id', ondelete='CASCADE'), unique=True)
@@ -64,13 +64,13 @@ class PilotOutbox(Base):
     tickets: Mapped[list] = mapped_column(JSONB, default=list)
 
 
-class PilotPushToken(Base):
+class BuddyPushToken(Base):
     __tablename__ = 'pilot_push_tokens'
     token: Mapped[str] = mapped_column(String(256), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
 
 
-class PilotLocation(Base):
+class BuddyLocation(Base):
     __tablename__ = 'pilot_locations'
     request_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('assistance_requests.id', ondelete='CASCADE'), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
@@ -80,7 +80,7 @@ class PilotLocation(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class PilotMessage(Base):
+class BuddyMessage(Base):
     __tablename__ = 'pilot_messages'
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('assistance_requests.id', ondelete='CASCADE'))

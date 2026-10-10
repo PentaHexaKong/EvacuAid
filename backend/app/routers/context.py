@@ -16,7 +16,7 @@ from app.services.bmkg_service import BmkgFetchResult, fetch_weather
 from app.services.cacheService import CacheService, getCache
 from app.services.petabencana_service import PetaBencanaFetchResult, fetch_reports
 from app.services.risk_service import aggregate_risk
-from app.services import pilotService, navigationService
+from app.services import buddyRequestService, navigationService
 from app.services.hazardContextService import officialWarningForLocation
 from app.repositories import buddyRepository
 
@@ -52,7 +52,7 @@ async def getContext(userId: uuid.UUID, session: AsyncSession, cache: CacheServi
         return result
 
     preferences = user.preferences
-    activeRequest = await pilotService.current_request(session, userId)
+    activeRequest = await buddyRequestService.current_request(session, userId)
     risk = await aggregate_risk(
         RiskRequest(
             adm4='31.71.03.1001',
@@ -87,7 +87,7 @@ async def contextAssistance(session: AsyncSession, required: bool, request) -> C
         relationship = await buddyRepository.getRelationshipForPair(session, request.userId, request.buddyUserId)
         if relationship is not None:
             buddy = ContextBuddy(userId=request.buddyUserId, level=relationship.level)
-    return ContextAssistanceData(required=required, status=pilotService.legacyStatus(request.status), requestId=str(request.id), buddy=buddy)
+    return ContextAssistanceData(required=required, status=buddyRequestService.legacyStatus(request.status), requestId=str(request.id), buddy=buddy)
 
 
 async def contextNavigation(session: AsyncSession, userId: uuid.UUID, action: str) -> NavigationResponse:

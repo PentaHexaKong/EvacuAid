@@ -6,7 +6,7 @@ from app.models.user import AccessibilityItem, AccessibilityUpdate, LocationUpda
 from app.routers import context as contextRouter
 from app.services import user_service
 from app.db.models import BuddyRelationship
-from app.db.models.pilot import PilotRequest
+from app.db.models.buddySession import BuddyRequest
 from app.services.bmkg_service import BmkgFetchResult
 from app.services.cacheService import CacheService
 from app.services.petabencana_service import PetaBencanaFetchResult
@@ -53,7 +53,7 @@ async def testContextShowsOnlyActiveAssistanceRequest(dbSession, monkeypatch):
     buddy = await user_service.create_user(dbSession, UserCreate(name='Sari'))
     await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
     relationship = BuddyRelationship(userId=user.id, buddyUserId=buddy.id, level='PRIMARY', status='ACTIVE')
-    request = PilotRequest(requester_id=user.id, helper_id=buddy.id, status='ACCEPTED', pilot=True)
+    request = BuddyRequest(requester_id=user.id, helper_id=buddy.id, status='ACCEPTED', is_buddy=True)
     dbSession.add_all([relationship, request])
     await dbSession.commit()
 
