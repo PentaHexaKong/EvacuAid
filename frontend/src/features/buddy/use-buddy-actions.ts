@@ -52,10 +52,12 @@ export function useBuddyActions({ token, userId, state, manageBackground = true 
   const autoShared = useRef<string | null>(null);
   const sessionId = session?.id;
   const shareOnAccept = useEffectEvent(() => { if (!native.tracking) catchNative(native.enableLocation); });
+  // The helper's position is read once on this phone so the session map can show; it is shared only when they start travelling.
+  const locateOnAccept = useEffectEvent(() => { if (!native.location) catchNative(native.obtainLocation); });
   useEffect(() => {
-    if (!requester || !active || !sessionId || autoShared.current === sessionId) return;
+    if (!active || !sessionId || autoShared.current === sessionId) return;
     autoShared.current = sessionId;
-    shareOnAccept();
+    if (requester) shareOnAccept(); else locateOnAccept();
   }, [requester, active, sessionId]);
   const [approach, setApproach] = useState<{ sessionId: string; value: BuddyRoute } | null>(null);
   const approaching = Boolean(requester && active && (session?.status === 'ACCEPTED' || session?.status === 'EN_ROUTE'));
