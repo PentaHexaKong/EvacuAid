@@ -7,6 +7,7 @@ let mockSession: any = null;
 let mockLoading = true;
 let mockError: string | null = null;
 const mockRefresh = jest.fn(() => new Promise(() => {}));
+jest.mock('@/components/use-armed', () => ({ useArmed: () => true }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), requestBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: false }), watchPositionAsync: jest.fn().mockResolvedValue({ remove: jest.fn() }), getCurrentPositionAsync: jest.fn(), hasStartedLocationUpdatesAsync: jest.fn().mockResolvedValue(true), stopLocationUpdatesAsync: jest.fn(), startLocationUpdatesAsync: jest.fn(), Accuracy: { High: 4 } }));
 jest.mock('expo-notifications', () => ({ setNotificationHandler: jest.fn(), getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }), scheduleNotificationAsync: jest.fn().mockResolvedValue('id'), getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null), addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })), addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })) }));

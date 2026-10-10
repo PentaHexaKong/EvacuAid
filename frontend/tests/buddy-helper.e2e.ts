@@ -64,10 +64,11 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
 
     const request = await call(friend, '/requests', 'POST', { helperUserId: invitation.redeemerUserId, message: 'Please walk with me to the gathering point', supportNeeds: [], sharingConsent: true, idempotencyKey: `e2e-${Date.now()}`, latitude: -6.266, longitude: 106.804 });
     requestId = request.id;
-    await screen.getByRole('tab', 'Home').tap();
-    await screen.getByRole('tab', 'Buddy').tap();
-    await expect(screen.getByText('Nina Rahma needs your help')).toBeVisible({ timeout: 30_000 });
+    // The takeover arrives on its own. Tapping tabs while waiting can land on its buttons as it slides in.
+    await expect(screen.getByText('Nina Rahma needs your help')).toBeVisible({ timeout: 90_000 });
     await expect(screen.getByText('Shares your location with Nina Rahma while you help')).toBeVisible();
+    // Its actions ignore touches for the first 600 ms after it appears.
+    await new Promise(resolve => setTimeout(resolve, 1000));
     await screen.getByRole('button', "I'll help Nina Rahma").tap();
     await expect(screen.getByRole('button', 'Start travelling to requester')).toBeVisible({ timeout: 30_000 });
 

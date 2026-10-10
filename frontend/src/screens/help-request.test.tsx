@@ -9,6 +9,7 @@ let mockError: string | null = null;
 let mockIssue: string | null = null;
 let mockSession: any;
 let mockAttempt: any;
+jest.mock('@/components/use-armed', () => ({ useArmed: () => true }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'request' }), useRouter: () => ({ back: mockBack, replace: mockReplace }), Stack: { Screen: ({ options }: { options: unknown }) => { mockOptions(options); return null; } } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 10 }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest', user: { id: 'helper' } }) }));
