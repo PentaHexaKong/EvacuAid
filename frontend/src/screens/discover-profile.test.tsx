@@ -415,14 +415,14 @@ test('new copy has Indonesian parity and Profile uses the localized fallback', a
   expect(Object.keys(en).sort()).toEqual(Object.keys(id).sort());
   mockLanguage = 'id';
   const view = render(<ProfileProvider><ProfileScreen /></ProfileProvider>);
-  await waitFor(() => expect(view.getByText('Profil tamu')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Profilmu')).toBeTruthy());
   expect(view.queryByText('Profil tamu · perangkat ini')).toBeNull();
 });
 
 test('settings toggles save immediately, without a Save button', async () => {
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileScreen /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByText('Guest profile')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Your profile')).toBeTruthy());
   expect(view.queryByRole('button', { name: 'Save changes' })).toBeNull();
   fireEvent(view.getByRole('switch', { name: 'Larger text' }), 'valueChange', true);
   await waitFor(() => expect(mockPreferences.larger_text).toBe(true));
