@@ -26,7 +26,8 @@ jest.mock('@/features/navigation/use-evacuation-guidance', () => ({ useEvacuatio
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest' }) }));
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: true, soundFree: mockSoundFree }) }));
 jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn().mockResolvedValue({ myResponse: 'SAFE' }) }));
-jest.mock('@/features/alerts/use-alerts', () => ({ applyResponse: jest.fn() }));
+let mockActive: string[] = [];
+jest.mock('@/features/alerts/use-alerts', () => ({ applyResponse: jest.fn(), activeAlertIds: () => mockActive }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn().mockResolvedValue(undefined) }));
 
 beforeEach(() => { jest.clearAllMocks(); mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
@@ -54,7 +55,8 @@ test.each([undefined, 'rain'])('arrival posts SAFE when an alert is given and le
   mockParams.alertId = alertId;
   const view = render(<EvacuateScreen />);
   fireEvent.press(view.getByRole('button', { name: "I've arrived, I'm safe" }));
-  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+  await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+  expect(mockRouter.replace).not.toHaveBeenCalled();
   if (alertId) {
     expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', 'SAFE');
     expect(applyResponse).toHaveBeenCalledWith('rain', 'SAFE');
@@ -104,8 +106,19 @@ test('a failed SAFE response keeps guidance open for retry', async () => {
   const view = render(<EvacuateScreen />);
   fireEvent.press(view.getByRole('button', { name: "I've arrived, I'm safe" }));
   await waitFor(() => expect(view.getByRole('alert')).toBeTruthy());
-  expect(mockRouter.replace).not.toHaveBeenCalled();
+  expect(mockRouter.back).not.toHaveBeenCalled();
   expect(applyResponse).not.toHaveBeenCalled();
+});
+
+test('arrival also closes other warnings the person was acting on', async () => {
+  mockParams.alertId = 'rain';
+  mockActive = ['rain', 'flood'];
+  try {
+    const view = render(<EvacuateScreen />);
+    fireEvent.press(view.getByRole('button', { name: "I've arrived, I'm safe" }));
+    await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+    expect(jest.mocked(respondToAlert).mock.calls.map(call => call[1])).toEqual(['rain', 'flood']);
+  } finally { mockActive = []; }
 });
 
 test('a failed reroute keeps guiding on the last good route', () => {
