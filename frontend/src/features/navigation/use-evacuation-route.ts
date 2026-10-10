@@ -46,12 +46,12 @@ export function useEvacuationRoute(routeRequest?: string) {
     setState(value => ({ ...value, phase: 'error', errorKind: (cause as ApiError)?.kind ?? 'unknown' }));
   }, []);
 
-  const findRoute = useCallback(async (destinationShelterId?: string) => {
+  const findRoute = useCallback(async (destinationShelterId?: string, currentOrigin?: Origin) => {
     const { id, signal } = begin();
     const live = () => id === generation.current;
     setState(value => ({ ...value, route: null, phase: value.origin ? 'routing' : 'locating', reason: null, errorKind: null }));
     try {
-      const origin = await fix(state.origin, true);
+      const origin = await fix(currentOrigin ?? state.origin, true);
       if (!live()) return;
       if (!origin) { setState(value => ({ ...value, phase: 'denied' })); return; }
       const { token, user } = sessionRef.current;

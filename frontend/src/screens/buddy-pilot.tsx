@@ -11,6 +11,7 @@ import { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
 import { useBuddyActions } from '@/features/buddy-pilot/use-buddy-actions';
 import { useBuddyCopy } from '@/features/buddy-pilot/copy';
 import { useInboxNotifications } from '@/features/buddy-pilot/native';
+import { VoiceBuddyView } from '@/features/buddy-pilot/ui/voice-buddy-view';
 import { BuddiesView } from '@/features/buddy-pilot/ui/buddies-view';
 import { SessionMap, SessionView } from '@/features/buddy-pilot/ui/session-view';
 import { Card } from '@/features/buddy-pilot/ui/parts';
@@ -30,7 +31,7 @@ export function BuddyPilotScreen() {
 }
 
 function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
-  const { soundFree } = useAccess();
+  const { soundFree, voiceHome } = useAccess();
   const a = useBuddyActions({ token, userId, state });
   const router = useRouter();
   const { c, session, requester, active, issue, voice, native, catchNative, setLocalError } = a;
@@ -41,16 +42,17 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
     <TabHeader><AppText variant="title" accessibilityRole="header">{c('title')}</AppText></TabHeader>
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Button icon="plus" accessibilityLabel={c('addBuddy')} onPress={() => router.push('/buddy-add')} />
-      <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={c('more')}>
+      {!voiceHome && <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={c('more')}>
         <Stack.Toolbar.MenuAction onPress={() => catchNative(native.enableNotifications)}>{c('notifications')}</Stack.Toolbar.MenuAction>
         {!soundFree && <Stack.Toolbar.MenuAction onPress={() => { if (voice.listening) voice.stopListening(); else void voice.startListening(); }}>{voice.listening ? c('listening') : c('listen')}</Stack.Toolbar.MenuAction>}
-      </Stack.Toolbar.Menu>
+      </Stack.Toolbar.Menu>}
     </Stack.Toolbar>
   </>;
   const banner = issue && <Card tint="caution">
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
     <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
   </Card>;
+  if (voiceHome) return <Page keyboard>{bar}{banner}<VoiceBuddyView a={a} /></Page>;
   if (inSession && active && native.location) return <>{bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;
 
   return <Page keyboard>

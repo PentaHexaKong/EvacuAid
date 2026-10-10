@@ -133,3 +133,20 @@ test('arrival cues do not fire off route and remain arrived after moving away', 
   expect(view.result.current.arrived).toBe(true);
   expect(mockImpact).not.toHaveBeenCalled();
 });
+
+
+test.each([true, false])('turn cues are captioned only without speech (%s)', voiceEnabled => {
+  const speak = jest.fn().mockResolvedValue(undefined);
+  const caption = jest.fn();
+  const view = renderHook((position: Position) => useRouteGuidance({ route, position, target: null, language: 'en', reroute: jest.fn(), speak, voiceEnabled, haptics: true, cue, onInstruction: jest.fn(), caption }), { initialProps: fix(0, 0.0003) });
+  act(() => jest.advanceTimersByTime(1));
+  view.rerender(fix(0, 0.0007));
+  act(() => jest.advanceTimersByTime(1));
+  if (voiceEnabled) {
+    expect(speak).toHaveBeenCalledWith('In 40 metres, Turn left');
+    expect(caption).not.toHaveBeenCalled();
+  } else {
+    expect(speak).not.toHaveBeenCalled();
+    expect(caption).toHaveBeenCalledWith('In 40 metres, Turn left');
+  }
+});

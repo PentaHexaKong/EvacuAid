@@ -16,7 +16,7 @@ let mockSoundFree = false;
 let mockLocations: SharedPosition[] = [];
 let mockMapProps: Record<string, unknown> = {};
 let mockSession: Session;
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useLocalSearchParams: () => ({}) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ soundFree: mockSoundFree }) }));

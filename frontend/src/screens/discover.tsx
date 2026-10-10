@@ -45,7 +45,7 @@ function Explore() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { route: routeRequest, focus: focusRequest } = useLocalSearchParams<{ route?: string; focus?: string }>();
+  const { route: routeRequest, focus: focusRequest, alertId } = useLocalSearchParams<{ route?: string; focus?: string; alertId?: string }>();
   const evacuation = useEvacuationRoute(routeRequest);
   const { ensureGuest } = useGuestSession();
   const sheet = useRef<BottomSheet>(null);
@@ -153,7 +153,7 @@ function Explore() {
             </View>
             <IconChevronRight size={20} color={sky[level].ink} />
           </Pressable>}
-          <Primary state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
+          <Primary alertId={alertId} state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
         </View>
         {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
         {evacuation.phase !== 'ready' && shelters.length > 1 && <View style={{ gap: 12 }}>
@@ -178,9 +178,9 @@ function SheetBackground({ style }: BottomSheetBackgroundProps) {
   </View>;
 }
 
-type PrimaryProps = { state: EvacuationState; focus: Shelter | null; locale: string; onRoute: (shelterId?: string) => void; onLocate: () => void; onRetry: () => void; onChooseAnother: () => void };
+type PrimaryProps = { alertId?: string; state: EvacuationState; focus: Shelter | null; locale: string; onRoute: (shelterId?: string) => void; onLocate: () => void; onRetry: () => void; onChooseAnother: () => void };
 
-function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAnother }: PrimaryProps) {
+function Primary({ alertId, state, focus, locale, onRoute, onLocate, onRetry, onChooseAnother }: PrimaryProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const { accessibility } = useProfile();
@@ -196,7 +196,7 @@ function Primary({ state, focus, locale, onRoute, onLocate, onRetry, onChooseAno
         <AppText variant="button">{t('walkTo', { name: destination?.name ?? '' })}</AppText>
       </View>
       {/* The action sits above the notes so it clears the tab bar at the sheet's resting height. */}
-      <ActionButton variant="gradient" label={t('evacuateStart')} onPress={() => router.push({ pathname: '/evacuate', params: { shelterId: destination?.shelterId } })} />
+      <ActionButton variant="gradient" label={t('evacuateStart')} onPress={() => router.push({ pathname: '/evacuate', params: { shelterId: destination?.shelterId, ...(alertId ? { alertId } : {}) } })} />
       {evaluation && <View style={{ gap: 8 }}>
         <Evidence caution={evaluation.safetyStatus !== 'NO_KNOWN_HAZARD'}>{t(`hazard_${evaluation.safetyStatus}`)}</Evidence>
         <Evidence caution>{t(`routeAccess_${evaluation.accessibilityStatus}`)}</Evidence>

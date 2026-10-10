@@ -24,6 +24,10 @@ test('someone with a visual need gets a Home led by Speak, and Ask for help wait
   await app.screenshot('ask-for-help-confirmation');
   await screen.getByRole('button', 'Cancel').tap();
 
+  await screen.getByRole('tab', 'Buddy').tap();
+  await expect(screen.getByText('Buddy status')).toBeVisible();
+  await expect(screen.getByRole('button', 'Tap to speak')).toBeVisible();
+
   await agent.act('open Profile, then Profile details, turn off every accessibility need, save the profile, and close the Profile sheet');
   await screen.getByRole('tab', 'Home').tap();
   await expect(screen.getByRole('button', 'Speak')).not.toBeVisible();

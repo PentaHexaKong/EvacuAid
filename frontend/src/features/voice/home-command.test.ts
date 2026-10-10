@@ -9,3 +9,10 @@ test.each([
 ] as const)('%s → %s', (transcript, expected) => {
   expect(homeCommand(transcript)).toBe(expected);
 });
+
+test.each([
+  ['all warnings', 'alerts'], ['all alerts', 'alerts'], ['notifications', 'alerts'],
+  ['semua peringatan', 'alerts'], ['notifikasi', 'alerts'], ['daftar peringatan', 'alerts'],
+  ['buddy status', 'buddy'], ['status buddy', 'buddy'], ['pendamping', 'buddy'],
+  ['help, all warnings', 'help'], ['tolong pendamping', 'help'],
+] as const)('%s → %s', (text, expected) => { expect(homeCommand(text)).toBe(expected); });

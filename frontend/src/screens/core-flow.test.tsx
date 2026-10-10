@@ -334,7 +334,7 @@ test('the voice Home leads with Speak and three spoken-word actions, and leaves 
   mockShelters = [{ name: 'Aula Kelurahan', distanceM: 250 }];
   try {
     const view = render(<OverviewScreen />);
-    expect(view.getByRole('button', { name: 'Speak' })).toHaveProp('accessibilityHint', 'Then say what you need. A two-finger double-tap anywhere on this screen does the same. Say “read the alert”, “nearest gathering point” or “help me”.');
+    expect(view.getByRole('button', { name: 'Speak' })).toHaveProp('accessibilityHint', 'Then say what you need. A two-finger double-tap anywhere on this screen does the same. Say “read the alert”, “nearest gathering point” or “help me”. You can also say: all warnings, buddy status.');
     expect(view.getByText('Read the alert aloud')).toBeTruthy();
     expect(view.getByText('Aula Kelurahan · 250 m')).toBeTruthy();
     expect(view.getByText('Ask for help')).toBeTruthy();
@@ -386,6 +386,10 @@ test('spoken commands on the voice Home read the alert, open the gathering point
     // Help wins even when the sentence also names a gathering point, and it goes to Buddy, which confirms before sending.
     act(() => mockOnCommand('tolong, di mana titik kumpul'));
     expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+    act(() => mockOnCommand('all warnings'));
+    expect(mockRouter.navigate).toHaveBeenCalledWith('/alerts-tab');
+    act(() => mockOnCommand('buddy status'));
+    expect(mockRouter.navigate).toHaveBeenCalledWith('/buddy');
     act(() => mockOnCommand('what time is it'));
     expect(jest.mocked(speak).mock.calls.at(-1)![0]).toBe('Sorry, I didn’t catch that. Say read the alert, nearest gathering point or help me.');
   } finally { mockShelters = null; }
@@ -394,7 +398,7 @@ test('spoken commands on the voice Home read the alert, open the gathering point
 test('when voice fails the voice Home says so on screen as well as aloud, and the buttons stay', () => {
   mockVoiceHome = true;
   const view = render(<OverviewScreen />);
-  expect(view.getByText('Say “read the alert”, “nearest gathering point” or “help me”.', { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByText('Say “read the alert”, “nearest gathering point” or “help me”. You can also say: all warnings, buddy status.', { includeHiddenElements: true })).toBeTruthy();
   jest.mocked(speak).mockClear();
   mockVoiceError = 'Speech recognition stopped.';
   view.rerender(<OverviewScreen />);
@@ -412,7 +416,7 @@ test.each([false, true])('the voice Home stays silent without listening, includi
   const view = render(<OverviewScreen />);
   expect(view.queryByRole('button', { name: 'Speak' })).toBeNull();
   expect(view.queryByText('Read the alert aloud')).toBeNull();
-  expect(view.queryByText('Say “read the alert”, “nearest gathering point” or “help me”.', { includeHiddenElements: true })).toBeNull();
+  expect(view.queryByText('Say “read the alert”, “nearest gathering point” or “help me”. You can also say: all warnings, buddy status.', { includeHiddenElements: true })).toBeNull();
   expect(view.queryByRole('alert')).toBeNull();
   expect(view.getByRole('button', { name: /More information/ })).toHaveProp('accessibilityState', { expanded: false });
   expect(view.queryByText('Other alerts')).toBeNull();

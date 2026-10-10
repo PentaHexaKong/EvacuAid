@@ -85,6 +85,8 @@ function useVoiceHome(readText: string, nearest: RefObject<string | null>, liste
   const say = (text: string) => { if (!listen || !focused) return; void speak(text, i18n.language).catch(() => {}); };
   const run = (command: HomeCommand) => {
     if (command === 'readAlert') say(readText);
+    else if (command === 'alerts') router.navigate('/alerts-tab');
+    else if (command === 'buddy') router.navigate('/buddy');
     else if (command === 'nearest') { if (nearest.current) say(nearest.current); router.navigate('/evacuate'); }
     else router.navigate({ pathname: '/buddy', params: { help: String(Date.now()) } });
   };
