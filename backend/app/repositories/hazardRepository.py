@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import logging
+from math import cos, radians
 import uuid
 
 from geoalchemy2 import Geography
@@ -56,8 +57,8 @@ async def activeEvidence(session, center: tuple[float, float], radiusM: float, g
         shape = func.ST_SetSRID(func.ST_GeomFromGeoJSON(json.dumps(geometry)), 4326)
     point = shape.cast(Geography)
     # The geodesic distance test is slow against large polygons, so an indexed bounding-box test drops far-away rows first.
-    # ponytail: 90 km per degree keeps the box wider than radiusM up to 36 degrees latitude (Indonesia is within 11); use a per-latitude width beyond that.
-    nearby = HazardRecord.geometry.op('&&')(func.ST_Expand(shape, radiusM / 90000))
+    # A degree of longitude shrinks with latitude, so the box widens with it; 100 km per degree (not 111) and one extra degree of latitude leave a margin.
+    nearby = HazardRecord.geometry.op('&&')(func.ST_Expand(shape, radiusM / (100000 * max(0.02, cos(radians(min(89.0, abs(center[0]) + 1)))))))
     query = select(HazardRecord).where(nearby, or_(HazardRecord.validFrom.is_(None), HazardRecord.validFrom <= now), or_(HazardRecord.validUntil.is_(None), HazardRecord.validUntil > now), func.ST_DWithin(HazardRecord.geometry.cast(Geography), point, radiusM)).order_by(HazardRecord.source, HazardRecord.sourceId).limit(HAZARD_MAX_EVIDENCE + 1)
     rows = (await session.execute(query)).scalars().all()
     logger.info('hazardState activeEvidenceCount=%s', len(rows))

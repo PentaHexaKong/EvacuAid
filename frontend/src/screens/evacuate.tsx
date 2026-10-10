@@ -96,10 +96,11 @@ export function EvacuateScreen() {
       <DiscoverMap items={destination ? [{ id: destination.shelterId, kind: 'destination', title: destination.name, coordinate: destination }] : []} selected={destination?.shelterId ?? null} onSelect={() => {}} route={line} userLocation={guidance.position ?? evacuation.origin} onLocate={() => setPaused(false)} topInset={insets.top} bottomInset={panelHeight} creditsInset={panelHeight} controlsStyle={controlsStyle} follow={!paused} onFollowChange={following => setPaused(!following)} walked={guidance.walked} />
       <ManeuverBanner guidance={guidance} busy={evacuation.phase === 'routing' || evacuation.phase === 'locating'} name={null} top={insets.top + 8} onLayout={event => setBannerHeight(Math.round(event.nativeEvent.layout.height))} />
       {paused && <RecenterPill bottom={panelHeight + 16} onPress={() => setPaused(false)} />}
-      <View onLayout={event => setPanelHeight(Math.round(event.nativeEvent.layout.height))} style={[styles.panel, { paddingBottom: insets.bottom + 12 }]}>
+      {/* Large text or a long entrance note can outgrow the screen, so the panel scrolls instead of pushing Stop out of reach. */}
+      <ScrollView onLayout={event => setPanelHeight(Math.round(event.nativeEvent.layout.height))} style={styles.panel} contentContainerStyle={{ gap: 12, paddingTop: 16, paddingHorizontal: 20, paddingBottom: insets.bottom + 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
-            <AppText variant="figure" style={{ fontVariant: ['tabular-nums'] }}>{t('evacuateRemaining', { distance: formatDistance(guidance.remainingM, i18n.language), minutes: guidance.minutes })}</AppText>
+            <AppText variant="figure" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ fontVariant: ['tabular-nums'] }}>{t('evacuateRemaining', { distance: formatDistance(guidance.remainingM, i18n.language), minutes: guidance.minutes })}</AppText>
             {destination && <AppText variant="small" numberOfLines={1} style={{ color: colors.muted }}>{t('evacuateTo', { name: destination.name })}</AppText>}
           </View>
           <Tap accessibilityLabel={t('evacuateStop')} onPress={stop} style={styles.stop}><IconX size={22} color={colors.ink} /></Tap>
@@ -110,7 +111,7 @@ export function EvacuateScreen() {
         {failed && <AppText accessibilityRole="alert">{t('alertUnavailable')}</AppText>}
         <ActionButton variant="gradient" label={t('evacuateArrived')} loading={saving} onPress={() => { void arrived(); }} />
         <ActionButton variant="secondary" label={t('requestHelp')} onPress={() => router.replace({ pathname: '/buddy', params: { help: String(Date.now()) } })} />
-      </View>
+      </ScrollView>
     </View>;
   }
   return <ScrollView accessibilityViewIsModal style={{ flex: 1, backgroundColor: colors.canvas }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: insets.top, paddingBottom: insets.bottom + 12, gap: 16 }}>
@@ -135,6 +136,6 @@ export function EvacuateScreen() {
 }
 
 const styles = StyleSheet.create({
-  panel: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: 12, paddingTop: 16, paddingHorizontal: 20, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: colors.surface, boxShadow: `0 -2px 12px ${colors.ink}1F` },
+  panel: { position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '60%', flexGrow: 0, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: colors.surface, boxShadow: `0 -2px 12px ${colors.ink}1F` },
   stop: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.canvas },
 });

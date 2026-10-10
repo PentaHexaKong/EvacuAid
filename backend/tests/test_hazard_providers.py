@@ -145,6 +145,15 @@ async def testPostgisIngestionDeduplicatesAndSpatiallyFilters(dbSession):
 
 
 @pytest.mark.asyncio
+async def testPostgisSearchReachesItsRadiusAtHighLatitude(dbSession):
+    # 0.3 degrees of longitude at 60 degrees north is about 16.7 km: inside a 20 km search, outside a box sized for the equator.
+    await hazardRepository.saveEvidence(dbSession, [syntheticEvidence(geometry={'type': 'Polygon', 'coordinates': [[[0.3, 60], [0.301, 60], [0.301, 60.001], [0.3, 60.001], [0.3, 60]]]})])
+    await dbSession.commit()
+    assert len(await hazardRepository.activeEvidence(dbSession, (60, 0), 20000)) == 1
+    assert await hazardRepository.activeEvidence(dbSession, (60, 0), 10000) == []
+
+
+@pytest.mark.asyncio
 async def testPostgisExpiredHazardExcluded(dbSession):
     item = syntheticEvidence()
     item.validUntil = datetime.now(timezone.utc) - timedelta(seconds=1)
