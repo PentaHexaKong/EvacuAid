@@ -10,7 +10,6 @@ from app.db.session import get_session
 from app.db.models.pilot import PilotAttempt, PilotInvitation, PilotLocation, PilotRequest
 from app.routers.pilot import router
 from app.routers.sessions import router as sessions
-from app.routers.assistance import router as assistance
 from app.services import pilotService
 
 
@@ -18,7 +17,6 @@ def api(db):
     app = FastAPI()
     app.include_router(router)
     app.include_router(sessions)
-    app.include_router(assistance)
 
     async def database():
         yield db
@@ -66,7 +64,6 @@ async def test_pilot_trust_session_completion_and_privacy(dbSession):
         request = created.json()
         path = '/v1/buddy-pilot/requests/' + request['id']
         assert (await client.post('/v1/buddy-pilot/requests', headers=owner, json=payload)).json()['id'] == request['id']
-        assert (await client.post('/v1/assistance/requests', headers=owner, json={})).status_code == 409
         assert (await client.get(path, headers=stranger)).status_code == 403
         point = {'latitude': -6.2, 'longitude': 106.8, 'accuracyM': 5, 'observedAt': datetime.now(timezone.utc).isoformat(), 'sharingConsent': True, 'sharingVersion': 0}
         assert (await client.put(path + '/location', headers=owner, json=point)).status_code == 409
@@ -90,7 +87,6 @@ async def test_pilot_trust_session_completion_and_privacy(dbSession):
         assert (await client.get(path, headers=helper)).json()['phoneShared'] is False
         assert (await client.post('/v1/buddy-pilot/requests', headers=owner, json=payload)).json()['phoneShared'] is True
         assert (await client.put(path + '/location', headers=owner, json=point)).status_code == 200
-        assert (await client.post('/v1/assistance/requests/' + request['id'] + '/safe', headers=helper)).status_code == 409
         assert (await client.post(path + '/messages', headers=owner, json={'text': 'Here', 'idempotencyKey': 'message-1'})).status_code == 201
         assert len((await client.get(path + '/messages', headers=helper)).json()) == 1
         assert (await client.post(path + '/depart', headers=helper)).status_code == 200

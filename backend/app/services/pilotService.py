@@ -37,6 +37,18 @@ async def occupied(db, user_id, exclude=None):
     return bool(pilot or pending)
 
 
+async def current_request(db, user_id, include_offers=False):
+    participants = [PilotRequest.requester_id == user_id, PilotRequest.helper_id == user_id]
+    if include_offers:
+        offered = select(PilotAttempt.request_id).where(PilotAttempt.helper_id == user_id, PilotAttempt.status == 'PENDING', PilotAttempt.expires_at > now())
+        participants.append(PilotRequest.id.in_(offered))
+    return (await db.execute(select(PilotRequest).where(PilotRequest.pilot.is_(True), or_(*participants), PilotRequest.status.not_in(TERMINAL)).order_by(PilotRequest.created_at.desc()))).scalars().first()
+
+
+def legacyStatus(status):
+    return {'WAITING': 'REQUESTED', 'FALLBACK_REQUIRED': 'REQUESTED', 'COMPLETION_PENDING': 'EVACUATING', 'COMPLETED': 'SAFE', 'INTERRUPTED': 'CANCELLED', 'UNANSWERED': 'EXPIRED'}.get(status, status)
+
+
 async def event(db, user_id, request_id, kind, payload=None):
     inbox = PilotInbox(user_id=user_id, request_id=request_id, kind=kind, payload=payload or {})
     db.add(inbox)

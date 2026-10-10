@@ -18,17 +18,6 @@ class BuddyStatus(str, Enum):
     REVOKED = 'REVOKED'
 
 
-class SafetyStatus(str, Enum):
-    UNKNOWN = 'UNKNOWN'
-    SAFE = 'SAFE'
-    POTENTIALLY_EXPOSED = 'POTENTIALLY_EXPOSED'
-
-
-class BuddyInvitationCreate(BaseModel):
-    buddyUserId: uuid.UUID
-    level: BuddyLevel
-
-
 class BuddyRelationshipResponse(BaseModel):
     id: uuid.UUID
     userId: uuid.UUID
@@ -38,18 +27,3 @@ class BuddyRelationshipResponse(BaseModel):
     createdAt: datetime
     updatedAt: datetime
     acceptedAt: datetime | None
-class BuddyCandidate(BaseModel):
-    buddyUserId: uuid.UUID
-    relationshipId: uuid.UUID
-    level: BuddyLevel
-    distanceM: float | None
-    locationAvailable: bool
-    available: bool
-    activeAssignments: int
-    safetyStatus: SafetyStatus = SafetyStatus.UNKNOWN
-    rank: int
-    selectionReasons: list[str]
-
-
-class BuddyCandidatesResponse(BaseModel):
-    candidates: list[BuddyCandidate]

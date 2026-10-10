@@ -302,12 +302,11 @@ async def create_request(payload: RequestCreate, db: AsyncSession = Depends(get_
 
 @router.get('/requests/current')
 async def current_request(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
-    offered = select(PilotAttempt.request_id).where(PilotAttempt.helper_id == actor.id, PilotAttempt.status == 'PENDING', PilotAttempt.expires_at > service.now())
-    request_id = (await db.execute(select(PilotRequest.id).where(PilotRequest.pilot.is_(True), or_(PilotRequest.requester_id == actor.id, PilotRequest.helper_id == actor.id, PilotRequest.id.in_(offered)), PilotRequest.status.not_in(service.TERMINAL)).order_by(PilotRequest.created_at.desc()))).scalars().first()
-    if not request_id:
+    request = await service.current_request(db, actor.id, include_offers=True)
+    if not request:
         return None
     try:
-        row = await service.get_request(db, request_id, actor.id)
+        row = await service.get_request(db, request.id, actor.id)
     except HTTPException:
         return None
     return await service.response(db, row, actor.id)
