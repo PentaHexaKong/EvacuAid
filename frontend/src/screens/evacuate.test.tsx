@@ -12,8 +12,9 @@ let mockParams: { shelterId?: string; alertId?: string };
 let mockPhase = 'ready';
 let mockFocused = true;
 let mockSoundFree = false;
+let mockVoice = true;
 let mockArrived = false;
-const mockResponse = { destination: { shelterId: 'hall', name: 'Town Hall', entranceNote: 'East entrance' }, route: { distanceM: 900 } };
+const mockResponse = { destination: { shelterId: 'hall', name: 'Town Hall', entranceNote: 'East entrance' }, route: { distanceM: 900, geometry: { type: 'LineString', coordinates: [[106.8, -6.2], [106.801, -6.2]] } } };
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 34 }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, values?: Record<string, string>) => {
@@ -23,14 +24,17 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
 }, i18n: { language: 'en' } }) }));
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ phase: mockPhase, route: { response: mockResponse }, findRoute: mockFind }) }));
 jest.mock('@/features/navigation/use-evacuation-guidance', () => ({ useEvacuationGuidance: jest.fn(() => ({ instruction: 'Turn left', upcoming: 'Continue straight', remainingM: 800, minutes: 9, nextManeuverM: 40, caption: 'Use the east entrance', arrived: mockArrived })) }));
+jest.mock('@/components/discover-map', () => ({ DiscoverMap: () => { const { Text } = require('react-native'); return <Text>map</Text>; } }));
+jest.mock('@/features/buddy/ui/navigation-view', () => ({ ManeuverBanner: () => { const { Text } = require('react-native'); return <Text>banner</Text>; }, RecenterPill: () => null }));
+jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: jest.fn().mockResolvedValue(undefined), deactivateKeepAwake: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest' }) }));
-jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: true, soundFree: mockSoundFree }) }));
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: true, soundFree: mockSoundFree, voiceHome: mockVoice }) }));
 jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn().mockResolvedValue({ myResponse: 'SAFE' }) }));
 let mockActive: string[] = [];
 jest.mock('@/features/alerts/use-alerts', () => ({ applyResponse: jest.fn(), activeAlertIds: () => mockActive }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn().mockResolvedValue(undefined) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
+beforeEach(() => { jest.clearAllMocks(); mockVoice = true; mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
 
 test('READY shows destination, instruction, remaining distance, entrance and caption, and speaks once', () => {
   const view = render(<EvacuateScreen />);
@@ -174,4 +178,15 @@ test('denied permission retries on foreground and from Try again, with listener 
   expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
   view.unmount();
   jest.mocked(AppState.addEventListener).mockRestore();
+});
+
+test('sighted walkers get the map with the turn banner, and can still arrive or stop', () => {
+  mockVoice = false;
+  const view = render(<EvacuateScreen />);
+  expect(view.getByText('map')).toBeTruthy();
+  expect(view.getByText('banner')).toBeTruthy();
+  expect(view.getByText('800 m · about 9 min')).toBeTruthy();
+  expect(view.getByText('To Town Hall')).toBeTruthy();
+  expect(view.getByText("I've arrived, I'm safe")).toBeTruthy();
+  expect(view.getByLabelText('Stop guidance')).toBeTruthy();
 });

@@ -95,3 +95,18 @@ test('a map that never becomes ready exposes the list fallback', () => {
   view.unmount();
   jest.useRealTimers();
 });
+
+test('turn-by-turn keeps the camera on the walker, and leaves it alone once they drag the map', () => {
+  const me = { latitude: -6.2, longitude: 106.8 };
+  const route: DiscoverMapProps['route'] = [[106.8, -6.2], [106.81, -6.2]];
+  const view = render(<DiscoverMap items={[]} selected={null} onSelect={jest.fn()} route={route} userLocation={me} follow {...insets} />);
+  act(() => mockReady());
+  settle();
+  expect(mockAnimate).toHaveBeenLastCalledWith({ center: me, zoom: 17 });
+  expect(mockFit).not.toHaveBeenCalled();
+  jest.clearAllMocks();
+  view.rerender(<DiscoverMap items={[]} selected={null} onSelect={jest.fn()} route={route} userLocation={{ latitude: -6.201, longitude: 106.8 }} follow={false} {...insets} />);
+  settle();
+  expect(mockAnimate).not.toHaveBeenCalled();
+  expect(mockFit).not.toHaveBeenCalled();
+});
