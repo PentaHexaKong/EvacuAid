@@ -169,8 +169,10 @@ test('response retries once then swallows failures', async () => {
   jest.mocked(respondToAlert).mockRejectedValue(new Error('offline'));
   const view = render(<EmergencyScreen />);
   fireEvent.press(view.getByRole('button', { name: 'Start evacuation' }));
+  // Counted locally the moment it is tapped, so the gate cannot offer a lesser warning while the request is in flight or after it fails.
+  expect(applyResponse).toHaveBeenCalledWith('rain', 'EVACUATING');
   await waitFor(() => expect(respondToAlert).toHaveBeenCalledTimes(2));
-  expect(applyResponse).not.toHaveBeenCalled();
+  expect(applyResponse).toHaveBeenCalledTimes(1);
 });
 test('404 reloads without retry or extra navigation', async () => {
   jest.mocked(respondToAlert).mockRejectedValue(Object.assign(new Error('alert not found'), { status: 404 }));
