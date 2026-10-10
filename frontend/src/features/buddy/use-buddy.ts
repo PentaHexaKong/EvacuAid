@@ -4,7 +4,7 @@ import { buddyRequest, sharingStatuses, terminalStatuses, type Availability, typ
 
 const keep = <T,>(next: T) => (prev: T) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 
-export function useBuddyPilot(token: string | null) {
+export function useBuddy(token: string | null) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [incomingContacts, setIncomingContacts] = useState<Contact[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);

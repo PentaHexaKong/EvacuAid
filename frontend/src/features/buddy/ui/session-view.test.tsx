@@ -3,7 +3,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ActionButton } from '@/components/ui';
 import type { Session, SharedPosition } from '../api';
 import { useBuddyActions } from '../use-buddy-actions';
-import { useBuddyPilot } from '../use-buddy-pilot';
+import { useBuddy } from '../use-buddy';
 import { SessionMap, SessionView } from './session-view';
 
 const mockRun = jest.fn();
@@ -27,18 +27,18 @@ jest.mock('@gorhom/bottom-sheet', () => {
   const { View, ScrollView } = jest.requireActual('react-native');
   return { __esModule: true, default: View, BottomSheetScrollView: ScrollView, useBottomSheetSpringConfigs: (config: object) => config };
 });
-jest.mock('@/features/buddy-pilot/native', () => ({
+jest.mock('@/features/buddy/native', () => ({
   useBuddyNative: () => ({ location: null, tracking: false, error: null, enableLocation: async () => {}, stopLocation: async () => {}, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
   useBuddySpeech: () => ({ speak: mockSpeak, error: null }),
 }));
-jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
-jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyPilot: () => ({
+jest.mock('@/features/buddy/api', () => ({ ...jest.requireActual('@/features/buddy/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
+jest.mock('@/features/buddy/use-buddy', () => ({ useBuddy: () => ({
   contacts: [], invitations: [], incomingContacts: [], inbox: [], availability: { optedIn: false }, session: mockSession,
   messages: [], locations: mockLocations, error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh, dismissSession: mockDismiss,
 }) }));
 
 function Harness({ map = false }: { map?: boolean }) {
-  const state = useBuddyPilot('private');
+  const state = useBuddy('private');
   const a = useBuddyActions({ token: 'private', userId: mockUserId, state });
   return map ? <SessionMap a={a} token="private" userId={mockUserId} /> : <SessionView a={a} token="private" userId={mockUserId} />;
 }

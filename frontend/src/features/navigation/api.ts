@@ -1,4 +1,4 @@
-import type { Maneuver } from '@/features/buddy-pilot/api';
+import type { Maneuver } from '@/features/buddy/api';
 import { apiRequest } from '@/features/profile/api';
 
 export type Coordinate = [number, number];

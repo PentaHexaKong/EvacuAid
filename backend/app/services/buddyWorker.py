@@ -6,9 +6,9 @@ import httpx
 from sqlalchemy import delete, select, update
 
 from app.db.session import SessionLocal
-from app.db.models.pilot import PilotAvailability, PilotInbox, PilotInvitation, PilotMessage, PilotOutbox, PilotPushToken, PilotRequest
+from app.db.models.buddySession import BuddyAvailability, BuddyInbox, BuddyInvitation, BuddyMessage, BuddyOutbox, BuddyPushToken, BuddyRequest
 from app.services import alertService
-from app.services import pilotService as service
+from app.services import buddyRequestService as service
 
 
 async def tick():
@@ -16,19 +16,19 @@ async def tick():
         await service.expire(db)
         await alertService.cleanup(db)
         await alertService.enqueueAlerts(db)
-        invites = (await db.execute(select(PilotInvitation).where(PilotInvitation.status.in_(('PENDING', 'REDEEMED')), PilotInvitation.expires_at <= service.now()).with_for_update(skip_locked=True))).scalars()
+        invites = (await db.execute(select(BuddyInvitation).where(BuddyInvitation.status.in_(('PENDING', 'REDEEMED')), BuddyInvitation.expires_at <= service.now()).with_for_update(skip_locked=True))).scalars()
         for row in invites:
             row.status = 'EXPIRED'
-        await db.execute(update(PilotAvailability).where(PilotAvailability.observed_at < service.now() - timedelta(minutes=2)).values(latitude=None, longitude=None, observed_at=None, accuracy_m=None))
-        await db.execute(delete(PilotMessage).where(PilotMessage.created_at < service.now() - timedelta(hours=24)))
-        await db.execute(delete(PilotRequest).where(PilotRequest.pilot.is_(True), PilotRequest.status.in_(service.TERMINAL), PilotRequest.updated_at < service.now() - timedelta(days=30)))
-        await db.execute(delete(PilotInbox).where(PilotInbox.created_at < service.now() - timedelta(days=30)))
+        await db.execute(update(BuddyAvailability).where(BuddyAvailability.observed_at < service.now() - timedelta(minutes=2)).values(latitude=None, longitude=None, observed_at=None, accuracy_m=None))
+        await db.execute(delete(BuddyMessage).where(BuddyMessage.created_at < service.now() - timedelta(hours=24)))
+        await db.execute(delete(BuddyRequest).where(BuddyRequest.buddy_flow.is_(True), BuddyRequest.status.in_(service.TERMINAL), BuddyRequest.updated_at < service.now() - timedelta(days=30)))
+        await db.execute(delete(BuddyInbox).where(BuddyInbox.created_at < service.now() - timedelta(days=30)))
         await db.commit()
-        rows = (await db.execute(select(PilotOutbox).where(PilotOutbox.sent_at.is_(None), PilotOutbox.next_at <= service.now()).order_by(PilotOutbox.next_at).limit(20).with_for_update(skip_locked=True))).scalars().all()
+        rows = (await db.execute(select(BuddyOutbox).where(BuddyOutbox.sent_at.is_(None), BuddyOutbox.next_at <= service.now()).order_by(BuddyOutbox.next_at).limit(20).with_for_update(skip_locked=True))).scalars().all()
         async with httpx.AsyncClient(timeout=10) as client:
             for row in rows:
-                inbox = await db.get(PilotInbox, row.inbox_id)
-                tokens = (await db.execute(select(PilotPushToken).where(PilotPushToken.user_id == inbox.user_id))).scalars().all()
+                inbox = await db.get(BuddyInbox, row.inbox_id)
+                tokens = (await db.execute(select(BuddyPushToken).where(BuddyPushToken.user_id == inbox.user_id))).scalars().all()
                 payload = inbox.payload
                 if inbox.kind == 'ALERT':
                     alert = await alertService.activeAlert(db, inbox.payload.get('alertId'), ('SIAGA', 'AWAS'))
@@ -66,7 +66,7 @@ async def tick():
                     pass
                 row.next_at = service.now() + timedelta(seconds=min(300, 2 ** min(row.attempts, 8)))
         await db.commit()
-        receipt_rows = (await db.execute(select(PilotOutbox).where(PilotOutbox.sent_at.is_not(None), PilotOutbox.tickets.contains([{'receiptChecked': False}]), PilotOutbox.sent_at < service.now() - timedelta(seconds=15)).limit(100).with_for_update(skip_locked=True))).scalars().all()
+        receipt_rows = (await db.execute(select(BuddyOutbox).where(BuddyOutbox.sent_at.is_not(None), BuddyOutbox.tickets.contains([{'receiptChecked': False}]), BuddyOutbox.sent_at < service.now() - timedelta(seconds=15)).limit(100).with_for_update(skip_locked=True))).scalars().all()
         pending = [(row, ticket) for row in receipt_rows for ticket in row.tickets if ticket.get('id') and not ticket.get('receiptChecked')]
         if pending:
             try:
@@ -81,7 +81,7 @@ async def tick():
                     if not receipt:
                         continue
                     if receipt.get('details', {}).get('error') == 'DeviceNotRegistered':
-                        await db.execute(delete(PilotPushToken).where(PilotPushToken.token == ticket['token']))
+                        await db.execute(delete(BuddyPushToken).where(BuddyPushToken.token == ticket['token']))
                     row.tickets = [{**item, 'receiptChecked': True, 'receipt': receipt} if item.get('id') == ticket['id'] else item for item in row.tickets]
             except (httpx.HTTPError, KeyError, ValueError):
                 pass

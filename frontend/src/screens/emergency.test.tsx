@@ -35,9 +35,9 @@ jest.mock('@/features/alerts/alert-gate', () => ({ markAlertPresented: jest.fn()
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockNeeds }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest', user: { id: 'user' } }) }));
-jest.mock('@/features/buddy-pilot/use-primary-buddy', () => ({ usePrimaryBuddy: () => mockBuddy }));
-jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncoming }));
-jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: typeof mockCommand }) => { mockCommand = onCommand; return mockVoice; } }));
+jest.mock('@/features/buddy/use-primary-buddy', () => ({ usePrimaryBuddy: () => mockBuddy }));
+jest.mock('@/features/buddy/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncoming }));
+jest.mock('@/features/buddy/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: typeof mockCommand }) => { mockCommand = onCommand; return mockVoice; } }));
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ shelters: [{ name: 'Town Hall', distanceM: 250 }] }) }));
 jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => mockHaptics }));
 jest.mock('@/features/location/alert-area', () => ({ askAlwaysAndStart: jest.fn().mockResolvedValue('granted') }));

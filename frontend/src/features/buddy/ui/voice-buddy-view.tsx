@@ -3,9 +3,9 @@ import IconPhone from '@tabler/icons-react-native/IconPhone';
 import { ActionButton, AppText } from '@/components/ui';
 import { SpeakButton } from '@/components/speak-button';
 import { useAccess } from '@/features/access/use-access';
-import { terminalStatuses } from '@/features/buddy-pilot/api';
+import { terminalStatuses } from '@/features/buddy/api';
 import { SessionRequesterActions } from './session-requester-actions';
-import type { BuddyActions } from '@/features/buddy-pilot/use-buddy-actions';
+import type { BuddyActions } from '@/features/buddy/use-buddy-actions';
 import { colors } from '@/theme';
 
 export function VoiceBuddyView({ a }: { a: BuddyActions }) {

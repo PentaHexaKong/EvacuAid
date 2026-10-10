@@ -13,7 +13,7 @@ import { AlertLocationButton } from '@/features/alerts/location-button';
 import { ListenButton } from '@/components/listen-button';
 import { useAccess } from '@/features/access/use-access';
 import { SpeakButton } from '@/components/speak-button';
-import { useBuddySpeech } from '@/features/buddy-pilot/native';
+import { useBuddySpeech } from '@/features/buddy/native';
 import { confirmCommand } from '@/features/voice/confirm-command';
 import { useVoicePrompt } from '@/features/voice/use-voice-prompt';
 import { colors } from '@/theme';

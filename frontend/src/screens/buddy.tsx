@@ -5,21 +5,21 @@ import { TabHeader } from '@/components/tab-shell';
 import { ActivityIndicator } from 'react-native';
 import { ActionButton, AppText, Page } from '@/components/ui';
 import { useProfile } from '@/features/profile/context';
-import { HelperContent } from '@/features/buddy-pilot/ui/helper-buddy';
+import { HelperContent } from '@/features/buddy/ui/helper-buddy';
 import { useGuestSession } from '@/features/profile/session';
-import { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
-import { useBuddyActions } from '@/features/buddy-pilot/use-buddy-actions';
-import { useBuddyCopy } from '@/features/buddy-pilot/copy';
-import { useInboxNotifications } from '@/features/buddy-pilot/native';
-import { VoiceBuddyView } from '@/features/buddy-pilot/ui/voice-buddy-view';
-import { BuddiesView } from '@/features/buddy-pilot/ui/buddies-view';
-import { SessionMap, SessionView } from '@/features/buddy-pilot/ui/session-view';
-import { Card } from '@/features/buddy-pilot/ui/parts';
+import { useBuddy } from '@/features/buddy/use-buddy';
+import { useBuddyActions } from '@/features/buddy/use-buddy-actions';
+import { useBuddyCopy } from '@/features/buddy/copy';
+import { useInboxNotifications } from '@/features/buddy/native';
+import { VoiceBuddyView } from '@/features/buddy/ui/voice-buddy-view';
+import { BuddiesView } from '@/features/buddy/ui/buddies-view';
+import { SessionMap, SessionView } from '@/features/buddy/ui/session-view';
+import { Card } from '@/features/buddy/ui/parts';
 import { colors } from '@/theme';
 
-export function BuddyPilotScreen() {
+export function BuddyScreen() {
   const { token, user } = useGuestSession();
-  const state = useBuddyPilot(token);
+  const state = useBuddy(token);
   const { accessibility, ready } = useProfile();
   const refresh = state.refresh;
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
@@ -30,7 +30,7 @@ export function BuddyPilotScreen() {
   return <BuddyContent key={user.id} token={token} userId={user.id} state={state} />;
 }
 
-function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
+function BuddyContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddy> }) {
   const { soundFree, voiceHome } = useAccess();
   const a = useBuddyActions({ token, userId, state });
   const router = useRouter();

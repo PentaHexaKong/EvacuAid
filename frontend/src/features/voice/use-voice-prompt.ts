@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import * as Speech from 'expo-speech';
-import type { useBuddySpeech } from '@/features/buddy-pilot/native';
+import type { useBuddySpeech } from '@/features/buddy/native';
 
 export function useVoicePrompt(voice: ReturnType<typeof useBuddySpeech>, enabled: boolean, language: string) {
   const focused = useIsFocused();

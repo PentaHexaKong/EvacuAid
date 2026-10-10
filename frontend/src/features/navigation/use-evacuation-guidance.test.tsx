@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import * as routeGuidance from '@/features/buddy-pilot/use-route-guidance';
+import * as routeGuidance from '@/features/buddy/use-route-guidance';
 import { speak, stopSpeaking } from '@/features/feedback/speech';
 import { useEvacuationGuidance } from './use-evacuation-guidance';
 import type { NavigationResponse } from './api';

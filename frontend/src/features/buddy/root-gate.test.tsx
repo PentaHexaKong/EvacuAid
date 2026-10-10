@@ -18,7 +18,7 @@ jest.mock('expo-router', () => {
   return { Stack, useRouter: () => ({ replace: mockReplace }) };
 });
 jest.mock('expo-notifications', () => ({ addNotificationResponseReceivedListener: jest.fn(callback => { mockNotification = callback; return { remove: jest.fn() }; }), getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null), clearLastNotificationResponseAsync: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('expo-linking', () => ({ addEventListener: jest.fn(() => ({ remove: jest.fn() })), getInitialURL: jest.fn().mockResolvedValue('evacuaid://buddy-invite?code=pilot-code'), parse: () => ({ hostname: 'buddy-invite', queryParams: { code: 'pilot-code' } }) }));
+jest.mock('expo-linking', () => ({ addEventListener: jest.fn(() => ({ remove: jest.fn() })), getInitialURL: jest.fn().mockResolvedValue('evacuaid://buddy-invite?code=buddy-code'), parse: () => ({ hostname: 'buddy-invite', queryParams: { code: 'buddy-code' } }) }));
 jest.mock('expo-splash-screen', () => ({ preventAutoHideAsync: jest.fn().mockResolvedValue(undefined), hideAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children, SafeAreaView: ({ children }: { children: React.ReactNode }) => children }));
@@ -40,7 +40,7 @@ test('retains Buddy target through onboarding and allows repeated notification o
   expect(mockReplace).not.toHaveBeenCalled();
   mockCompleted = true;
   view.rerender(<RootLayout />);
-  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/buddy-invite?code=pilot-code'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/buddy-invite?code=buddy-code'));
   const response = { notification: { request: { content: { data: { requestId: 'session-id' } } } } };
   await act(async () => { mockNotification(response); });
   await act(async () => { mockNotification(response); });

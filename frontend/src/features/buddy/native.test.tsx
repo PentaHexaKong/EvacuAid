@@ -25,7 +25,7 @@ test('never obtains or uploads coordinates before an accepted session', async ()
 test('explicit stop revokes the server participant location', async () => {
   const { result } = renderHook(() => useBuddyNative({ active: true, sessionId: 'request', token: 'token', onRefresh: jest.fn() }));
   await act(async () => { await result.current.stopLocation(); });
-  expect(apiRequest).toHaveBeenCalledWith('/v1/buddy-pilot/requests/request/location', 'token', expect.objectContaining({ method: 'DELETE' }));
+  expect(apiRequest).toHaveBeenCalledWith('/v1/buddy/requests/request/location', 'token', expect.objectContaining({ method: 'DELETE' }));
 });
 
 test('unresolved session hydration preserves background consent', async () => {

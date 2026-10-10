@@ -24,7 +24,7 @@ export async function buddyRequest<T>(token: string, path: string, method = 'GET
   else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
   try {
-    return await apiRequest<T>(`/v1/buddy-pilot${path}`, token, { method, signal: controller.signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    return await apiRequest<T>(`/v1/buddy${path}`, token, { method, signal: controller.signal, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   } catch (cause) {
     if (timedOut) throw new Error('Buddy connection timed out. Please retry.');
     throw cause;

@@ -15,8 +15,8 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest', user: { id: 'helper' } }) }));
 jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: mockAlert, tap: jest.fn() }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: Record<string, string>) => jest.requireActual('@/localization/en.json')[key]?.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => params?.[name] ?? '') ?? key }) }));
-jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyPilot: () => ({ loading: false, error: mockError, busy: false, refresh: mockRefresh, incomingContacts: [{ userId: 'requester', relation: 'TEMAN' }] }) }));
-jest.mock('@/features/buddy-pilot/use-buddy-actions', () => ({ useBuddyActions: () => ({ session: mockSession, attempt: mockAttempt, transition: mockTransition, confirm: mockConfirm, support: (value: string) => value, c: (key: string) => key, issue: mockIssue }) }));
+jest.mock('@/features/buddy/use-buddy', () => ({ useBuddy: () => ({ loading: false, error: mockError, busy: false, refresh: mockRefresh, incomingContacts: [{ userId: 'requester', relation: 'TEMAN' }] }) }));
+jest.mock('@/features/buddy/use-buddy-actions', () => ({ useBuddyActions: () => ({ session: mockSession, attempt: mockAttempt, transition: mockTransition, confirm: mockConfirm, support: (value: string) => value, c: (key: string) => key, issue: mockIssue }) }));
 
 beforeEach(() => {
   jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-10T00:00:00Z')); jest.clearAllMocks(); mockTransition.mockResolvedValue(true);

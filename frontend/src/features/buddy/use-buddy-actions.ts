@@ -7,17 +7,17 @@ import { useVoicePrompt } from '@/features/voice/use-voice-prompt';
 import { useLocalSearchParams } from 'expo-router';
 import { useProfile } from '@/features/profile/context';
 import { usePreferences } from '@/features/preferences/context';
-import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type Position, type Session } from '@/features/buddy-pilot/api';
-import type { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
+import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type Position, type Session } from '@/features/buddy/api';
+import type { useBuddy } from '@/features/buddy/use-buddy';
 import type { ApiError } from '@/features/profile/api';
-import { useBuddyNative, useBuddySpeech } from '@/features/buddy-pilot/native';
-import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
+import { useBuddyNative, useBuddySpeech } from '@/features/buddy/native';
+import { readableIssue, useBuddyCopy } from '@/features/buddy/copy';
 import type { Shelter } from '@/features/navigation/api';
-import { distanceM } from '@/features/buddy-pilot/navigation';
+import { distanceM } from '@/features/buddy/navigation';
 import { usesMapbox } from '@/components/map-engine';
-import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
+import { CUE_M, useRouteGuidance } from '@/features/buddy/use-route-guidance';
 
-export function useBuddyActions({ token, userId, state, manageBackground = true }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot>; manageBackground?: boolean }) {
+export function useBuddyActions({ token, userId, state, manageBackground = true }: { token: string; userId: string; state: ReturnType<typeof useBuddy>; manageBackground?: boolean }) {
   const { c, status, language, support, event } = useBuddyCopy();
   const { accessibility } = useProfile();
   const { preferences } = usePreferences();

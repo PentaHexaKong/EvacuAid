@@ -2,11 +2,11 @@ from datetime import timedelta
 
 from fastapi import HTTPException
 
-from app.db.models.pilot import PilotLocation
+from app.db.models.buddySession import BuddyLocation
 from app.models.hazard import HazardEvidence
 from app.models.navigation import HazardStatus
 from app.repositories import hazardRepository, shelterRepository
-from app.services import navigationService, pilotService, shelterService, user_service
+from app.services import navigationService, buddyRequestService, shelterService, user_service
 from app.services.navigationService import routeHazards
 from app.services.routeCandidateService import evaluatedCandidates
 from app.services.routeEvaluationService import applyRanking, evaluateRoute, rankingKey
@@ -23,22 +23,22 @@ async def session_route(db, request, actor, payload):
     if approach:
         if request.status not in ('ACCEPTED', 'EN_ROUTE'):
             raise HTTPException(409, 'helper is not on the way')
-        point = await db.get(PilotLocation, (request.id, request.helper_id))
-        if not point or point.observed_at < pilotService.now() - timedelta(seconds=30) or point.accuracy_m > 50:
+        point = await db.get(BuddyLocation, (request.id, request.helper_id))
+        if not point or point.observed_at < buddyRequestService.now() - timedelta(seconds=30) or point.accuracy_m > 50:
             raise HTTPException(409, 'helper location unavailable or stale')
         origin = (point.latitude, point.longitude)
     elif payload.origin:
-        if payload.origin.observedAt < pilotService.now() - timedelta(seconds=30) or payload.origin.accuracyM is None or payload.origin.accuracyM > 50:
+        if payload.origin.observedAt < buddyRequestService.now() - timedelta(seconds=30) or payload.origin.accuracyM is None or payload.origin.accuracyM > 50:
             raise HTTPException(409, 'fresh accurate origin required')
         origin = (payload.origin.latitude, payload.origin.longitude)
     else:
-        point = await db.get(PilotLocation, (request.id, actor))
-        if not point or point.observed_at < pilotService.now() - timedelta(seconds=30) or point.accuracy_m > 50:
+        point = await db.get(BuddyLocation, (request.id, actor))
+        if not point or point.observed_at < buddyRequestService.now() - timedelta(seconds=30) or point.accuracy_m > 50:
             raise HTTPException(409, 'fresh accurate session location required')
         origin = (point.latitude, point.longitude)
     if payload.leg == 'TO_REQUESTER':
-        target = await db.get(PilotLocation, (request.id, request.requester_id))
-        if not target or target.observed_at < pilotService.now() - timedelta(seconds=30) or target.accuracy_m > 50:
+        target = await db.get(BuddyLocation, (request.id, request.requester_id))
+        if not target or target.observed_at < buddyRequestService.now() - timedelta(seconds=30) or target.accuracy_m > 50:
             raise HTTPException(409, 'requester location unavailable or stale')
         destinations = [(None, (target.latitude, target.longitude), [])]
     else:
@@ -115,10 +115,10 @@ async def session_route(db, request, actor, payload):
             hazard_reasons = [reason for reason in (selected.reasons if selected else []) + hazard_reasons if reason != 'NO_KNOWN_HAZARD_INTERSECTION'] + ['HAZARD_STATE_UNAVAILABLE']
         wheelchair = payload.profile == 'WHEELCHAIR'
         reasons += hazard_reasons + (['WHEELCHAIR_COSTING', 'OSM_ACCESSIBILITY_UNVERIFIED', 'ROUTE_ACCESSIBILITY_UNKNOWN'] if wheelchair else ['ROUTE_PEDESTRIAN_ACCESS'])
-        request = await pilotService.get_request(db, request_id, actor, connected=True)
+        request = await buddyRequestService.get_request(db, request_id, actor, connected=True)
         if payload.leg == 'TO_REQUESTER':
-            target = await db.get(PilotLocation, (request.id, request.requester_id), populate_existing=True)
-            if not target or target.observed_at < pilotService.now() - timedelta(seconds=30):
+            target = await db.get(BuddyLocation, (request.id, request.requester_id), populate_existing=True)
+            if not target or target.observed_at < buddyRequestService.now() - timedelta(seconds=30):
                 raise HTTPException(409, 'requester location sharing stopped or stale')
         if shelter:
             if request.selected_shelter_id not in (None, shelter.id, prior_selection):
@@ -126,7 +126,7 @@ async def session_route(db, request, actor, payload):
             changed = request.selected_shelter_id != shelter.id
             request.selected_shelter_id = shelter.id
             if changed:
-                await pilotService.session_event(db, request)
+                await buddyRequestService.session_event(db, request)
         await db.commit()
         return {'routeStatus': 'READY', 'leg': payload.leg, 'destination': {'shelterId': shelter.id if shelter else None, 'name': shelter.name if shelter else 'Requester', 'latitude': destination[0], 'longitude': destination[1], 'source': shelter.source if shelter else 'ACCEPTED_SESSION', 'entranceNote': shelter.entranceNote if shelter else None, 'entranceLatitude': shelter.entranceLatitude if shelter else None, 'entranceLongitude': shelter.entranceLongitude if shelter else None}, 'route': {'distanceM': route.distanceM, 'durationSec': route.durationSec, 'geometry': route.geometry, 'profile': payload.profile, 'maneuvers': route.maneuvers}, 'evaluation': {'safetyStatus': hazard, 'accessibilityStatus': 'UNKNOWN' if wheelchair else 'COMPATIBLE', 'reasonCodes': reasons}, 'selectionReasonCodes': reasons, 'rejectedCandidates': []}
     return {'routeStatus': 'UNAVAILABLE', 'leg': payload.leg, 'selectionReasonCodes': list(dict.fromkeys(['NO_FEASIBLE_ROUTE'] + rejection_reasons)) if rejection_reasons else ['NO_SUITABLE_ROUTE']}

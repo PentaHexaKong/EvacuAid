@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { buddyRequest } from '@/features/buddy-pilot/api';
+import { buddyRequest } from '@/features/buddy/api';
 
 export async function prepareNotificationChannel() {
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('buddy', { name: 'Buddy requests', importance: Notifications.AndroidImportance.HIGH });

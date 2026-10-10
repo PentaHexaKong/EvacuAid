@@ -5,9 +5,8 @@ from redis.exceptions import RedisError
 from app.models.user import AccessibilityItem, AccessibilityUpdate, LocationUpdate, PreferencesUpdate, UserCreate
 from app.routers import context as contextRouter
 from app.services import user_service
-from app.services import assistanceService, buddyService
-from app.models.assistance import AssistanceCreate
-from app.models.buddy import BuddyInvitationCreate
+from app.db.models import BuddyRelationship
+from app.db.models.buddySession import BuddyRequest
 from app.services.bmkg_service import BmkgFetchResult
 from app.services.cacheService import CacheService
 from app.services.petabencana_service import PetaBencanaFetchResult
@@ -53,11 +52,10 @@ async def testContextShowsOnlyActiveAssistanceRequest(dbSession, monkeypatch):
     user = await user_service.create_user(dbSession, UserCreate(name='Rani', needs_assistance=True))
     buddy = await user_service.create_user(dbSession, UserCreate(name='Sari'))
     await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
-    invitation = await buddyService.createInvitation(dbSession, user.id, BuddyInvitationCreate(buddyUserId=buddy.id, level='PRIMARY'))
-    await buddyService.acceptInvitation(dbSession, invitation.id, buddy.id)
-    request = await assistanceService.createRequest(dbSession, user.id, AssistanceCreate(buddyUserId=buddy.id))
-    await assistanceService.transitionRequest(dbSession, request.id, 'notify', user.id)
-    await assistanceService.transitionRequest(dbSession, request.id, 'accept', buddy.id)
+    relationship = BuddyRelationship(userId=user.id, buddyUserId=buddy.id, level='PRIMARY', status='ACTIVE')
+    request = BuddyRequest(requester_id=user.id, helper_id=buddy.id, status='ACCEPTED', buddy_flow=True)
+    dbSession.add_all([relationship, request])
+    await dbSession.commit()
 
     async def weatherFetcher(adm4):
         return BmkgFetchResult({'forecasts': [{'weather_desc': 'Cloudy', 'temperature_c': 26, 'humidity_pct': 84, 'precipitation': 0.9, 'wind_speed': 3.5, 'forecast_age_minutes': 1}]})

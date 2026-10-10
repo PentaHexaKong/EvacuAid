@@ -1,7 +1,7 @@
 import { AppState } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { buddyRequest } from './api';
-import { useBuddyCode, useBuddyPilot } from './use-buddy-pilot';
+import { useBuddyCode, useBuddy } from './use-buddy';
 
 jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.fn() }));
 const request = jest.mocked(buddyRequest);
@@ -22,7 +22,7 @@ beforeEach(() => {
 test('identical refresh preserves references and changed contacts update', async () => {
   const implementation = request.getMockImplementation()!;
   request.mockImplementation(async (token, path, ...args) => JSON.parse(JSON.stringify(await implementation(token, path, ...args))));
-  const { result } = renderHook(() => useBuddyPilot('token'));
+  const { result } = renderHook(() => useBuddy('token'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   const { contacts, session, locations, availability } = result.current;
   await act(async () => { await result.current.refresh(); });
@@ -38,7 +38,7 @@ test('identical refresh preserves references and changed contacts update', async
 });
 
 test('connection loss clears displayed partner position and recovery restores it', async () => {
-  const { result } = renderHook(() => useBuddyPilot('token'));
+  const { result } = renderHook(() => useBuddy('token'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.locations).toHaveLength(1);
   request.mockRejectedValueOnce(new Error('offline'));
@@ -51,7 +51,7 @@ test('connection loss clears displayed partner position and recovery restores it
 });
 
 test('lost authorization removes the selected session and its messages', async () => {
-  const { result } = renderHook(() => useBuddyPilot('token'));
+  const { result } = renderHook(() => useBuddy('token'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   request.mockRejectedValueOnce(Object.assign(new Error('removed'), { status: 403 }));
   await act(async () => { await result.current.refresh('session'); });
@@ -62,7 +62,7 @@ test('lost authorization removes the selected session and its messages', async (
 
 
 test('historical notification cannot replace the authoritative active session', async () => {
-  const { result } = renderHook(() => useBuddyPilot('token'));
+  const { result } = renderHook(() => useBuddy('token'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   await act(async () => { await result.current.refresh('old-completed-session'); });
   expect(result.current.session?.id).toBe('session');
@@ -76,7 +76,7 @@ test('active events during refresh keep a single poll loop', async () => {
   const implementation = request.getMockImplementation()!;
   let resolveContacts!: (contacts: never[]) => void;
   const contacts = new Promise<never[]>(resolve => { resolveContacts = resolve; });
-  const { result, unmount } = renderHook(() => useBuddyPilot('token'));
+  const { result, unmount } = renderHook(() => useBuddy('token'));
   try {
     await act(async () => {});
     expect(result.current.session?.status).toBe('ACCEPTED');
@@ -97,7 +97,7 @@ test('received invitations join the existing refresh and update after accepting 
   const implementation = request.getMockImplementation()!;
   const received = [{ id: 'received', status: 'SENT', direction: 'SEEK_HELP', ownerName: 'Test friend', ownerNeeds: ['HEARING_IMPAIRMENT'] }];
   request.mockImplementation(async (token, path, ...args) => path === '/invitations/received' ? received : implementation(token, path, ...args));
-  const { result } = renderHook(() => useBuddyPilot('token'));
+  const { result } = renderHook(() => useBuddy('token'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.received).toEqual(received);
   expect(request.mock.calls.filter(([, path]) => path === '/invitations/received')).toHaveLength(1);

@@ -12,7 +12,7 @@ from app.db.models.hazard import HazardRecord
 from app.db.models.user import User
 from app.models.alerts import AlertItem, AlertList, AlertLocation
 from app.repositories import hazardRepository
-from app.services import pilotService
+from app.services import buddyRequestService
 
 
 NAMESPACE = UUID('68bd5a3a-276c-4f9c-8d52-f38920dfab72')
@@ -71,7 +71,7 @@ async def enqueueAlerts(db):
             continue
         statement = insert(AlertDelivery).values([{'alert_key': alertId, 'user_id': userId, 'level': row.evidenceMetadata['officialStatus'].lower()} for userId in userIds]).on_conflict_do_nothing(index_elements=['alert_key', 'user_id', 'level']).returning(AlertDelivery.user_id)
         for userId in (await db.execute(statement)).scalars():
-            await pilotService.event(db, userId, None, 'ALERT', payload(row))
+            await buddyRequestService.event(db, userId, None, 'ALERT', payload(row))
 
 
 async def cleanup(db):

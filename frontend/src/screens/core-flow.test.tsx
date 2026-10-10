@@ -13,10 +13,10 @@ import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
 
 let mockAccessibility: { type: string; severity: null }[] = [];
-let mockIncomingContacts: Pick<import('@/features/buddy-pilot/api').Contact, 'name' | 'latestAlertResponse'>[] = [];
+let mockIncomingContacts: Pick<import('@/features/buddy/api').Contact, 'name' | 'latestAlertResponse'>[] = [];
 let mockNotifications: boolean | undefined;
 jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility }) }));
-jest.mock('@/features/buddy-pilot/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
+jest.mock('@/features/buddy/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
 jest.mock('@/features/location/permissions', () => ({ ...jest.requireActual('@/features/location/permissions'), ensureForeground: jest.fn(), ensureNotifications: jest.fn() }));
 jest.mock('@/features/location/push-token', () => ({ prepareNotificationChannel: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('expo-location', () => ({ getCurrentPositionAsync: jest.fn(), Accuracy: { High: 4 } }));
@@ -321,7 +321,7 @@ let mockOnCommand: (transcript: string) => void = () => {};
 const mockStartListening = jest.fn(() => Promise.resolve());
 const mockStopListening = jest.fn();
 const mockCancelListening = jest.fn();
-jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (transcript: string) => void }) => { mockOnCommand = onCommand; return { listening: mockListening, error: mockVoiceError, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockCancelListening }; } }));
+jest.mock('@/features/buddy/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (transcript: string) => void }) => { mockOnCommand = onCommand; return { listening: mockListening, error: mockVoiceError, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockCancelListening }; } }));
 let mockVoiceError: string | null = null;
 beforeEach(() => { mockVoiceHome = false; mockListen = true; mockSoundFree = false; mockListening = false; mockFocused = true; mockVoiceError = null; });
 

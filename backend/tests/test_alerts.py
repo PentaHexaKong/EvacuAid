@@ -13,20 +13,20 @@ from app import config
 from app.db.models import BuddyRelationship, User
 from app.db.models.alert import AlertDelivery, AlertResponse
 from app.db.models.hazard import HazardRecord
-from app.db.models.pilot import PilotInbox, PilotOutbox, PilotPushToken
+from app.db.models.buddySession import BuddyInbox, BuddyOutbox, BuddyPushToken
 from app.db.session import get_session
 from app.routers.alerts import router
-from app.routers.pilot import router as pilot
+from app.routers.buddy import router as buddy
 from app.routers.sessions import router as sessions
 from app.models.hazard import HazardEvidence
 from app.repositories import hazardRepository
-from app.services import alertService, pilotService, pilotWorker
+from app.services import alertService, buddyRequestService, buddyWorker
 
 
 def api(db):
     app = FastAPI()
     app.include_router(router)
-    app.include_router(pilot)
+    app.include_router(buddy, prefix='/v1/buddy')
     app.include_router(sessions)
 
     async def database():
@@ -138,10 +138,10 @@ async def test_worker_push_deduplicates_and_preserves_buddy_messages(dbSession, 
         missing, _ = await guest(client, dbSession, latitude=None, longitude=None)
         future, _ = await guest(client, dbSession, age=-1)
         for user in (fresh, stale, outside, missing, future):
-            dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
-        await pilotService.event(dbSession, fresh.id, None, 'INVITATION_CONFIRMED', {})
+            dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+        await buddyRequestService.event(dbSession, fresh.id, None, 'INVITATION_CONFIRMED', {})
         await dbSession.commit()
-        buddy_inbox = await client.get('/v1/buddy-pilot/inbox', headers=headers)
+        buddy_inbox = await client.get('/v1/buddy/inbox', headers=headers)
         assert len(buddy_inbox.json()) == 1
 
     @asynccontextmanager
@@ -167,13 +167,13 @@ async def test_worker_push_deduplicates_and_preserves_buddy_messages(dbSession, 
             return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
     monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
-    monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
-    monkeypatch.setattr(pilotWorker.httpx, 'AsyncClient', Client)
-    await pilotWorker.tick()
-    await pilotWorker.tick()
-    inboxes = (await dbSession.execute(select(PilotInbox).where(PilotInbox.kind == 'ALERT'))).scalars().all()
+    monkeypatch.setattr(buddyWorker, 'SessionLocal', database)
+    monkeypatch.setattr(buddyWorker.httpx, 'AsyncClient', Client)
+    await buddyWorker.tick()
+    await buddyWorker.tick()
+    inboxes = (await dbSession.execute(select(BuddyInbox).where(BuddyInbox.kind == 'ALERT'))).scalars().all()
     assert len(inboxes) == 1 and inboxes[0].user_id == fresh.id and inboxes[0].request_id is None
-    assert (await dbSession.execute(select(func.count()).select_from(PilotOutbox).where(PilotOutbox.inbox_id == inboxes[0].id))).scalar_one() == 1
+    assert (await dbSession.execute(select(func.count()).select_from(BuddyOutbox).where(BuddyOutbox.inbox_id == inboxes[0].id))).scalar_one() == 1
     deliveries = (await dbSession.execute(select(AlertDelivery))).scalars().all()
     assert len(deliveries) == 1 and deliveries[0].alert_key == alertService.alertKey(row) and deliveries[0].user_id == fresh.id
     assert len(calls) == 2
@@ -186,7 +186,7 @@ async def test_worker_push_deduplicates_and_preserves_buddy_messages(dbSession, 
     assert buddy['title'] == 'EvacuAid Buddy' and buddy['body'] == 'Ada pembaruan Buddy. Buka aplikasi untuk melihat.'
     assert 'priority' not in buddy and 'interruptionLevel' not in buddy
     async with apiClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
-        response = await client.get('/v1/buddy-pilot/inbox', headers=headers)
+        response = await client.get('/v1/buddy/inbox', headers=headers)
         assert response.status_code == 200
         items = response.json()
         assert len(items) == 1 and items[0]['kind'] == 'INVITATION_CONFIRMED'
@@ -207,11 +207,11 @@ async def test_waspada_does_not_enqueue_alerts(dbSession, monkeypatch):
         raise AssertionError('unexpected Expo HTTP call')
 
     monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
-    monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
-    await pilotWorker.tick()
-    assert (await dbSession.execute(select(func.count()).select_from(PilotInbox))).scalar_one() == 0
-    assert (await dbSession.execute(select(func.count()).select_from(PilotOutbox))).scalar_one() == 0
+    monkeypatch.setattr(buddyWorker, 'SessionLocal', database)
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', no_network)
+    await buddyWorker.tick()
+    assert (await dbSession.execute(select(func.count()).select_from(BuddyInbox))).scalar_one() == 0
+    assert (await dbSession.execute(select(func.count()).select_from(BuddyOutbox))).scalar_one() == 0
     assert (await dbSession.execute(select(func.count()).select_from(AlertDelivery))).scalar_one() == 0
 
 
@@ -237,7 +237,7 @@ async def test_incoming_contacts_show_recent_latest_response_for_active_buddies(
         dbSession.add(AlertResponse(user_id=active.id, alert_key=alertService.alertKey(older_alert), response='EVACUATING', updated_at=now - timedelta(hours=1)))
         await dbSession.commit()
         assert (await client.post(f'/v1/alerts/{alertService.alertKey(row)}/response', headers=active_headers, json={'response': 'NEEDS_HELP'})).status_code == 200
-        response = await client.get('/v1/buddy-pilot/contacts/incoming', headers=headers)
+        response = await client.get('/v1/buddy/contacts/incoming', headers=headers)
         assert response.status_code == 200
         contacts = {contact['userId']: contact for contact in response.json()}
         assert set(contacts) == {str(user.id) for user in (active, stale, empty)}
@@ -254,7 +254,7 @@ def worker_database(monkeypatch, db):
         yield db
 
     monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', True)
-    monkeypatch.setattr(pilotWorker, 'SessionLocal', database)
+    monkeypatch.setattr(buddyWorker, 'SessionLocal', database)
 
 
 @pytest.mark.asyncio
@@ -266,7 +266,7 @@ async def test_alert_state_survives_source_refresh(dbSession, monkeypatch):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
         user, headers = await guest(client, dbSession)
         assert (await client.post(f'/v1/alerts/{key}/response', headers=headers, json={'response': 'SAFE'})).status_code == 200
-    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
     calls = []
@@ -276,17 +276,17 @@ async def test_alert_state_survives_source_refresh(dbSession, monkeypatch):
         calls.extend(json)
         return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
-    await pilotWorker.tick()
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', send)
+    await buddyWorker.tick()
     await hazardRepository.replaceSource(dbSession, evidence.source, [evidence])
     await dbSession.commit()
     current = (await dbSession.execute(select(HazardRecord))).scalar_one()
     assert current.id != old_id and alertService.alertKey(current) == key
-    await pilotWorker.tick()
+    await buddyWorker.tick()
     assert len(calls) == 1
     assert (await dbSession.execute(select(AlertDelivery))).scalar_one().alert_key == key
     assert (await dbSession.execute(select(AlertResponse))).scalar_one().response == 'SAFE'
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', original_post)
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', original_post)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
         item = (await client.get('/v1/alerts', headers=headers)).json()['items'][0]
         assert item['id'] == str(key) and item['myResponse'] == 'SAFE'
@@ -305,13 +305,13 @@ async def test_queued_alert_cancellation(dbSession, monkeypatch, change):
     async def no_network(*args, **kwargs):
         raise AssertionError('unexpected Expo HTTP call')
 
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
-    await pilotWorker.tick()
-    outbox = (await dbSession.execute(select(PilotOutbox))).scalar_one()
-    inbox = await dbSession.get(PilotInbox, outbox.inbox_id)
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', no_network)
+    await buddyWorker.tick()
+    outbox = (await dbSession.execute(select(BuddyOutbox))).scalar_one()
+    inbox = await dbSession.get(BuddyInbox, outbox.inbox_id)
     outbox.next_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     if change == 'expired_with_token':
-        dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+        dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     if change in ('expired', 'expired_with_token'):
         row.validUntil = datetime.now(timezone.utc) - timedelta(seconds=1)
     elif change == 'waspada':
@@ -321,12 +321,12 @@ async def test_queued_alert_cancellation(dbSession, monkeypatch, change):
     else:
         inbox.created_at = datetime.now(timezone.utc) - timedelta(hours=3)
     await dbSession.commit()
-    await pilotWorker.tick()
+    await buddyWorker.tick()
     assert outbox.sent_at is not None and outbox.attempts == 0
     if change != 'expired_with_token':
-        dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+        dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     await dbSession.commit()
-    await pilotWorker.tick()
+    await buddyWorker.tick()
     assert outbox.attempts == 0
 
 
@@ -342,7 +342,7 @@ async def test_worker_cleans_old_alert_state(dbSession, monkeypatch):
         dbSession.add(AlertResponse(alert_key=key, user_id=user.id, response='SAFE', created_at=at, updated_at=at))
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
-    await pilotWorker.tick()
+    await buddyWorker.tick()
     assert [row.alert_key for row in (await dbSession.execute(select(AlertDelivery))).scalars()] == [recent]
     assert [row.alert_key for row in (await dbSession.execute(select(AlertResponse))).scalars()] == [recent]
 
@@ -388,7 +388,7 @@ async def test_extreme_cap_alert_context_and_push(dbSession, monkeypatch):
         assert response.status_code == 200
         assert response.json()['event']['official_status'] == 'SIAGA'
         assert response.json()['action']['recommended_action'] == 'FOLLOW_OFFICIAL_INSTRUCTION'
-    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
     calls = []
@@ -397,13 +397,13 @@ async def test_extreme_cap_alert_context_and_push(dbSession, monkeypatch):
         calls.extend(json)
         return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
-    await pilotWorker.tick()
-    await pilotWorker.tick()
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', send)
+    await buddyWorker.tick()
+    await buddyWorker.tick()
     assert len(calls) == 1 and calls[0]['data']['alertId'] == alerts[0]['id']
     assert calls[0]['title'] == 'Peringatan SIAGA'
-    assert (await dbSession.execute(select(func.count()).select_from(PilotInbox).where(PilotInbox.kind == 'ALERT'))).scalar_one() == 1
-    assert (await dbSession.execute(select(func.count()).select_from(PilotOutbox))).scalar_one() == 1
+    assert (await dbSession.execute(select(func.count()).select_from(BuddyInbox).where(BuddyInbox.kind == 'ALERT'))).scalar_one() == 1
+    assert (await dbSession.execute(select(func.count()).select_from(BuddyOutbox))).scalar_one() == 1
 
 
 @pytest.mark.asyncio
@@ -419,21 +419,21 @@ async def test_alert_push_disabled_preserves_api_and_later_delivery(dbSession, m
     original_post = httpx.AsyncClient.post
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
         _, headers = await guest(client, dbSession)
-        monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
-        await pilotWorker.tick()
-        await pilotWorker.tick()
-        for model in (PilotInbox, PilotOutbox, AlertDelivery):
+        monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', no_network)
+        await buddyWorker.tick()
+        await buddyWorker.tick()
+        for model in (BuddyInbox, BuddyOutbox, AlertDelivery):
             assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 0
         items = (await client.get('/v1/alerts', headers=headers)).json()['items']
         assert len(items) == 1 and items[0]['level'] == status.lower()
-        monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', original_post)
+        monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', original_post)
         response = await client.post(f'/v1/alerts/{alertService.alertKey(row)}/response', headers=headers, json={'response': 'SAFE'})
         assert response.status_code == 200 and response.json()['myResponse'] == 'SAFE'
     worker_database(monkeypatch, dbSession)
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', no_network)
-    await pilotWorker.tick()
-    await pilotWorker.tick()
-    for model in (PilotInbox, PilotOutbox, AlertDelivery):
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', no_network)
+    await buddyWorker.tick()
+    await buddyWorker.tick()
+    for model in (BuddyInbox, BuddyOutbox, AlertDelivery):
         assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 1
 
 
@@ -444,14 +444,14 @@ async def test_queued_alert_uses_current_payload(dbSession, monkeypatch):
     dbSession.add(user)
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
-    await pilotWorker.tick()
-    outbox = (await dbSession.execute(select(PilotOutbox))).scalar_one()
-    inbox = await dbSession.get(PilotInbox, outbox.inbox_id)
+    await buddyWorker.tick()
+    outbox = (await dbSession.execute(select(BuddyOutbox))).scalar_one()
+    inbox = await dbSession.get(BuddyInbox, outbox.inbox_id)
     assert inbox.payload['level'] == 'siaga'
     row.evidenceMetadata = {'officialStatus': 'AWAS'}
     row.hazardType = 'TSUNAMI'
     outbox.next_at = datetime.now(timezone.utc) - timedelta(seconds=1)
-    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     await dbSession.commit()
     monkeypatch.setattr(config, 'ALERT_PUSH_ENABLED', False)
     calls = []
@@ -460,8 +460,8 @@ async def test_queued_alert_uses_current_payload(dbSession, monkeypatch):
         calls.extend(json)
         return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
-    await pilotWorker.tick()
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', send)
+    await buddyWorker.tick()
     assert len(calls) == 1 and outbox.sent_at is not None
     assert calls[0]['title'] == 'Peringatan AWAS'
     assert calls[0]['body'] == 'Tsunami di area Anda. Buka EvacuAid untuk langkah selanjutnya.'
@@ -476,7 +476,7 @@ async def test_alert_escalation_delivers_once_per_level(dbSession, monkeypatch):
     user = User(latitude=-6.2, longitude=106.8, locationObservedAt=datetime.now(timezone.utc))
     dbSession.add(user)
     await dbSession.commit()
-    dbSession.add(PilotPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
+    dbSession.add(BuddyPushToken(token=f'ExpoPushToken[{user.id}]', user_id=user.id))
     await dbSession.commit()
     worker_database(monkeypatch, dbSession)
     calls = []
@@ -485,18 +485,18 @@ async def test_alert_escalation_delivers_once_per_level(dbSession, monkeypatch):
         calls.extend(json)
         return httpx.Response(200, request=httpx.Request('POST', url), json={'data': [{'status': 'ok', 'id': str(uuid.uuid4())} for message in json]})
 
-    monkeypatch.setattr(pilotWorker.httpx.AsyncClient, 'post', send)
-    await pilotWorker.tick()
-    await pilotWorker.tick()
+    monkeypatch.setattr(buddyWorker.httpx.AsyncClient, 'post', send)
+    await buddyWorker.tick()
+    await buddyWorker.tick()
     assert len(calls) == 1
     row.evidenceMetadata = {'officialStatus': 'AWAS'}
     await dbSession.commit()
-    await pilotWorker.tick()
-    await pilotWorker.tick()
+    await buddyWorker.tick()
+    await buddyWorker.tick()
     assert [message['data']['level'] for message in calls] == ['siaga', 'awas']
     assert {message['data']['alertId'] for message in calls} == {str(alertService.alertKey(row))}
     deliveries = (await dbSession.execute(select(AlertDelivery))).scalars().all()
     assert {delivery.level for delivery in deliveries} == {'siaga', 'awas'}
     assert len(deliveries) == 2
-    for model in (PilotInbox, PilotOutbox):
+    for model in (BuddyInbox, BuddyOutbox):
         assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 2

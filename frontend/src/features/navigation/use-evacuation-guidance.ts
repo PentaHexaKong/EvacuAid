@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
 import { usePreferences } from '@/features/preferences/context';
 import { useAccess } from '@/features/access/use-access';
-import type { BuddyRoute, Position } from '@/features/buddy-pilot/api';
-import { useBuddyCopy } from '@/features/buddy-pilot/copy';
-import { distanceM } from '@/features/buddy-pilot/navigation';
-import { CUE_M, useRouteGuidance } from '@/features/buddy-pilot/use-route-guidance';
+import type { BuddyRoute, Position } from '@/features/buddy/api';
+import { useBuddyCopy } from '@/features/buddy/copy';
+import { distanceM } from '@/features/buddy/navigation';
+import { CUE_M, useRouteGuidance } from '@/features/buddy/use-route-guidance';
 import { speak, stopSpeaking } from '@/features/feedback/speech';
 import { toCoordinates, type NavigationResponse } from './api';
 

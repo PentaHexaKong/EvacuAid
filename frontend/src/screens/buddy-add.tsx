@@ -9,9 +9,9 @@ import { ValueMenu } from '@/components/native-controls';
 import { colors, corner, radius } from '@/theme';
 import { useGuestSession } from '@/features/profile/session';
 import { useProfile } from '@/features/profile/context';
-import { buddyRequest, type Relation } from '@/features/buddy-pilot/api';
-import { readableIssue, useBuddyCopy } from '@/features/buddy-pilot/copy';
-import { useBuddyCode } from '@/features/buddy-pilot/use-buddy-pilot';
+import { buddyRequest, type Relation } from '@/features/buddy/api';
+import { readableIssue, useBuddyCopy } from '@/features/buddy/copy';
+import { useBuddyCode } from '@/features/buddy/use-buddy';
 import type { ApiError } from '@/features/profile/api';
 
 const formatCode = (value: string) => {

@@ -4,8 +4,6 @@ from datetime import datetime, timezone
 from fastapi import FastAPI
 
 from app.db.session import get_session
-from app.routers.assistance import router as assistance_router
-from app.routers.buddies import router as buddies_router
 from app.routers.sessions import router as sessions_router
 from app.routers.users import router as users_router
 
@@ -14,8 +12,6 @@ def createApi(dbSession):
     api = FastAPI()
     api.include_router(sessions_router)
     api.include_router(users_router)
-    api.include_router(buddies_router)
-    api.include_router(assistance_router)
 
     async def getTestSession():
         yield dbSession
@@ -77,22 +73,3 @@ async def testGuestProfileRequiresPrivateTokenAndSupportsProfileLocationAndDelet
 
         assert (await client.delete('/v1/guest-sessions/current', headers=headers)).status_code == 204
         assert (await client.get('/v1/me', headers=headers)).status_code == 401
-
-
-@pytest.mark.asyncio
-async def testAssistanceOwnerComesFromTokenNotRequestBody(dbSession):
-    api = createApi(dbSession)
-    transport = httpx.ASGITransport(app=api)
-    async with httpx.AsyncClient(transport=transport, base_url='http://test') as client:
-        first = (await client.post('/v1/guest-sessions')).json()
-        second = (await client.post('/v1/guest-sessions')).json()
-        first_headers = {'Authorization': f"Bearer {first['access_token']}"}
-        second_headers = {'Authorization': f"Bearer {second['access_token']}"}
-        created = await client.post('/v1/assistance/requests', headers=first_headers, json={
-            'userId': second['user']['id'], 'eventId': 'test-event',
-        })
-        assert created.status_code == 201
-        assert created.json()['userId'] == first['user']['id']
-        request_id = created.json()['id']
-        assert (await client.get(f'/v1/assistance/requests/{request_id}')).status_code == 401
-        assert (await client.get(f'/v1/assistance/requests/{request_id}', headers=second_headers)).status_code == 403
