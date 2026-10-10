@@ -36,7 +36,8 @@ export function AuthScreen() {
       setError(t(status===401 ? 'authInvalidCredentials' : status===409 ? 'authRegisterConflict' : status===429 ? 'authRateLimited' : 'authTryAgain'));
     } finally { pending.current=false;setBusy(false); }
   };
-  return <Page keyboard fill edgeInsets={insets} contentStyle={{ justifyContent:'center',gap:20 }}>
+  // The form sits at the top so the submit button stays above the keyboard.
+  return <Page keyboard fill edgeInsets={insets} contentStyle={{ paddingTop:insets.top+40,gap:20 }}>
     <View style={{ gap:8 }}><AppText variant="eyebrow" style={{color:colors.primary}}>EVACUAID</AppText>
       <AppText variant="title" accessibilityRole="header">{t(register ? 'authCreateAccount' : 'authWelcome')}</AppText>
       <AppText style={{color:colors.muted}}>{t('authDescription')}</AppText></View>
