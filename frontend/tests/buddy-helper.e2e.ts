@@ -8,8 +8,8 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
   // A dev build downloads its bundle from Metro on every fresh launch.
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
   // A saved language preference wins over the device language, so switch it in the app when it is not English yet.
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
-  await expect(screen.getByRole('button', 'Alerts')).toBeVisible();
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await expect(screen.getByRole('tab', 'Alerts')).toBeVisible();
 
   await screen.getByRole('tab', 'Buddy').tap();
   await expect(screen.getByText('Help others')).toBeVisible();
@@ -44,7 +44,7 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
   await walk();
   await app.open();
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
   await screen.getByRole('tab', 'Buddy').tap();
   const { code } = await agent.extract('the Buddy code shown under "Your code", in the form XXXX-XXXX', { schema: z.object({ code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/) }) });
 
@@ -64,16 +64,20 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
 
     const request = await call(friend, '/requests', 'POST', { helperUserId: invitation.redeemerUserId, message: 'Please walk with me to the gathering point', supportNeeds: [], sharingConsent: true, idempotencyKey: `e2e-${Date.now()}`, latitude: -6.266, longitude: 106.804 });
     requestId = request.id;
-    await screen.getByRole('tab', 'Home').tap();
-    await screen.getByRole('tab', 'Buddy').tap();
-    await screen.getByRole('button', 'Accept & help').tap({ timeout: 30_000 });
-    await screen.getByRole('button', 'Confirm').tap();
+    // The takeover arrives on its own. Tapping tabs while waiting can land on its buttons as it slides in.
+    await expect(screen.getByText('Nina Rahma needs your help')).toBeVisible({ timeout: 90_000 });
+    await expect(screen.getByText('Shares your location with Nina Rahma while you help')).toBeVisible();
+    // Its actions ignore touches for the first 600 ms after it appears.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await screen.getByRole('button', "I'll help Nina Rahma").tap();
     await expect(screen.getByRole('button', 'Start travelling to requester')).toBeVisible({ timeout: 30_000 });
 
     // A phone keeps sending its position; one ping would go stale before the route is asked for.
     const share = () => call(friend, `/requests/${requestId}/location`, 'PUT', { latitude: -6.266, longitude: 106.804, accuracyM: 8, observedAt: new Date().toISOString(), sharingConsent: true, sharingVersion: 0 });
     await share();
     sharing = setInterval(() => { void share().catch(() => {}); }, 8_000);
+    // Waiting for the takeover can outlast the first position, so the helper takes another step before the map is expected.
+    await walk();
     // The session moves from the inline view to the map once the helper's own position arrives; tap after that, not during.
     await expect(screen.getByRole('button', 'Center map on my location')).toBeVisible({ timeout: 30_000 });
     await expect(screen.getByRole('button', 'Route to Nina')).toBeVisible();

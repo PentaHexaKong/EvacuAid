@@ -1,3 +1,4 @@
+import { useArmed } from '@/components/use-armed';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, Platform, ScrollView, StyleSheet, View, findNodeHandle } from 'react-native';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
@@ -120,8 +121,10 @@ export function EmergencyScreen() {
   };
   const dismiss = () => { if (router.canGoBack()) router.back(); else router.replace('/'); };
   const close = () => { markAlertPresented(id); active.current = false; cancelVoice(); dismiss(); };
-  const run = (action: EmergencyAction['id']) => {
-    if (!active.current || !alert) return;
+  const armed = useArmed();
+  const run = (action: EmergencyAction['id'], spoken = false) => {
+    // Touch is held back for a moment after the pop-up appears; a spoken answer is deliberate and is not.
+    if (!active.current || !alert || (!armed && !spoken)) return;
     haptics.tap();
     markAlertPresented(id);
     active.current = false;
@@ -140,7 +143,7 @@ export function EmergencyScreen() {
   const voice = useBuddySpeech({ stopSpeechOnUnmount: false, language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
     if (!active.current || !access.voiceHome || !access.listen || access.soundFree) return;
     const command = emergencyCommand(transcript);
-    if (command) run(command === 'help' ? hasNeeds ? 'buddy' : 'needHelp' : command);
+    if (command) run(command === 'help' ? hasNeeds ? 'buddy' : 'needHelp' : command, true);
     else {
       voiceRef.current?.cancelListening();
       const retry = !retriedVoice.current;
@@ -180,7 +183,7 @@ export function EmergencyScreen() {
       {alert ? <>
         <View style={styles.top}><LevelChip level={alert.level} /><Tap accessibilityLabel={t('emergencyClose')} onPress={close} style={styles.close}><IconX size={24} color={ink} /></Tap></View>
         <View style={styles.content}>
-          <Enter index={0}><View ref={headline} accessible accessibilityRole="header" accessibilityLabel={t('homeHeadlineNoWindow', { level: t(levelLabels[alert.level]), hazard: t(alert.title).charAt(0).toLocaleLowerCase() + t(alert.title).slice(1) })} onLayout={() => { if (focusedHeadline.current === id) return; const node = findNodeHandle(headline.current); if (node) { focusedHeadline.current = id; AccessibilityInfo.setAccessibilityFocus(node); } }}><Headline template={t('homeHeadlineNoWindow')} parts={{ level: t(levelLabels[alert.level]), hazard: t(alert.title).charAt(0).toLocaleLowerCase() + t(alert.title).slice(1) }} ink={ink} /></View></Enter>
+          <Enter index={0}><View ref={headline} accessible accessibilityRole="header" accessibilityLabel={t(alert.level === 'awas' ? 'homeHeadlineDanger' : 'homeHeadlineNoWindow', { level: t(levelLabels[alert.level]), hazard: t(alert.title).charAt(0).toLocaleLowerCase() + t(alert.title).slice(1) })} onLayout={() => { if (focusedHeadline.current === id) return; const node = findNodeHandle(headline.current); if (node) { focusedHeadline.current = id; AccessibilityInfo.setAccessibilityFocus(node); } }}><Headline template={t(alert.level === 'awas' ? 'homeHeadlineDanger' : 'homeHeadlineNoWindow')} parts={{ level: t(levelLabels[alert.level]), hazard: t(alert.title).charAt(0).toLocaleLowerCase() + t(alert.title).slice(1) }} ink={ink} /></View></Enter>
           <Enter index={1}><AppText variant="button" style={{ color: ink }}>{[alert.area, alert.window].filter(Boolean).join(' · ')}</AppText></Enter>
           <Enter index={2}><AppText style={{ color: ink }}>{t(GUIDANCE[alert.level])}</AppText></Enter>
           <Enter index={3}><View style={styles.steps}><StepList steps={alert.steps.map(step => t(step))} /></View></Enter>

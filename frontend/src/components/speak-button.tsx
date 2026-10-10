@@ -23,7 +23,7 @@ export function SpeakButton({ listening, label, detail, hint, onPress }: { liste
       <View style={styles.mic}><Animated.View style={mic}><IconMicrophone size={26} strokeWidth={2} color={colors.surface} /></Animated.View></View>
       <View style={styles.text}>
         <AppText style={styles.label}>{label}</AppText>
-        <AppText style={styles.detail}>{detail}</AppText>
+        {!!detail && <AppText style={styles.detail}>{detail}</AppText>}
       </View>
     </Animated.View>
   </Pressable>;
