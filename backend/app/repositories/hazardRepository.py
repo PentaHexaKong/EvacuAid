@@ -50,11 +50,15 @@ async def evidenceCounts(session, source: str) -> dict[str, int]:
 
 async def activeEvidence(session, center: tuple[float, float], radiusM: float, geometry: dict | None = None) -> list[HazardEvidence]:
     now = datetime.now(timezone.utc)
-    point = func.ST_SetSRID(func.ST_MakePoint(center[1], center[0]), 4326).cast(Geography)
+    shape = func.ST_SetSRID(func.ST_MakePoint(center[1], center[0]), 4326)
     if geometry is not None:
         import json
-        point = func.ST_SetSRID(func.ST_GeomFromGeoJSON(json.dumps(geometry)), 4326).cast(Geography)
-    query = select(HazardRecord).where(or_(HazardRecord.validFrom.is_(None), HazardRecord.validFrom <= now), or_(HazardRecord.validUntil.is_(None), HazardRecord.validUntil > now), func.ST_DWithin(HazardRecord.geometry.cast(Geography), point, radiusM)).order_by(HazardRecord.source, HazardRecord.sourceId).limit(HAZARD_MAX_EVIDENCE + 1)
+        shape = func.ST_SetSRID(func.ST_GeomFromGeoJSON(json.dumps(geometry)), 4326)
+    point = shape.cast(Geography)
+    # The geodesic distance test is slow against large polygons, so an indexed bounding-box test drops far-away rows first.
+    # ponytail: 90 km per degree keeps the box wider than radiusM up to 36 degrees latitude (Indonesia is within 11); use a per-latitude width beyond that.
+    nearby = HazardRecord.geometry.op('&&')(func.ST_Expand(shape, radiusM / 90000))
+    query = select(HazardRecord).where(nearby, or_(HazardRecord.validFrom.is_(None), HazardRecord.validFrom <= now), or_(HazardRecord.validUntil.is_(None), HazardRecord.validUntil > now), func.ST_DWithin(HazardRecord.geometry.cast(Geography), point, radiusM)).order_by(HazardRecord.source, HazardRecord.sourceId).limit(HAZARD_MAX_EVIDENCE + 1)
     rows = (await session.execute(query)).scalars().all()
     logger.info('hazardState activeEvidenceCount=%s', len(rows))
     if len(rows) > HAZARD_MAX_EVIDENCE:
