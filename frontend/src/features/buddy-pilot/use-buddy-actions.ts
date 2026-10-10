@@ -106,9 +106,16 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     if (/status|posisi/.test(command)) void (voiceHome ? prompt.say(voiceStatusText) : voice.speak(statusText));
     else if (/ulang|repeat/.test(command)) void (voiceHome ? prompt.say(route ? currentInstruction.current || c('noRoute') : c('noRoute')) : voice.speak(route ? currentInstruction.current || c('noRoute') : c('noRoute')));
     else if (/batal|akhiri|cancel|end/.test(command) && session) voiceHome ? askSpoken(c('voiceBuddyCancelAsk'), () => transition('interrupt'), true) : confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
+    else if (voiceHome && /\b(met|bertemu|here)\b|arrived with me/.test(command) && requester && session?.status === 'ARRIVED' && !session.meetingConfirmed) askSpoken(c('voiceBuddyMeetAsk'), () => transition('confirm-meeting'));
     else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) voiceHome ? askSpoken(c('voiceBuddyCompleteAsk'), () => transition('confirm-complete')) : confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
-    else if (/terdekat|nearby/.test(command)) voiceHome ? askSpoken(c('voiceBuddyNearbyAsk'), () => startNearby(true)) : askNearby();
-    else if ((/bantuan|help/.test(command) || (voiceHome && /tolong/.test(command))) && !session) voiceHome ? first ? askSpoken(c('voiceBuddyHelpAsk', { name: first.name ?? c('name') }), () => sendRequest(first.buddyUserId)) : void prompt.say(c('noBuddyHelp')) : askForHelp();
+    else if (/terdekat|nearby/.test(command)) {
+      if (voiceHome && session && terminalStatuses.has(session.status)) state.dismissSession();
+      voiceHome ? askSpoken(c('voiceBuddyNearbyAsk'), () => startNearby(true)) : askNearby();
+    }
+    else if ((/bantuan|help/.test(command) || (voiceHome && /tolong/.test(command))) && (!session || (voiceHome && terminalStatuses.has(session.status)))) {
+      if (session) state.dismissSession();
+      voiceHome ? first ? askSpoken(c('voiceBuddyHelpAsk', { name: first.name ?? c('name') }), () => sendRequest(first.buddyUserId)) : void prompt.say(c('noBuddyHelp')) : askForHelp();
+    }
     else void (voiceHome ? prompt.say(c('unknownCommand')) : voice.speak(c('unknownCommand')));
   } });
   const prompt = useVoicePrompt(voice, voiceHome && listen && !soundFree, language);
@@ -117,8 +124,9 @@ export function useBuddyActions({ token, userId, state }: { token: string; userI
     void prompt.say(text, () => { void prompt.listen(); });
   };
   useEffect(() => { if (!prompt.focused || !listen || soundFree) pendingConfirmation.current = null; }, [prompt.focused, listen, soundFree]);
-  const readVoiceStatus = useEffectEvent(() => { pendingConfirmation.current = null; void prompt.say(voiceStatusText); });
-  useEffect(() => { if (voiceHome && listen && !soundFree && prompt.focused) readVoiceStatus(); }, [voiceHome, listen, soundFree, prompt.focused, voiceStatusText]);
+  const voiceStatusKey = session ? `${session.id}:${session.status}` : JSON.stringify([first?.buddyUserId, first?.name]);
+  const readVoiceStatus = useEffectEvent(() => { if (!pendingConfirmation.current && !voice.listening) void prompt.say(voiceStatusText); });
+  useEffect(() => { if (voiceHome && listen && !soundFree && prompt.focused) readVoiceStatus(); }, [voiceHome, listen, soundFree, prompt.focused, voiceStatusKey]);
   const toggleVoice = () => {
     if (!listen || soundFree || !prompt.focused) return;
     if (voice.listening) voice.stopListening();

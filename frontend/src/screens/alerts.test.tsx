@@ -187,3 +187,43 @@ test('voice warnings mic starts recognition and the secondary control reads agai
   fireEvent.press(view.getByRole('button', { name: id.alertsReadAgain }));
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
 });
+
+
+test.each(['siaga', 'awas'] as const)('a same-id escalation to %s is read once and asks about evacuation', async level => {
+  mockAccess = { listen: true, autoRead: false, voiceHome: true, soundFree: false };
+  mockItems = [{ ...alertItems[1], level: 'waspada' }];
+  const view = render(<AlertsScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  await finishSpeech();
+  expect(mockStartListening).not.toHaveBeenCalled();
+  mockItems = mockItems.map(item => ({ ...item, level }));
+  view.rerender(<AlertsScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain(id[levelLabels[level]]);
+  await finishSpeech();
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(id.alertsSpokenEvacuateAsk, expect.any(Object)));
+  await finishSpeech();
+  expect(mockStartListening).toHaveBeenCalledTimes(1);
+  mockItems = mockItems.map(item => ({ ...item }));
+  view.rerender(<AlertsScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(3);
+  act(() => mockCommand('yes'));
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/evacuate', params: { alertId: alertItems[1].id } });
+});
+
+test.each(['area', 'validUntil', 'myResponse'] as const)('changed warning %s is announced once', async field => {
+  mockAccess = { listen: true, autoRead: false, voiceHome: true, soundFree: false };
+  mockItems = [{ ...alertItems[0], myResponse: 'SAFE' }];
+  const view = render(<AlertsScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  await finishSpeech();
+  const changes = { area: 'Another area', validUntil: '2026-10-10T12:00:00Z', myResponse: 'NEED_HELP' };
+  mockItems = mockItems.map(item => ({ ...item, [field]: changes[field] }));
+  view.rerender(<AlertsScreen />);
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(2));
+  mockItems = mockItems.map(item => ({ ...item }));
+  view.rerender(<AlertsScreen />);
+  await act(async () => {});
+  expect(Speech.speak).toHaveBeenCalledTimes(2);
+});

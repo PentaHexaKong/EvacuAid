@@ -12,6 +12,7 @@ const copy = {
   voiceBuddyCancelAsk: ["Batalkan permintaan bantuan? Ucapkan ya atau tidak.", "Cancel your help request? Say yes or no."],
   voiceBuddyCancelled: ["Permintaanmu dibatalkan.", "Your request is cancelled."],
   voiceBuddyKept: ["Baik, permintaanmu tetap aktif.", "Okay, your request stays active."],
+  voiceBuddyMeetAsk: ['Konfirmasi sudah bertemu? Ucapkan ya atau tidak.', 'Confirm you have met? Say yes or no.'],
   voiceBuddyCompleteAsk: ["Konfirmasi kamu sudah aman dan selesai? Ucapkan ya atau tidak.", "Confirm you are safe and finished? Say yes or no."],
   voiceBuddyHelpAsk: ["Minta bantuan {name} dan bagikan lokasimu? Ucapkan ya atau tidak.", "Ask {name} for help and share your location? Say yes or no."],
   voiceBuddyNearbyAsk: ["Cari pendamping di sekitar dan bagikan lokasimu? Ucapkan ya atau tidak.", "Search for helpers nearby and share your location? Say yes or no."],
