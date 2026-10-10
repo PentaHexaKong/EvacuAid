@@ -21,6 +21,7 @@ const mockReload = jest.fn().mockResolvedValue(undefined);
 const mockHaptics = { tap: jest.fn(), alert: jest.fn() };
 const mockVoice = { listening: false, startListening: jest.fn(), stopListening: jest.fn(), cancelListening: jest.fn() };
 let mockCommand: (text: string) => void;
+jest.mock('@/components/use-armed', () => ({ useArmed: () => true }));
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: 'rain' }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, values?: Record<string, string>) => {

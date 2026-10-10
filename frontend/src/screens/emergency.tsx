@@ -1,3 +1,4 @@
+import { useArmed } from '@/components/use-armed';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, Platform, ScrollView, StyleSheet, View, findNodeHandle } from 'react-native';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
@@ -120,8 +121,10 @@ export function EmergencyScreen() {
   };
   const dismiss = () => { if (router.canGoBack()) router.back(); else router.replace('/'); };
   const close = () => { markAlertPresented(id); active.current = false; cancelVoice(); dismiss(); };
-  const run = (action: EmergencyAction['id']) => {
-    if (!active.current || !alert) return;
+  const armed = useArmed();
+  const run = (action: EmergencyAction['id'], spoken = false) => {
+    // Touch is held back for a moment after the pop-up appears; a spoken answer is deliberate and is not.
+    if (!active.current || !alert || (!armed && !spoken)) return;
     haptics.tap();
     markAlertPresented(id);
     active.current = false;
@@ -140,7 +143,7 @@ export function EmergencyScreen() {
   const voice = useBuddySpeech({ stopSpeechOnUnmount: false, language: i18n.language === 'id' ? 'id' : 'en', onCommand: transcript => {
     if (!active.current || !access.voiceHome || !access.listen || access.soundFree) return;
     const command = emergencyCommand(transcript);
-    if (command) run(command === 'help' ? hasNeeds ? 'buddy' : 'needHelp' : command);
+    if (command) run(command === 'help' ? hasNeeds ? 'buddy' : 'needHelp' : command, true);
     else {
       voiceRef.current?.cancelListening();
       const retry = !retriedVoice.current;

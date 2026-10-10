@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import IconX from '@tabler/icons-react-native/IconX';
 import { ActionButton, AppText, Enter, Tap } from '@/components/ui';
+import { useArmed } from '@/components/use-armed';
 import { useGuestSession } from '@/features/profile/session';
 import { useBuddy } from '@/features/buddy/use-buddy';
 import { useBuddyActions } from '@/features/buddy/use-buddy-actions';
@@ -51,8 +52,9 @@ export function HelpRequestScreen() {
   const detail = [...(session?.supportNeeds ?? []).map(a.support), friend ? relationLabel(contact?.relation, a.c) : a.c('gpsSystemLine', { name })].filter(Boolean).join(' · ');
   // The shared error is cleared by the next background refresh, so a refused answer is kept here until the next try.
   const [refused, setRefused] = useState(false);
-  const accept = async () => { if (!attempt) return; setRefused(false); if (await a.transition('accept', { attemptId: attempt.id, sharingConsent: true })) router.replace({ pathname: '/buddy', params: { requestId: id } }); else setRefused(true); };
-  const decline = async () => { if (!attempt) return; setRefused(false); if (await a.transition('decline', { attemptId: attempt.id })) router.back(); else setRefused(true); };
+  const armed = useArmed();
+  const accept = async () => { if (!attempt || !armed) return; setRefused(false); if (await a.transition('accept', { attemptId: attempt.id, sharingConsent: true })) router.replace({ pathname: '/buddy', params: { requestId: id } }); else setRefused(true); };
+  const decline = async () => { if (!attempt || !armed) return; setRefused(false); if (await a.transition('decline', { attemptId: attempt.id })) router.back(); else setRefused(true); };
   const back = () => { haptics.tap(); router.back(); };
   return <LinearGradient colors={palette.stops as [string, string, ...string[]]} style={styles.fill}>
     <ScrollView accessibilityViewIsModal contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
@@ -70,7 +72,7 @@ export function HelpRequestScreen() {
         {(a.issue || refused) && <AppText accessibilityRole="alert" style={[styles.text, { color: palette.ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>}
         <View style={{ gap: 12 }}>
           <View style={{ gap: 6 }}><ActionButton variant="gradient" label={t('helpRequestAccept', { name })} loading={state.busy} onPress={() => { haptics.tap(); void accept(); }} /><AppText variant="small" style={[styles.text, { color: palette.ink }]}>{t('helpRequestConsent', { name })}</AppText></View>
-          <ActionButton variant="secondary" label={t('helpRequestDecline')} loading={state.busy} onPress={() => { haptics.tap(); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
+          <ActionButton variant="secondary" label={t('helpRequestDecline')} loading={state.busy} onPress={() => { if (!armed) return; haptics.tap(); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
         </View>
       </> : !session && state.error ? <>
         <View style={styles.fill} />
