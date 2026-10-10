@@ -8,7 +8,7 @@ const obtainLocation = jest.fn();
 const enableLocation = jest.fn().mockResolvedValue(undefined);
 jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.fn() }));
 let mockParams: { help?: string; consented?: string } = {};
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useLocalSearchParams: () => mockParams }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [{ type: 'MOBILITY_LIMITATION' }] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
 jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));

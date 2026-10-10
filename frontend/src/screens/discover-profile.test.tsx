@@ -33,7 +33,7 @@ let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
 let mockPreferences: Record<string, unknown>;
 let mockFocus: string | undefined;
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus }) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { name: string }) => {
   const text = (mockLanguage === 'en' ? jest.requireActual('../localization/en.json') : jest.requireActual('../localization/id.json'))[key] ?? key;
   return params?.name ? text.replace('{{name}}', params.name) : text;

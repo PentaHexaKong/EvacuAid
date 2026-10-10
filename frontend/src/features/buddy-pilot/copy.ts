@@ -2,6 +2,19 @@ import { useTranslation } from 'react-i18next';
 import type { Relation } from './api';
 
 const copy = {
+  voiceBuddyTitle: ["Status Buddy", "Buddy status"],
+  voiceBuddyIdleBuddy: ["{name} adalah Buddy-mu. Ucapkan “tolong” untuk meminta bantuan.", "{name} is your Buddy. Say “help” to ask them."],
+  voiceBuddyIdleNone: ["Kamu belum punya Buddy. Ucapkan “terdekat” untuk mencari pendamping di sekitarmu.", "You have no Buddy yet. Say “nearby” to find a helper near you."],
+  voiceBuddyMic: ["Ketuk untuk bicara", "Tap to speak"],
+  voiceBuddyListening: ["Mendengarkan…", "Listening…"],
+  voiceBuddyHintIdle: ["Kamu bisa mengucapkan: tolong, terdekat, status.", "You can say: help, nearby, status."],
+  voiceBuddyHintSession: ["Kamu bisa mengucapkan: status, ulang, batal.", "You can say: status, repeat, cancel."],
+  voiceBuddyCancelAsk: ["Batalkan permintaan bantuan? Ucapkan ya atau tidak.", "Cancel your help request? Say yes or no."],
+  voiceBuddyCancelled: ["Permintaanmu dibatalkan.", "Your request is cancelled."],
+  voiceBuddyKept: ["Baik, permintaanmu tetap aktif.", "Okay, your request stays active."],
+  voiceBuddyCompleteAsk: ["Konfirmasi kamu sudah aman dan selesai? Ucapkan ya atau tidak.", "Confirm you are safe and finished? Say yes or no."],
+  voiceBuddyHelpAsk: ["Minta bantuan {name} dan bagikan lokasimu? Ucapkan ya atau tidak.", "Ask {name} for help and share your location? Say yes or no."],
+  voiceBuddyNearbyAsk: ["Cari pendamping di sekitar dan bagikan lokasimu? Ucapkan ya atau tidak.", "Search for helpers nearby and share your location? Say yes or no."],
   friends: ['Teman', 'Added friends'], auto: ['Cari otomatis', 'Auto search'], addBuddy: ['Tambah Buddy', 'Add Buddy'], declineShort: ['Tolak', 'Decline'], acceptHelp: ['Terima & bantu', 'Accept & help'], acceptTitle: ['Bantu {name}?', 'Help {name}?'], acceptBody: ['Lokasimu dibagikan ke {name} selama sesi bantuan. Kamu bisa menghentikannya kapan saja.', 'Your location is shared with {name} during this session. You can stop it any time.'], declineTitle: ['Tolak permintaan {name}?', "Decline {name}'s request?"], declineBody: ['{name} akan diberi tahu bahwa kamu tidak bisa membantu sekarang.', "{name} will be told you can't help right now."],
   wantsYou: ['Ingin menambahkanmu', 'Wants to add you'], inviteBodyReceived: ['Kamu akan menerima permintaan bantuan dari {name}.', 'You will receive help requests from {name}.'], inviteBodyOffered: ['{name} menawarkan diri jadi Buddy-mu dan akan menerima permintaan bantuanmu.', '{name} is offering to be your Buddy and will receive your help requests.'], tooManyInvites: ['Terlalu banyak undangan hari ini. Coba lagi besok.', 'Too many invitations today. Try again tomorrow.'], friendsHeading: ['Teman yang kamu bantu', 'People you help'], inSession: ['Sedang dibantu', 'In session'], friendsFootnote: ['Saat temanmu minta bantuan, permintaannya muncul paling atas.', 'When a friend asks for help, their request appears at the top.'], sentHeading: ['Menunggu diterima', 'Waiting for a reply'], sentDetail: ['Undangan terkirim', 'Invitation sent'], cancelInvite: ['Batalkan', 'Cancel'],
   yourCode: ['Kode kamu', 'Your code'], shareCode: ['Bagikan kode', 'Share code'], shareMessage: ['Tambahkan aku sebagai Buddy di EvacuAid. Kodeku: {code}', 'Add me as your Buddy on EvacuAid. My code: {code}'], shareMessageNeeds: ['Jadilah Buddy-ku di EvacuAid. Kodeku: {code}', 'Be my Buddy on EvacuAid. My code: {code}'], noFriendsTitle: ['Belum ada teman', 'No friends yet'], noFriendsBody: ['Bagikan kodemu ke orang yang butuh pendamping, atau masukkan kode mereka.', 'Share your code with someone who needs a companion, or enter theirs.'], gpsSystemLine: ['Sistem mendeteksi {name} di area darurat, dan belum ada Buddy yang membantu.', 'The system found {name} in an emergency area with no Buddy helping yet.'],
