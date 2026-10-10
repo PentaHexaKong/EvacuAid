@@ -76,6 +76,8 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
     const share = () => call(friend, `/requests/${requestId}/location`, 'PUT', { latitude: -6.266, longitude: 106.804, accuracyM: 8, observedAt: new Date().toISOString(), sharingConsent: true, sharingVersion: 0 });
     await share();
     sharing = setInterval(() => { void share().catch(() => {}); }, 8_000);
+    // Waiting for the takeover can outlast the first position, so the helper takes another step before the map is expected.
+    await walk();
     // The session moves from the inline view to the map once the helper's own position arrives; tap after that, not during.
     await expect(screen.getByRole('button', 'Center map on my location')).toBeVisible({ timeout: 30_000 });
     await expect(screen.getByRole('button', 'Route to Nina')).toBeVisible();
