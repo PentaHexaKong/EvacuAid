@@ -101,6 +101,7 @@ function Navigation() {
   const { t } = useTranslation();
   return <><AlertGate /><Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="evacuate" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
     <Stack.Screen name="emergency/[id]" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false, animation: 'slide_from_bottom' }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
     <Stack.Screen name="hazard/[id]" options={{ title: t('hazardDetailTitle') }} />

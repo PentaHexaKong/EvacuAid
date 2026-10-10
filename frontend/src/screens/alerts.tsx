@@ -13,9 +13,6 @@ import { AlertLocationButton } from '@/features/alerts/location-button';
 import { ListenButton } from '@/components/listen-button';
 import { useAccess } from '@/features/access/use-access';
 import { colors } from '@/theme';
-import { speak } from '@/features/feedback/speech';
-import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
-import { formatDistance } from '@/features/navigation/distance';
 
 export function AlertsScreen({ sheet = false }: { sheet?: boolean }) {
   const router = useRouter();
@@ -34,11 +31,10 @@ export function AlertScreen({ sheet = false }: { sheet?: boolean }) {
   const { id } = useLocalSearchParams<{ id: string }>();
   useAlerts();
   const item = findAlert(id);
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const alert = item ? mapAlert(item, t) : undefined;
   const router = useRouter();
   const access = useAccess();
-  const { shelters } = useEvacuationRoute();
   const haptics = useHaptics();
   const alerted = useRef(false);
   useEffect(() => {
@@ -47,17 +43,9 @@ export function AlertScreen({ sheet = false }: { sheet?: boolean }) {
     haptics.alert(alert.level);
   }, [alert, haptics.alert]);
   if (!alert) return <Page><EmptyContent /></Page>;
-  const go = (pathname: '/buddy' | '/discover', params?: Record<string, string>) => sheet ? router.dismissTo({ pathname, params }) : router.navigate({ pathname, params });
+  const go = (pathname: '/buddy' | '/discover' | '/evacuate', params?: Record<string, string>) => sheet ? router.dismissTo({ pathname, params }) : router.navigate({ pathname, params });
   const findRoute = () => {
-    // ponytail: interim until spoken evacuation guidance lands.
-    if (access.voiceHome) {
-      if (access.listen) {
-        const shelter = shelters?.[0];
-        const text = shelter ? `${t('homeNearest')}: ${shelter.name}, ${formatDistance(shelter.distanceM, i18n.language)}` : t('homeNearestDetail');
-        void speak(text, i18n.language).catch(() => {});
-      }
-      return;
-    }
+    if (access.voiceHome) { go('/evacuate', { alertId: id }); return; }
     go('/discover', { route: String(Date.now()) });
   };
   return <Page>

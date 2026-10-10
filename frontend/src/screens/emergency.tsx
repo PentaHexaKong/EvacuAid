@@ -26,9 +26,6 @@ import { useIncomingContacts } from '@/features/buddy-pilot/use-incoming-contact
 import { incomingNamesSummary } from '@/features/buddy-pilot/incoming-contacts';
 import { useBuddySpeech } from '@/features/buddy-pilot/native';
 import { useHaptics } from '@/features/feedback/haptics';
-import { speak } from '@/features/feedback/speech';
-import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
-import { formatDistance } from '@/features/navigation/distance';
 import { askAlwaysAndStart } from '@/features/location/alert-area';
 import type { ApiError } from '@/features/profile/api';
 import { gutter, radius, sky } from '@/theme';
@@ -50,7 +47,6 @@ export function EmergencyScreen() {
   const buddyName = usePrimaryBuddy(token, hasNeeds);
   const incoming = useIncomingContacts(token, !hasNeeds);
   const actions = emergencyActions({ hasNeeds, voiceHome: access.voiceHome, buddyName, relyingCount: incoming.length });
-  const { shelters } = useEvacuationRoute();
   const haptics = useHaptics();
   const insets = useSafeAreaInsets();
   const { stops, ink } = sky[alert?.level ?? 'normal'];
@@ -134,12 +130,9 @@ export function EmergencyScreen() {
     // Only the primary button shows the location-sharing line, so only it carries consent; the plain link still confirms on the Buddy page.
     if (action === 'buddy' || action === 'needHelp') router.replace({ pathname: '/buddy', params: { help: String(Date.now()), ...(action === 'buddy' ? { consented: '1' } : {}) } });
     else if (action === 'checkPeople') router.replace('/buddy');
-    else if (action === 'evacuate' && !access.voiceHome) router.replace({ pathname: '/discover', params: { route: String(Date.now()) } });
+    else if (action === 'evacuate' && !access.voiceHome) router.replace({ pathname: '/discover', params: { route: String(Date.now()), alertId: id } });
+    else if (action === 'evacuate') router.replace({ pathname: '/evacuate', params: { alertId: id } });
     else {
-      if (action === 'evacuate' && access.listen && !access.soundFree) {
-        const shelter = shelters?.[0];
-        void speak(shelter ? `${t('homeNearest')}: ${shelter.name}, ${formatDistance(shelter.distanceM, i18n.language)}` : t('homeNearestDetail'), i18n.language).catch(() => {});
-      }
       dismiss();
       if (action === 'safe') void always();
     }

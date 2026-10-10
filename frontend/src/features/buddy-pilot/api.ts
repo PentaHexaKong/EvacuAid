@@ -11,7 +11,7 @@ export type Availability = { enrolled: boolean; optedIn: boolean; observedAt: st
 export type Message = { id: string; userId: string; text: string; createdAt: string };
 export type SharedPosition = Position & { userId: string; stale: boolean };
 export type Maneuver = { instruction: string; beginShapeIndex: number; endShapeIndex: number; distanceM: number; durationSec: number; type: number; streetNames?: string[] };
-export type BuddyRoute = { routeStatus: string; leg: 'TO_REQUESTER' | 'TO_SHELTER'; destination: { name: string; latitude: number; longitude: number; shelterId?: string } | null; route: { geometry: { type: 'LineString'; coordinates: [number, number][] }; distanceM: number; durationSec: number; profile: string; maneuvers: Maneuver[] } | null; evaluation: { safetyStatus: string; accessibilityStatus: string; reasonCodes: string[] } | null; selectionReasonCodes: string[] };
+export type BuddyRoute = { routeStatus: string; leg: 'TO_REQUESTER' | 'TO_SHELTER'; destination: { entranceLatitude?: number | null; entranceLongitude?: number | null; entranceNote?: string | null; name: string; latitude: number; longitude: number; shelterId?: string } | null; route: { geometry: { type: 'LineString'; coordinates: [number, number][] }; distanceM: number; durationSec: number; profile: string; maneuvers: Maneuver[] } | null; evaluation: { safetyStatus: string; accessibilityStatus: string; reasonCodes: string[] } | null; selectionReasonCodes: string[] };
 
 export const terminalStatuses = new Set(['COMPLETED', 'INTERRUPTED', 'UNANSWERED']);
 export const sharingStatuses = new Set(['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'COMPLETION_PENDING']);

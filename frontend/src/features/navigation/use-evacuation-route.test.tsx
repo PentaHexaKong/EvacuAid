@@ -187,3 +187,18 @@ test('a changed capability uses the latest flag without recreating findRoute', a
   await act(() => findRoute());
   expect(jest.mocked(requestRoute).mock.calls[0][0].profile).toBe('WHEELCHAIR');
 });
+
+
+test('automatic rerouting uses the current guidance fix instead of the cached origin', async () => {
+  grant(true);
+  jest.mocked(requestRoute).mockResolvedValue(ready as never);
+  const view = await settled();
+  await act(() => view.result.current.findRoute('s1'));
+  const origin = { latitude: -6.265, longitude: 106.815, accuracyM: 5, observedAt: new Date().toISOString() };
+  location.getCurrentPositionAsync.mockClear();
+  await act(() => view.result.current.findRoute('s1', origin));
+  expect(requestRoute).toHaveBeenLastCalledWith(expect.objectContaining({ origin, destinationShelterId: 's1' }), 't', expect.any(AbortSignal));
+  expect(nearbyShelters).toHaveBeenLastCalledWith(origin, expect.any(AbortSignal));
+  expect(view.result.current.origin).toEqual(origin);
+  expect(location.getCurrentPositionAsync).not.toHaveBeenCalled();
+});

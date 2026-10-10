@@ -100,6 +100,7 @@ class NavigationRoute(BaseModel):
     geometry: dict
     routeScore: float
     profile: str = 'PEDESTRIAN'
+    maneuvers: list[dict] = Field(default_factory=list)
 
 
 class NormalizedRouteMetrics(BaseModel):
