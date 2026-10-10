@@ -1,4 +1,8 @@
 {
+  "buddy": {
+    "fallbackSearching": "{{name}} didn't answer. Looking for helpers nearby.",
+    "fallbackSearchingNoName": "No answer yet. Looking for helpers nearby."
+  },
   "listen": "Listen",
   "stopListening": "Stop",
   "overview": "Home",

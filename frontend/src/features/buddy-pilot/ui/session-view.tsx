@@ -79,7 +79,7 @@ export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; toke
 
 export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatFocus }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode; onPrimaryLayout?: (height: number) => void; onChatFocus?: () => void }) {
   const { soundFree } = useAccess();
-  const { state, c, status, support, session, active, requester, partner, native, route, helperRoute, routeBusy, wheelchair, setWheelchair, consent, setConsent, voice, statusText, confirm, catchNative, transition, startNearby, requestRoute, guidance } = a;
+  const { state, c, support, session, active, requester, partner, native, route, helperRoute, routeBusy, wheelchair, setWheelchair, consent, setConsent, voice, sessionStatus, statusText, confirm, catchNative, transition, startNearby, requestRoute, guidance } = a;
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith('id') ? 'id' : 'en';
   if (!session) return null;
@@ -88,7 +88,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
   const gps = partnerLocation ? relativeTime(partnerLocation.observedAt) : null;
   const toRequester = session.status === 'ACCEPTED' || session.status === 'EN_ROUTE';
   const eta = (requester ? helperRoute : route)?.route;
-  const headline = requester && helperRoute ? c(session.status === 'EN_ROUTE' ? 'onTheWay' : 'gettingReady') : status(session.status);
+  const headline = requester && helperRoute ? c(session.status === 'EN_ROUTE' ? 'onTheWay' : 'gettingReady') : sessionStatus;
   const stats = [
     { label: c('statEta'), value: !requester && guidance.ready ? `${guidance.minutes} ${c('minShort')}` : eta ? `${Math.max(1, Math.ceil(eta.durationSec / 60))} ${c('minShort')}` : '—' },
     // With a route, distance and time both follow the route; a straight line is only the fallback before one exists.

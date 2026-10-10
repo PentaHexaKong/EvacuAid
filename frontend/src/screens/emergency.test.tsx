@@ -76,7 +76,7 @@ test.each([null, 'Sari'])('buddy action shares caption and goes to help (%s)', a
   const view = render(<EmergencyScreen />);
   fireEvent.press(view.getByRole('button', { name: buddy ? "Ask Sari for help. Shares your location with Sari" : "Find a helper nearby. Shares your location with helpers nearby" }));
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', 'NEEDS_HELP');
-  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/buddy', params: { help: expect.any(String) } });
+  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/buddy', params: { help: expect.any(String), consented: '1' } });
   await waitFor(() => expect(applyResponse).toHaveBeenCalledWith('rain', 'NEEDS_HELP'));
   expect(Alert.alert).not.toHaveBeenCalled();
 });

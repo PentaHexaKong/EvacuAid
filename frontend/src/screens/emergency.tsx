@@ -131,7 +131,8 @@ export function EmergencyScreen() {
     active.current = false;
     cancelVoice();
     if (action !== 'checkPeople') void post(action === 'safe' ? 'SAFE' : action === 'evacuate' ? 'EVACUATING' : 'NEEDS_HELP');
-    if (action === 'buddy' || action === 'needHelp') router.replace({ pathname: '/buddy', params: { help: String(Date.now()) } });
+    // Only the primary button shows the location-sharing line, so only it carries consent; the plain link still confirms on the Buddy page.
+    if (action === 'buddy' || action === 'needHelp') router.replace({ pathname: '/buddy', params: { help: String(Date.now()), ...(action === 'buddy' ? { consented: '1' } : {}) } });
     else if (action === 'checkPeople') router.replace('/buddy');
     else if (action === 'evacuate' && !access.voiceHome) router.replace({ pathname: '/discover', params: { route: String(Date.now()) } });
     else {
