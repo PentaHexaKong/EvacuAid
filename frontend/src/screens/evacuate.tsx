@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, ScrollView, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ActivityIndicator, Alert, AppState, Linking, ScrollView, View } from 'react-native';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import IconX from '@tabler/icons-react-native/IconX';
@@ -20,6 +20,7 @@ import { colors } from '@/theme';
 export function EvacuateScreen() {
   const { shelterId, alertId } = useLocalSearchParams<{ shelterId?: string; alertId?: string }>();
   const router = useRouter();
+  const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
   const access = useAccess();
@@ -30,7 +31,7 @@ export function EvacuateScreen() {
   const [last, setLast] = useState<NavigationResponse | null>(null);
   if (fresh && fresh !== last) setLast(fresh);
   const response = fresh ?? last;
-  const guidance = useEvacuationGuidance(response, () => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId); });
+  const guidance = useEvacuationGuidance(response, position => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId, { ...position, accuracyM: Number.isFinite(position.accuracyM) ? position.accuracyM : null }); }, focused && evacuation.phase !== 'denied');
   const findRoute = useRef(evacuation.findRoute);
   const started = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -38,10 +39,15 @@ export function EvacuateScreen() {
   useEffect(() => { findRoute.current = evacuation.findRoute; });
   useEffect(() => { void findRoute.current(shelterId); }, [shelterId]);
   useEffect(() => {
-    if (!response?.route || started.current) return;
+    if (evacuation.phase !== 'denied' || !focused) return;
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void findRoute.current(shelterId ?? response?.destination?.shelterId); });
+    return () => subscription.remove();
+  }, [evacuation.phase, focused, shelterId, response?.destination?.shelterId]);
+  useEffect(() => {
+    if (!focused || evacuation.phase === 'denied' || !response?.route || started.current) return;
     started.current = true;
     if (access.listen && !access.soundFree) void speak(t('evacuateSpokenStart', { name: response.destination?.name ?? '', distance: formatDistance(response.route.distanceM, i18n.language) }), i18n.language).catch(() => {});
-  }, [response, access.listen, access.soundFree, t, i18n.language]);
+  }, [focused, evacuation.phase, response, access.listen, access.soundFree, t, i18n.language]);
   const leave = () => { if (router.canGoBack()) router.back(); else router.replace('/'); };
   const stop = () => Alert.alert(t('evacuateStopTitle'), t('evacuateStopBody'), [{ text: t('evacuateKeepGoing'), style: 'cancel' }, { text: t('evacuateStopConfirm'), style: 'destructive', onPress: leave }]);
   const arrived = async () => {
@@ -76,7 +82,7 @@ export function EvacuateScreen() {
     {guidance.caption && <AppText accessibilityLiveRegion="polite">{guidance.caption}</AppText>}
     {denied && <ActionButton variant="secondary" label={t('openSettings')} onPress={() => { void Linking.openSettings(); }} />}
     {outdated && <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('evacuateRouteOutdated')}</AppText>}
-    {(unavailable || outdated) && <ActionButton variant="secondary" label={t('tryAgain')} onPress={() => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId); }} />}
+    {(denied || unavailable || outdated) && <ActionButton variant="secondary" label={t('tryAgain')} onPress={() => { void evacuation.findRoute(shelterId ?? response?.destination?.shelterId); }} />}
     <View style={{ flex: 1 }} />
     <View style={{ gap: 12 }}>
       {failed && <AppText accessibilityRole="alert">{t('alertUnavailable')}</AppText>}

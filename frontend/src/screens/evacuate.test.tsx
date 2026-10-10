@@ -1,7 +1,8 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Linking } from 'react-native';
+import { Alert, AppState, Linking } from 'react-native';
 import { respondToAlert } from '@/features/alerts/api';
 import { applyResponse } from '@/features/alerts/use-alerts';
+import { useEvacuationGuidance } from '@/features/navigation/use-evacuation-guidance';
 import { speak } from '@/features/feedback/speech';
 import { EvacuateScreen } from './evacuate';
 
@@ -9,10 +10,11 @@ const mockRouter = { canGoBack: jest.fn(), back: jest.fn(), replace: jest.fn() }
 const mockFind = jest.fn();
 let mockParams: { shelterId?: string; alertId?: string };
 let mockPhase = 'ready';
+let mockFocused = true;
 let mockSoundFree = false;
 let mockArrived = false;
 const mockResponse = { destination: { shelterId: 'hall', name: 'Town Hall', entranceNote: 'East entrance' }, route: { distanceM: 900 } };
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 34 }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, values?: Record<string, string>) => {
   let text = jest.requireActual('../localization/en.json')[key] ?? key;
@@ -20,14 +22,14 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
   return text;
 }, i18n: { language: 'en' } }) }));
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ phase: mockPhase, route: { response: mockResponse }, findRoute: mockFind }) }));
-jest.mock('@/features/navigation/use-evacuation-guidance', () => ({ useEvacuationGuidance: () => ({ instruction: 'Turn left', upcoming: 'Continue straight', remainingM: 800, minutes: 9, nextManeuverM: 40, caption: 'Use the east entrance', arrived: mockArrived }) }));
+jest.mock('@/features/navigation/use-evacuation-guidance', () => ({ useEvacuationGuidance: jest.fn(() => ({ instruction: 'Turn left', upcoming: 'Continue straight', remainingM: 800, minutes: 9, nextManeuverM: 40, caption: 'Use the east entrance', arrived: mockArrived })) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest' }) }));
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ listen: true, soundFree: mockSoundFree }) }));
 jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn().mockResolvedValue({ myResponse: 'SAFE' }) }));
 jest.mock('@/features/alerts/use-alerts', () => ({ applyResponse: jest.fn() }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn().mockResolvedValue(undefined) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
+beforeEach(() => { jest.clearAllMocks(); mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
 
 test('READY shows destination, instruction, remaining distance, entrance and caption, and speaks once', () => {
   const view = render(<EvacuateScreen />);
@@ -120,4 +122,43 @@ test('a failed reroute keeps guiding on the last good route', () => {
   mockPhase = 'denied';
   view.rerender(<EvacuateScreen />);
   expect(view.getByRole('header', { name: 'Guidance needs your location.' })).toBeTruthy();
+});
+
+
+test('automatic reroutes pass the current fix and guidance follows screen focus', () => {
+  const view = render(<EvacuateScreen />);
+  const fix = { latitude: 0, longitude: 0.001, accuracyM: 5, observedAt: new Date().toISOString() };
+  act(() => jest.mocked(useEvacuationGuidance).mock.calls.at(-1)![1](fix));
+  expect(mockFind).toHaveBeenLastCalledWith('hall', fix);
+  mockFocused = false;
+  view.rerender(<EvacuateScreen />);
+  expect(useEvacuationGuidance).toHaveBeenLastCalledWith(mockResponse, expect.any(Function), false);
+  mockFocused = true;
+  view.rerender(<EvacuateScreen />);
+  expect(useEvacuationGuidance).toHaveBeenLastCalledWith(mockResponse, expect.any(Function), true);
+  mockPhase = 'denied';
+  view.rerender(<EvacuateScreen />);
+  expect(useEvacuationGuidance).toHaveBeenLastCalledWith(mockResponse, expect.any(Function), false);
+});
+
+test('denied permission retries on foreground and from Try again, with listener cleanup', () => {
+  let change!: (state: import('react-native').AppStateStatus) => void;
+  const remove = jest.fn();
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, callback) => { change = callback; return { remove }; });
+  mockPhase = 'denied';
+  const view = render(<EvacuateScreen />);
+  mockFind.mockClear();
+  act(() => change('background'));
+  expect(mockFind).not.toHaveBeenCalled();
+  act(() => change('active'));
+  expect(mockFind).toHaveBeenCalledWith('hall');
+  mockFind.mockClear();
+  fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+  expect(mockFind).toHaveBeenCalledWith('hall');
+  mockPhase = 'ready';
+  view.rerender(<EvacuateScreen />);
+  expect(remove).toHaveBeenCalledTimes(1);
+  expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
+  view.unmount();
+  jest.mocked(AppState.addEventListener).mockRestore();
 });
