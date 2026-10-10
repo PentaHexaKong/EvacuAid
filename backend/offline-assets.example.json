@@ -1,0 +1,17 @@
+{
+  "regions": {
+    "REPLACE_WITH_REGION_UUID": {
+      "mapFile": "/app/data/offline-assets/cipete-streets-v1.geojson",
+      "graphDirectory": "/app/offline-graph",
+      "coverageBbox": [106.78, -6.29, 106.83, -6.24],
+      "bufferMeters": 1000,
+      "routingEngineVersion": "3.9.0",
+      "mapSourceUrl": "https://overpass-api.de/api/interpreter",
+      "routingSourceUrl": "https://www.openstreetmap.org",
+      "mapAttribution": "© OpenStreetMap contributors, ODbL 1.0",
+      "datasetGeneratedAt": null,
+      "mapDatasetGeneratedAt": null,
+      "graphDatasetGeneratedAt": null
+    }
+  }
+}

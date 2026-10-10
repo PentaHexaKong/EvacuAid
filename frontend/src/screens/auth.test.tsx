@@ -8,6 +8,12 @@ jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn().mockResolvedValue(nul
 jest.mock('react-native-safe-area-context',()=>({useSafeAreaInsets:()=>({top:20,bottom:10})}));
 jest.mock('react-i18next',()=>({useTranslation:()=>({t:(key:string)=>jest.requireActual('../localization/en.json')[key]??key})}));
 beforeEach(()=>{jest.clearAllMocks();mockLogin.mockResolvedValue(undefined);mockRegister.mockResolvedValue(undefined);});
+
+test('downloaded regions can be opened without logging in',async()=>{
+ const open=jest.fn();const view=render(<AuthScreen onOffline={open} />);await act(async()=>{});
+ fireEvent.press(view.getByRole('button',{name:en.offlineTitle}));
+ expect(open).toHaveBeenCalledTimes(1);expect(mockLogin).not.toHaveBeenCalled();
+});
 test('login sends credentials and blocks duplicate submissions',async()=>{
  let complete!:()=>void;mockLogin.mockImplementationOnce(()=>new Promise<void>(done=>{complete=done;}));
  const view=render(<AuthScreen />);await act(async()=>{});

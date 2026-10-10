@@ -7,7 +7,7 @@ import { ActionButton, AppText, Field, Page } from '@/components/ui';
 import { GUEST_TOKEN_KEY, useAuthSession } from '@/features/profile/session';
 import { colors } from '@/theme';
 
-export function AuthScreen() {
+export function AuthScreen({ onOffline }: { onOffline?: () => void } = {}) {
   const { t } = useTranslation();
   const session = useAuthSession();
   const insets = useSafeAreaInsets();
@@ -48,5 +48,6 @@ export function AuthScreen() {
     {(error || session.error) && <AppText accessibilityRole="alert" style={{color:colors.critical}}>{error ?? (session.errorKind==='network'?t('apiNetworkUnavailable'):t('authTryAgain'))}</AppText>}
     <ActionButton label={t(register?'authCreateAccount':'authSignIn')} onPress={()=>void submit()} loading={busy} />
     <ActionButton variant="secondary" label={t(register?'authHaveAccount':'authNeedAccount')} disabled={busy} onPress={()=>{setRegister(!register);setPassword('');setError(null);}} />
+    {onOffline && <ActionButton variant="secondary" label={t('offlineTitle')} onPress={onOffline} />}
   </Page>;
 }

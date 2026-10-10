@@ -17,3 +17,5 @@ defusedxml>=0.7,<1
 argon2-cffi>=25.1,<26
 PyJWT>=2.15,<3
 email-validator>=2.3,<3
+cryptography>=45,<47
+rfc8785>=0.1.4,<1

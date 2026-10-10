@@ -5,3 +5,7 @@ data/
 *.md
 *.markdown
 !backend/AUTHENTICATION.md
+!VPS_DEPLOYMENT.md
+!OFFLINE_NAVIGATION.md
+!OFFLINE_FEASIBILITY.md
+.secrets/

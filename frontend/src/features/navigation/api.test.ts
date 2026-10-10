@@ -68,4 +68,15 @@ describe('navigation api', () => {
     expect((rejection as Error).name).toBe('AbortError');
     expect(rejection).not.toHaveProperty('kind');
   });
+
+  test('explicit offline routing never invokes the backend or invents a route', async () => {
+    jest.doMock('@/features/offline/package-manager', () => ({ installedPackages: async () => [] }));
+    const fetchMock = jest.spyOn(global, 'fetch');
+    const response = await load().requestRoute({ userId: 'u1', origin }, 'token-1', undefined, { offlineOnly: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.routingMode).toBe('OFFLINE');
+    expect(response.feasibilityStatus).toBe('ROUTING_UNAVAILABLE');
+    expect(response.route).toBeNull();
+    expect(response.safetyVerified).toBe(false);
+  });
 });

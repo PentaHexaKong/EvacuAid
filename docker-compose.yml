@@ -65,6 +65,25 @@ services:
       backend:
         condition: service_healthy
 
+  offline-worker:
+    build:
+      context: ./backend
+    profiles: ['offline']
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-evacuaid}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-evacuaid}
+      OFFLINE_SIGNING_KEY_PATH: /run/secrets/offline-signing.pem
+      OFFLINE_ASSET_CATALOG: /app/data/offline-assets/catalog.json
+    command: ['python', '-m', 'app.offlineCli', 'worker']
+    restart: unless-stopped
+    volumes:
+      - ./backend/data:/app/data
+      - ./.secrets:/run/secrets:ro
+      - valhalla_tiles:/app/offline-graph:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
   postgres:
     image: postgis/postgis:16-3.4
     environment:

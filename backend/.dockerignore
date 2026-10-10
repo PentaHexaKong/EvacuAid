@@ -7,3 +7,5 @@ data/raw
 data/processed
 data/final_output.json
 data/valhallaData
+data/offline-assets
+data/offline-packages
