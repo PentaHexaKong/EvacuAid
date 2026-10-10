@@ -49,8 +49,8 @@ export function AlertsScreen({ sheet = false }: { sheet?: boolean }) {
     });
   };
   const readOnFocus = useEffectEvent(readWarnings);
-  const ids = alerts.items.map(item => item.id).sort().join(':');
-  useEffect(() => { readOnFocus(); }, [enabled, prompt.focused, ids, alerts.status, alerts.stale]);
+  const signature = JSON.stringify([...alerts.items].sort(compareAlerts).map(item => [item.id, item.level, item.hazardType, item.area, item.validUntil, item.myResponse]));
+  useEffect(() => { readOnFocus(); }, [enabled, prompt.focused, signature, alerts.status, alerts.stale]);
   useEffect(() => { if (!enabled || !prompt.focused) askedAlert.current = null; }, [enabled, prompt.focused]);
   return <Page><View style={{ gap: 12 }}>
     {enabled && <>

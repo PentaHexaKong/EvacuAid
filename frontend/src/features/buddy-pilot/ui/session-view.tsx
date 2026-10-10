@@ -21,6 +21,7 @@ import { distanceM, formatDistance } from '../navigation';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, initials, StatStrip, StatusChip } from './parts';
 import { RouteView } from './route-view';
+import { SessionRequesterActions } from './session-requester-actions';
 import { ManeuverBanner, RecenterPill, TripBar } from './navigation-view';
 
 const MIN_PEEK = 176;
@@ -116,8 +117,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       {session.status === 'ARRIVED' && <ActionButton label={c('pickup')} disabled={!session.meetingConfirmed} loading={state.busy} onPress={() => confirm(c('pickup'), () => { void transition('evacuating'); })} />}
       {['ARRIVED', 'EVACUATING'].includes(session.status) && <ActionButton variant="secondary" label={c('complete')} loading={state.busy} onPress={() => confirm(c('complete'), () => { void transition('report-complete'); })} />}
     </View>}
-    {active && requester && session.status === 'ARRIVED' && !session.meetingConfirmed && <ActionButton label={c('meet')} loading={state.busy} onPress={() => confirm(c('meet'), () => { void transition('confirm-meeting'); })} />}
-    {active && requester && session.status === 'COMPLETION_PENDING' && <ActionButton label={c('confirmComplete')} loading={state.busy} onPress={() => confirm(c('confirmComplete'), () => { void transition('confirm-complete'); })} />}
+    <SessionRequesterActions a={a} />
 
     </View>
 
