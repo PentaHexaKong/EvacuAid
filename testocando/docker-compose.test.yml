@@ -17,6 +17,9 @@ services:
       context: ../backend
     environment:
       DATABASE_URL: postgresql+asyncpg://command_test:isolated-test-only@postgres:5432/evacuaid_command_test
+      APP_ENV: test
+      AUTH_JWT_SECRET: isolated-test-only-signing-secret-at-least-32-bytes
+      AUTH_ALLOW_GUEST_SESSIONS: 'true'
       PYTHONPATH: /workspace/backend:/workspace/testocando
     working_dir: /workspace/backend
     volumes:

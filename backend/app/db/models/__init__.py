@@ -7,5 +7,7 @@ from .shelter import Shelter
 from .preference import UserPreference
 from .session import GuestSession
 from .user import User, UserAccessibility
+from .auth import RefreshToken, AuthRateLimit
 
 __all__ = ['AlertDelivery', 'AlertResponse', 'AssistanceRequest', 'BuddyRelationship', 'ExternalDataSnapshot', 'GuestSession', 'HazardRecord', 'BuddyAttempt', 'BuddyAvailability', 'BuddyInbox', 'BuddyInvitation', 'BuddyLocation', 'BuddyMessage', 'BuddyOutbox', 'BuddyPushToken', 'BuddyRequest', 'Shelter', 'User', 'UserAccessibility', 'UserPreference']
+__all__ += ['RefreshToken', 'AuthRateLimit']

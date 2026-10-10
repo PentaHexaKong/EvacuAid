@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import current_user
+from app.authConfig import settings
 from app.db.session import get_session
 from app.db.models.buddySession import BuddyAvailability, BuddyRequest
 from app.services import buddyRequestService as service
@@ -16,6 +17,8 @@ router = APIRouter(prefix='/dev', tags=['Buddy'])
 
 @router.post('/simulate-nearby', status_code=201)
 async def simulate_nearby(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    if settings().environment == 'production':
+        raise HTTPException(404, 'Simulation is disabled')
     await service.lock_users(db, [actor.id])
     availability = await db.get(BuddyAvailability, actor.id)
     if not availability or availability.latitude is None or availability.longitude is None:

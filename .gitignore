@@ -4,3 +4,4 @@ data/
 # Local Markdown documentation
 *.md
 *.markdown
+!backend/AUTHENTICATION.md

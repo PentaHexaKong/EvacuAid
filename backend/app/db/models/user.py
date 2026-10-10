@@ -14,9 +14,15 @@ class User(Base):
     __table_args__ = (
         CheckConstraint("latitude IS NULL OR latitude BETWEEN -90 AND 90", name="ck_users_latitude"),
         CheckConstraint("longitude IS NULL OR longitude BETWEEN -180 AND 180", name="ck_users_longitude"),
+        CheckConstraint("role IN ('CITIZEN','RESPONDER','GOVERNMENT','ADMIN')", name="ck_users_role"),
+        CheckConstraint("(email IS NULL) = (password_hash IS NULL)", name="ck_users_credentials_pair"),
+        CheckConstraint("email IS NULL OR email = lower(trim(email))", name="ck_users_email_normalized"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    role: Mapped[str] = mapped_column(String(16), default='CITIZEN', server_default='CITIZEN', nullable=False)
     name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     buddy_code: Mapped[str | None] = mapped_column(String(9), nullable=True, unique=True)

@@ -12,6 +12,11 @@ class AccessibilityType(str, Enum):
     ELDERLY = "ELDERLY"
     OTHER = "OTHER"
 
+    @classmethod
+    def _missing_(cls, value):
+        aliases = {'IMMOBILE':cls.MOBILITY_LIMITATION, 'BLIND':cls.VISUAL_IMPAIRMENT, 'DEAF':cls.HEARING_IMPAIRMENT}
+        return aliases.get(value) if isinstance(value, str) else None
+
 
 class AccessibilityItem(BaseModel):
     type: AccessibilityType

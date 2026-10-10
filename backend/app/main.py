@@ -8,6 +8,9 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from app.authConfig import settings, validate_startup
+from app.routers.auth import router as auth_router
 from redis.asyncio import Redis
 from sqlalchemy import text
 
@@ -37,6 +40,7 @@ configureLogging()
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    validate_startup()
     application.state.redisClient = Redis.from_url(REDIS_URL, decode_responses=True)
     worker = asyncio.create_task(run_buddy_worker())
     yield
@@ -48,6 +52,9 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="EvacuAid Backend", version="0.2.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=list(settings().cors_origins), allow_credentials=False,
+    allow_methods=['GET','POST','PATCH','PUT','DELETE','OPTIONS'], allow_headers=['Authorization','Content-Type'])
+app.include_router(auth_router)
 app.include_router(alerts_router)
 app.include_router(buddy_router, prefix='/v1/buddy')
 # Old app builds call /v1/buddy-pilot; remove once they are retired.

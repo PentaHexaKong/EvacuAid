@@ -30,6 +30,9 @@ async def test_direct_invitation_upgrade_downgrade(dbSession):
     await dbSession.execute(text("INSERT INTO pilot_invitations (id, owner_id, redeemer_id, code_hash, status, expires_at) VALUES (:legacy, :owner, NULL, :hash, 'PENDING', now() + interval '1 day')"), {'legacy': legacy_id, 'owner': owner_id, 'hash': 'a' * 64})
     await dbSession.execute(text("INSERT INTO pilot_invitations (id, owner_id, redeemer_id, code_hash, status, direction, relation, expires_at) VALUES (:direct, :owner, :target, NULL, 'SENT', 'OFFER_HELP', 'TEMAN', now() + interval '7 days')"), {'direct': direct_id, 'owner': owner_id, 'target': target_id})
     await dbSession.commit()
+    await dbSession.execute(text("UPDATE users SET name = 'Preserved profile', phone = '08123' WHERE id = :id"), {'id':owner_id})
+    await dbSession.execute(text("INSERT INTO user_accessibility (id, user_id, type) VALUES (:id, :user, 'VISUAL_IMPAIRMENT')"), {'id':uuid.uuid4(), 'user':owner_id})
+    await dbSession.commit()
     try:
         await migrate(('downgrade', '20261005_06'))
         async with engine.connect() as connection:
@@ -41,6 +44,8 @@ async def test_direct_invitation_upgrade_downgrade(dbSession):
     finally:
         await migrate(('upgrade', 'head'))
     async with engine.connect() as connection:
+        assert (await connection.execute(text('SELECT name, phone, role, email FROM users WHERE id = :id'), {'id':owner_id})).one() == ('Preserved profile','08123','CITIZEN',None)
+        assert (await connection.execute(text('SELECT type FROM user_accessibility WHERE user_id = :id'), {'id':owner_id})).scalar_one() == 'VISUAL_IMPAIRMENT'
         columns = (await connection.execute(text("SELECT table_name, column_name, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('users', 'pilot_invitations', 'buddy_relationships')"))).all()
         assert ('users', 'buddy_code', 'YES') in columns
         assert ('pilot_invitations', 'code_hash', 'YES') in columns
