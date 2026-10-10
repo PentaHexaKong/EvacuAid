@@ -20,7 +20,7 @@ export function DiscoverMap(props: DiscoverMapProps) {
   if (!available) return <MapFallback topInset={props.topInset} />;
   return <MapBoundary key={attempt} fallback={<MapFallback topInset={props.topInset} onRetry={() => setAttempt(count => count + 1)} />}><NativeMap {...props} /></MapBoundary>;
 }
-function NativeMap({ items, selected, onSelect, route, zones, userLocation, focus, onLocate, topInset, bottomInset, controlsStyle }: DiscoverMapProps) {
+function NativeMap({ items, selected, onSelect, route, zones, userLocation, focus, onLocate, topInset, bottomInset, controlsStyle, follow, onFollowChange }: DiscoverMapProps) {
   const { t } = useTranslation();
   const map = useRef<MapView>(null);
   const [ready, setReady] = useState(false);
@@ -30,18 +30,20 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, focu
     return () => clearTimeout(timeout);
   }, []);
   const frame = useCallback(() => {
+    // Turn-by-turn: stay on the walker, or stay where they dragged the map.
+    if (follow !== undefined) { if (follow && userLocation) map.current?.animateCamera({ center: userLocation, zoom: 17 }); return; }
     const edgePadding = { top: topInset + 40, right: 56, bottom: bottomInset + 56, left: 56 };
     const points = route?.length ? route.map(([longitude, latitude]) => ({ latitude, longitude })) : focus ? focusCorners(focus).map(([longitude, latitude]) => ({ latitude, longitude })) : userLocation ? [userLocation] : items.map(item => item.coordinate);
     if (points.length === 1) map.current?.animateCamera({ center: points[0], zoom: 14 });
     else if (points.length) map.current?.fitToCoordinates(points, { edgePadding, animated: true });
-  }, [focus, route, userLocation, items, topInset, bottomInset]);
+  }, [focus, route, userLocation, items, topInset, bottomInset, follow]);
   useEffect(() => {
     if (!ready) return;
     const settle = setTimeout(frame, 150);
     return () => clearTimeout(settle);
   }, [ready, frame]);
   return <View style={StyleSheet.absoluteFill}>
-    <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={{ latitude: -6.2675, longitude: 106.8095, latitudeDelta: 0.08, longitudeDelta: 0.08 }} onMapReady={() => setReady(true)} showsUserLocation={Boolean(userLocation)} showsMyLocationButton={false} toolbarEnabled={false} mapPadding={{ top: topInset, right: 0, bottom: bottomInset, left: 0 }} accessibilityLabel={t('discoverMapLabel')}>
+    <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={{ latitude: -6.2675, longitude: 106.8095, latitudeDelta: 0.08, longitudeDelta: 0.08 }} onMapReady={() => setReady(true)} onPanDrag={() => { if (follow) onFollowChange?.(false); }} showsUserLocation={Boolean(userLocation)} showsMyLocationButton={false} toolbarEnabled={false} mapPadding={{ top: topInset, right: 0, bottom: bottomInset, left: 0 }} accessibilityLabel={t('discoverMapLabel')}>
       {zones?.features.map(zone => {
         const tint = hazard[zone.properties.hazard];
         const core = zone.properties.ring === 'core';
@@ -64,7 +66,7 @@ function NativeMap({ items, selected, onSelect, route, zones, userLocation, focu
       })}
     </MapView>
     <Animated.View pointerEvents="box-none" style={[styles.controls, controlsStyle]}>
-      <MapControls controls={[{ label: t('centerOnMe'), symbol: 'location', icon: IconCurrentLocation, onPress: () => (userLocation && !focus ? frame() : onLocate()) }]} />
+      <MapControls controls={[{ label: t('centerOnMe'), symbol: 'location', icon: IconCurrentLocation, onPress: () => (follow !== undefined ? onFollowChange?.(true) : userLocation && !focus ? frame() : onLocate()) }]} />
     </Animated.View>
     {timedOut && !ready && <View style={[styles.notice, { top: topInset + 68 }]}><AppText accessibilityRole="alert" variant="small">{t('discoverMapUnavailable')}</AppText></View>}
   </View>;
