@@ -109,6 +109,8 @@ export function EmergencyScreen() {
   };
   const post = async (response: NonNullable<AlertItem['myResponse']>) => {
     if (!token) return;
+    // Counted as answered at once: the screen changes before the server replies, and the gate must not offer a lesser warning in between.
+    applyResponse(id, response);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try { const result = await respondToAlert(token, id, response); applyResponse(id, result.myResponse); return; }
       catch (cause) {
