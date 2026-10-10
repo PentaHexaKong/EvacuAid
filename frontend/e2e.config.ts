@@ -19,6 +19,8 @@ export default {
     },
   }],
   workers: 1,
+  // The account the tests sign in with. Register it once on the test backend, then set E2E_ACCOUNT_EMAIL and E2E_ACCOUNT_PASSWORD.
+  credentials: { tester: { username: process.env.E2E_ACCOUNT_EMAIL ?? 'sim-tester@example.com', password: () => process.env.E2E_ACCOUNT_PASSWORD ?? '' } },
   // Agent steps run on the ChatGPT subscription signed in with `npx e2e login openai`; CI needs an API key provider instead.
   agents: { default: { model: chatgpt('gpt-6-luna'), tools: mobileTools(iphone) } },
 } satisfies E2EConfig;

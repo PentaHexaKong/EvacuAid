@@ -529,7 +529,7 @@
   "authName": "Name (optional)",
   "authEmail": "Email",
   "authPassword": "Password",
-  "authPasswordHint": "Use 12?128 characters.",
+  "authPasswordHint": "Use 12 to 128 characters.",
   "authSignIn": "Sign in",
   "authHaveAccount": "Already have an account? Sign in",
   "authNeedAccount": "New here? Create account",
@@ -541,5 +541,5 @@
   "authSignOut": "Sign out",
   "authSignOutBody": "Sign out on this phone? Your account and saved profile will be kept.",
   "authUpgradeGuest": "Keep my previous guest profile",
-  "authUpgradeSelected": "Previous profile selected ? tap to create a new profile"
+  "authUpgradeSelected": "Previous profile selected. Tap to create a new profile instead."
 }

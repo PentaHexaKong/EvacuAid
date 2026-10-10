@@ -529,7 +529,7 @@
   "authName": "Nama (opsional)",
   "authEmail": "Email",
   "authPassword": "Kata sandi",
-  "authPasswordHint": "Gunakan 12?128 karakter.",
+  "authPasswordHint": "Gunakan 12 sampai 128 karakter.",
   "authSignIn": "Masuk",
   "authHaveAccount": "Sudah punya akun? Masuk",
   "authNeedAccount": "Belum punya akun? Daftar",
@@ -541,5 +541,5 @@
   "authSignOut": "Keluar",
   "authSignOutBody": "Keluar dari ponsel ini? Akun dan profil tersimpan tetap ada.",
   "authUpgradeGuest": "Simpan profil tamu saya sebelumnya",
-  "authUpgradeSelected": "Profil sebelumnya dipilih ? ketuk untuk membuat profil baru"
+  "authUpgradeSelected": "Profil sebelumnya dipilih. Ketuk untuk membuat profil baru."
 }
