@@ -16,6 +16,8 @@ let subscription: ReturnType<typeof AppState.addEventListener> | null = null;
 let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
 const publish = (value: State) => { state = value; listeners.forEach(listener => listener(state)); };
 export const applyResponse = (id: string, response: AlertItem['myResponse']) => publish({ ...state, items: state.items.map(item => item.id === id ? { ...item, myResponse: response } : item) });
+// Warnings the person answered with "evacuating" or "needs help": the ones an arrival should close.
+export const activeAlertIds = () => state.items.filter(item => item.myResponse === 'EVACUATING' || item.myResponse === 'NEEDS_HELP').map(item => item.id);
 export const findAlert = (id: string | undefined) => state.items.find(item => item.id === id);
 async function load(token: string) {
   if (pending) return pending;

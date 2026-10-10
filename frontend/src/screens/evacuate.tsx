@@ -8,7 +8,7 @@ import { ActionButton, AppText, Tap } from '@/components/ui';
 import { Group, Row } from '@/components/grouped-list';
 import { useAccess } from '@/features/access/use-access';
 import { respondToAlert } from '@/features/alerts/api';
-import { applyResponse } from '@/features/alerts/use-alerts';
+import { activeAlertIds, applyResponse } from '@/features/alerts/use-alerts';
 import { speak } from '@/features/feedback/speech';
 import { useGuestSession } from '@/features/profile/session';
 import { useEvacuationRoute } from '@/features/navigation/use-evacuation-route';
@@ -55,12 +55,14 @@ export function EvacuateScreen() {
     setSaving(true);
     setFailed(false);
     try {
-      if (alertId) {
+      // Arriving safe answers the warning that started this walk and any other the person said they were acting on.
+      const ids = [...new Set([...(alertId ? [alertId] : []), ...activeAlertIds()])];
+      if (ids.length) {
         if (!token) throw new Error('Missing guest session');
-        const result = await respondToAlert(token, alertId, 'SAFE');
-        applyResponse(alertId, result.myResponse);
+        for (const id of ids) applyResponse(id, (await respondToAlert(token, id, 'SAFE')).myResponse);
       }
-      router.replace('/');
+      // This screen is a modal: leaving must dismiss it, not put Home on top of it.
+      leave();
     } catch { setFailed(true); }
     finally { setSaving(false); }
   };
