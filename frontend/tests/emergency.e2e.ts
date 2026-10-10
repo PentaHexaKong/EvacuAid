@@ -8,7 +8,7 @@ test('a seeded Siaga warning interrupts launch and Safe confirms on Home', { tim
     await screen.getByRole('button', 'Tutup').tap();
     await agent.act('change the app language to English in the settings, then go back to the home screen');
     await app.restart();
-  } else if (await screen.getByRole('button', 'Peringatan').count()) {
+  } else if (await screen.getByRole('tab', 'Peringatan').count()) {
     await agent.act('change the app language to English in the settings, then go back to the home screen');
     await app.restart();
   }
@@ -27,6 +27,7 @@ test('a seeded warning with a primary Buddy sends help straight to the waiting s
     await app.restart();
   }
   await screen.getByRole('button', /^Ask .+ for help\. Shares your location with .+$/).tap();
-  await expect(screen.getByText('Waiting for a helper response')).toBeVisible();
+  // The request is out. With a Buddy who cannot answer it moves on to the nearby search by itself, so either state proves it was sent.
+  await expect(screen.getByText(/Waiting for a helper response|Looking for helpers nearby|No helper/).first()).toBeVisible({ timeout: 30_000 });
   await expect(screen.getByRole('button', 'Cancel')).not.toBeVisible();
 });

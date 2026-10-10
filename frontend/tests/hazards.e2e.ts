@@ -6,16 +6,17 @@ test('a disaster card opens its detail page with facts, safety steps and a way t
   // A dev build downloads its bundle from Metro on every fresh launch.
   await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 180_000 });
   // A saved language preference wins over the device language, so switch it in the app when it is not English yet.
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
 
   // The cards come from the live feed, so which disasters are listed changes from day to day: match any card by the shape of its label.
   const card = screen.getByRole('button', /magnitude \d|citizen reports? this week/).first();
   await screen.scrollUntilVisible(card);
-  await card.tap();
+  // The first card can come to rest under the floating tab bar, where a plain tap is refused: let the agent bring it clear.
+  await agent.act('open the first disaster card under "Discover disaster", scrolling first if the tab bar is in the way');
   await expect(screen.getByText('Key facts')).toBeVisible();
   await expect(screen.getByText('What to do')).toBeVisible();
   // The banner photo is decorative, so it is not in the accessibility tree this test reads; it is checked by eye on the simulator.
-  await expect(screen.getByText('Source')).toBeVisible();
+  await screen.scrollUntilVisible(screen.getByText(/^Source: /));
 
   await screen.getByRole('button', 'Back').tap();
   await expect(screen.getByText('Discover disaster')).toBeVisible();
@@ -24,8 +25,8 @@ test('a disaster card opens its detail page with facts, safety steps and a way t
 test('Home shows the area warning status and the Alerts tab opens', { timeout: 300_000 }, async ({ app, agent, screen }) => {
   await app.open();
   await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 180_000 });
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
-  await expect(screen.getByText(/^(Caution|Alert|Danger) for .+|^No warning for your area right now\.$/).first()).toBeVisible();
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await expect(screen.getByText(/^(Caution|Alert) for .+|^Danger from .+|^No warning for your area right now\.$/).first()).toBeVisible();
   await screen.getByRole('tab', 'Alerts').tap();
   await expect(screen.getByText('Alerts').first()).toBeVisible();
   await expect(screen.getByText("Can't load warnings right now.")).not.toBeVisible();
