@@ -76,7 +76,7 @@ export function EvacuateScreen() {
   return <ScrollView accessibilityViewIsModal style={{ flex: 1, backgroundColor: colors.canvas }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: insets.top, paddingBottom: insets.bottom + 12, gap: 16 }}>
     <View style={{ minHeight: 44 }}><Tap accessibilityLabel={t('evacuateStop')} onPress={stop} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><IconX size={24} color={colors.ink} /></Tap></View>
     {response?.destination && <AppText variant="small" style={{ color: colors.muted }}>{t('evacuateTo', { name: response.destination.name })}</AppText>}
-    <AppText variant="title" accessibilityRole="header">{denied ? t('evacuateNeedsLocation') : unavailable ? t('evacuateNoRoute') : !ready ? t('evacuateStarting') : guidance.arrived ? t('arriveHere') : guidance.instruction ?? t('evacuateStarting')}</AppText>
+    <AppText variant="title" accessibilityRole="header">{denied ? t('evacuateNeedsLocation') : unavailable ? t('evacuateNoRoute') : !ready ? t('evacuateStarting') : guidance.arrived ? t('arriveHere') : guidance.instruction ?? t('evacuateLocating')}</AppText>
     {!ready && !denied && !unavailable && <ActivityIndicator color={colors.primary} />}
     {ready && <AppText style={{ fontVariant: ['tabular-nums'] }}>{t('evacuateRemaining', { distance: formatDistance(guidance.remainingM, i18n.language), minutes: guidance.minutes })}</AppText>}
     {ready && !guidance.arrived && guidance.upcoming && <Group><Row title={t('evacuateThen')} detail={`${guidance.upcoming} · ${formatDistance(guidance.nextManeuverM, i18n.language)}`} /></Group>}

@@ -523,5 +523,7 @@
   "alertsSpokenItem": "{{level}}: {{hazard}} di {{area}}{{until}}.",
   "alertsSpokenEvacuateAsk": "Perlu evakuasi? Ucapkan ya.",
   "alertsSpokenStay": "Baik. Ucapkan “tolong” di Beranda jika butuh seseorang.",
-  "alertsReadAgain": "Bacakan lagi peringatan"
+  "alertsReadAgain": "Bacakan lagi peringatan",
+  "homeHeadlineDanger": "{{level}} untuk {{hazard}}.",
+  "evacuateLocating": "Mencari posisimu…"
 }

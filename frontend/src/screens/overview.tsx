@@ -163,7 +163,7 @@ export function OverviewScreen() {
           {!alert
             ? alerts.status === 'ready' ? <Headline template={t('homeHeadlineClear')} ink={ink} parts={{ level: lowerFirst(t(levelLabels.normal)), hazard: '' }} /> : <AppText variant="title" accessibilityRole="header" style={{ color: ink }}>{alerts.status === 'no-location' ? t('alertNoLocationTitle') : alerts.status === 'error' ? t('alertUnavailable') : t('loading')}</AppText>
             : <>
-              <Headline template={t('homeHeadlineNoWindow')} ink={ink} parts={{ level: t(levelLabels[level]), hazard: lowerFirst(t(alert.title)) }} />
+              <Headline template={t(level === 'awas' ? 'homeHeadlineDanger' : 'homeHeadlineNoWindow')} ink={ink} parts={{ level: t(levelLabels[level]), hazard: lowerFirst(t(alert.title)) }} />
               {alert.window && <AppText variant="button" style={{ color: ink }}>{upperFirst(alert.window)}</AppText>}
               <AppText style={{ color: ink }}>{t(GUIDANCE[alert.level])}</AppText>
               {item?.myResponse === 'SAFE' && <AppText variant="small" style={{ color: ink }}>{t('homeMarkedSafe')}</AppText>}

@@ -523,5 +523,7 @@
   "alertsSpokenItem": "{{level}}: {{hazard}} in {{area}}{{until}}.",
   "alertsSpokenEvacuateAsk": "Do you need to evacuate? Say yes.",
   "alertsSpokenStay": "Okay. Say “help” on Home if you need someone.",
-  "alertsReadAgain": "Read warnings again"
+  "alertsReadAgain": "Read warnings again",
+  "homeHeadlineDanger": "{{level}} from {{hazard}}.",
+  "evacuateLocating": "Finding your position…"
 }

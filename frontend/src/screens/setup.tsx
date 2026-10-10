@@ -299,7 +299,7 @@ function ReachStep({ busy, onFinish, onBack, onReach }: { onReach?: (permissions
     <View style={{ flex: 1, minHeight: 12 }} />
     <Enter index={3} style={{ gap: 12 }}>
       <ActionButton variant="gradient" label={t(decided ? 'continueHome' : 'reachTurnOn')} loading={busy || asking} onPress={() => decided ? onFinish() : void ask()} />
-      <ActionButton variant="secondary" label={t('reachNotNow')} onPress={onFinish} />
+      {!decided && <ActionButton variant="secondary" label={t('reachNotNow')} onPress={onFinish} />}
     </Enter>
   </>;
 }
