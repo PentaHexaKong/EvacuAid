@@ -23,7 +23,7 @@ jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false, textEnabled: true, vibrationEnabled: false } }) }));
 jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: jest.fn(), tap: jest.fn() }) }));
-jest.mock('@/features/buddy-pilot/use-buddy-pilot', () => ({ useBuddyPilot: () => ({
+jest.mock('@/features/buddy/use-buddy', () => ({ useBuddy: () => ({
   session: mockSession, loading: mockLoading, error: mockError, busy: false, refresh: mockRefresh, incomingContacts: [], contacts: [], locations: [], availability: null,
 }) }));
 

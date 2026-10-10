@@ -104,7 +104,7 @@ test.each([false, true])('sighted alert route keeps Discover navigation (sheet=%
 const mockStartListening = jest.fn().mockResolvedValue(undefined);
 const mockCancelListening = jest.fn();
 let mockCommand: (text: string) => void;
-jest.mock('@/features/buddy-pilot/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (text: string) => void }) => {
+jest.mock('@/features/buddy/native', () => ({ useBuddySpeech: ({ onCommand }: { onCommand: (text: string) => void }) => {
   mockCommand = onCommand;
   return { listening: false, startListening: mockStartListening, stopListening: jest.fn(), cancelListening: mockCancelListening };
 } }));

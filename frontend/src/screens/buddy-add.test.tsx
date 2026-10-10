@@ -10,7 +10,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }), useLoca
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'private' }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
-jest.mock('@/features/buddy-pilot/api', () => ({ ...jest.requireActual('@/features/buddy-pilot/api'), buddyRequest: (...args: unknown[]) => mockRequest(...args) }));
+jest.mock('@/features/buddy/api', () => ({ ...jest.requireActual('@/features/buddy/api'), buddyRequest: (...args: unknown[]) => mockRequest(...args) }));
 
 beforeEach(() => {
   jest.clearAllMocks(); mockParams = {}; mockNeeds = [];

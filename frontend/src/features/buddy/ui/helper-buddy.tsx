@@ -11,7 +11,7 @@ import { colors, SystemReduceMotionContext } from '@/theme';
 import { duration, ease } from '@/theme/motion';
 import { buddyRequest } from '../api';
 import { useBuddyActions } from '../use-buddy-actions';
-import { useBuddyCode, type useBuddyPilot } from '../use-buddy-pilot';
+import { useBuddyCode, type useBuddy } from '../use-buddy';
 import { useInboxNotifications } from '../native';
 import { FriendsView } from './friends-view';
 import { NearbyView } from './nearby-view';
@@ -29,7 +29,7 @@ export const tabEnter = (from: number) => () => {
   return { initialValues: { opacity: 0, transform: [{ translateX: from }] }, animations: { opacity: withTiming(1, timing), transform: [{ translateX: withTiming(0, timing) }] } };
 };
 
-export function HelperContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddyPilot> }) {
+export function HelperContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddy> }) {
   const { soundFree } = useAccess();
   const { t } = useTranslation();
   const a = useBuddyActions({ token, userId, state });

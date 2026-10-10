@@ -1,1 +1,1 @@
-export { BuddyPilotScreen as default } from '@/screens/buddy-pilot';
+export { BuddyScreen as default } from '@/screens/buddy';

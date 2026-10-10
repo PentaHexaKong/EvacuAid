@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 import IconX from '@tabler/icons-react-native/IconX';
 import { ActionButton, AppText, Enter, Tap } from '@/components/ui';
 import { useGuestSession } from '@/features/profile/session';
-import { useBuddyPilot } from '@/features/buddy-pilot/use-buddy-pilot';
-import { useBuddyActions } from '@/features/buddy-pilot/use-buddy-actions';
-import { relationLabel } from '@/features/buddy-pilot/copy';
-import { PersonAvatar, StatusChip } from '@/features/buddy-pilot/ui/parts';
+import { useBuddy } from '@/features/buddy/use-buddy';
+import { useBuddyActions } from '@/features/buddy/use-buddy-actions';
+import { relationLabel } from '@/features/buddy/copy';
+import { PersonAvatar, StatusChip } from '@/features/buddy/ui/parts';
 import { useHaptics } from '@/features/feedback/haptics';
 import { radius, sky } from '@/theme';
 
@@ -19,7 +19,7 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds
 export function HelpRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token, user } = useGuestSession();
-  const state = useBuddyPilot(token);
+  const state = useBuddy(token);
   const a = useBuddyActions({ token: token ?? '', userId: user?.id ?? '', state, manageBackground: false });
   const router = useRouter();
   const { t } = useTranslation();

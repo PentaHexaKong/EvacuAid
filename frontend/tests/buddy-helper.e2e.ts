@@ -30,7 +30,7 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
 // The helper starts near South Jakarta, inside the area the routing tiles cover, and walks toward the friend.
 const API = process.env.E2E_API_URL ?? 'http://localhost:8000';
 const call = async (token: string, path: string, method = 'GET', body?: unknown) => {
-  const response = await fetch(`${API}/v1/buddy-pilot${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(`${API}/v1/buddy${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) throw new Error(`${method} ${path}: ${response.status} ${await response.text()}`);
   return response.json();
 };
