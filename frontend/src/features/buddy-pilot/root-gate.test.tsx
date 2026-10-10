@@ -10,6 +10,7 @@ const mockSaveLocation = jest.fn().mockResolvedValue(undefined);
 const mockRegisterPush = jest.fn().mockResolvedValue(undefined);
 const mockReplace = jest.fn();
 let mockNotification: (value: unknown) => void;
+jest.mock('@/features/alerts/alert-gate', () => ({ AlertGate: () => null, markAlertPresented: jest.fn() }));
 jest.mock('expo-router', () => {
   const Stack = ({ children }: { children: React.ReactNode }) => children;
   Stack.Screen = function Screen() { return null; };
@@ -67,4 +68,15 @@ test('reach registration survives finishing setup before the guest profile is re
   expect(mockRegisterPush).toHaveBeenCalledTimes(1);
   expect(mockRegisterPush).toHaveBeenCalledWith('guest');
   expect(mockSaveLocation).toHaveBeenCalledTimes(1);
+});
+
+
+test('alert notification wins over inbox routing', async () => {
+  mockCompleted = true;
+  mockToken = 'guest';
+  render(<RootLayout />);
+  await act(async () => {});
+  await act(async () => { mockNotification({ notification: { request: { content: { data: { alertId: 'alert-id', inboxId: 'inbox-id' } } } } }); });
+  expect(mockReplace).toHaveBeenCalledWith('/emergency/alert-id');
+  expect(jest.requireMock('@/features/alerts/alert-gate').markAlertPresented).toHaveBeenCalledWith('alert-id');
 });

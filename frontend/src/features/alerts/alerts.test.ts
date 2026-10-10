@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import { alertItems } from './test-fixtures';
-import { mapAlert, topAlert } from './alerts';
+import { formatAlertTime, mapAlert, topAlert } from './alerts';
 import en from '@/localization/en.json';
 
 const t = ((key: string, params?: Record<string, string>) => Object.entries(params ?? {}).reduce((text, [name, value]) => text.replace(`{{${name}}}`, value), en[key as keyof typeof en] ?? key)) as TFunction;
@@ -25,5 +25,18 @@ test('mapper falls back for unknown hazard, null area and null times', () => {
   expect(view.steps).toEqual(['alertStepSiaga1', 'alertStepSiaga2', 'alertStepSiaga3']);
 });
 test('mapper renders source, coordinates, WIB issue and expiry', () => {
-  expect(mapAlert(alertItems[0], t)).toMatchObject({ title: 'alertHazardWeather', issued: '17 Sep 2026 · 08:30 WIB', window: 'Until 17 Sep 2026 · 11:30 WIB', coordinate: { latitude: -6.2665, longitude: 106.809 } });
+  expect(mapAlert(alertItems[0], t, Date.parse('2026-09-16T16:59:00Z'))).toMatchObject({ title: 'alertHazardWeather', issued: '17 Sep 2026 · 08:30 WIB', window: 'Until 17 Sep 2026 · 11:30 WIB', coordinate: { latitude: -6.2665, longitude: 106.809 } });
+});
+
+test.each([
+  ['2026-09-17T16:59:00Z', '2026-09-17T16:58:00Z', '23:59 WIB'],
+  ['2026-09-17T17:01:00Z', '2026-09-17T16:59:00Z', '18 Sep 2026 · 00:01 WIB'],
+  ['2026-09-17T17:01:00Z', '2026-09-17T17:00:00Z', '00:01 WIB'],
+  ['2026-09-18T16:59:00Z', '2026-09-17T17:00:00Z', '23:59 WIB'],
+] as const)('validity %s relative to %s uses the WIB calendar day', (validUntil, now, time) => {
+  expect(formatAlertTime(validUntil, Date.parse(now))).toBe(time);
+  expect(mapAlert({ ...alertItems[0], validUntil }, t, Date.parse(now)).window).toBe(`Until ${time}`);
+});
+test('same-day expiry keeps the issue timestamp in full-date form', () => {
+  expect(mapAlert(alertItems[0], t, Date.parse('2026-09-17T01:30:00Z'))).toMatchObject({ issued: '17 Sep 2026 · 08:30 WIB', window: 'Until 11:30 WIB' });
 });

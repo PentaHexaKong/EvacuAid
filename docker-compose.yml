@@ -28,6 +28,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-evacuaid}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-evacuaid}
       REDIS_URL: redis://redis:6379/0
       VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
+      ALERT_PUSH_ENABLED: ${ALERT_PUSH_ENABLED:-true}
       PYTHONPATH: /app:/app/testocando
     command: ['sh', '-c', 'alembic -c /app/testocando/alembic.ini upgrade head && exec uvicorn command.main:app --host 0.0.0.0 --port 8000']
     ports:

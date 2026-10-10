@@ -17,6 +17,7 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 import { i18n, localizationReady } from '@/localization';
 import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
+import { AlertGate, markAlertPresented } from '@/features/alerts/alert-gate';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -49,7 +50,8 @@ function FirstRunGate() {
     const notification = (value: Notifications.NotificationResponse | null) => {
       const data = value?.notification.request.content.data;
       const id = data?.requestId;
-      if (typeof id === 'string') setBuddyTarget(`/buddy?requestId=${encodeURIComponent(id)}`);
+      if (typeof data?.alertId === 'string') { markAlertPresented(data.alertId); setBuddyTarget(`/emergency/${encodeURIComponent(data.alertId)}`); }
+      else if (typeof id === 'string') setBuddyTarget(`/buddy?requestId=${encodeURIComponent(id)}`);
       else if (typeof data?.inboxId === 'string' || typeof data?.invitationId === 'string') setBuddyTarget('/buddy');
     };
     const link = (url: string) => {
@@ -97,8 +99,9 @@ function GuestSessionError() {
 }
 function Navigation() {
   const { t } = useTranslation();
-  return <Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
+  return <><AlertGate /><Stack screenLayout={pageHeaderLayout} screenOptions={{ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, headerTintColor: colors.ink, headerShadowVisible: false, headerTitle: '', headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } }}>
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="emergency/[id]" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false, animation: 'slide_from_bottom' }} />
     <Stack.Screen name="alert/[id]" options={{ title: t('alertDetailTitle') }} />
     <Stack.Screen name="hazard/[id]" options={{ title: t('hazardDetailTitle') }} />
     <Stack.Screen name="destinations/index" options={{ headerShown: false }} />
@@ -109,7 +112,7 @@ function Navigation() {
     <Stack.Protected guard={__DEV__}><Stack.Screen name="preview" options={{ title: t('developerPreviews') }} />
     <Stack.Screen name="(map)" options={{ headerShown: false }} />
     <Stack.Screen name="(components)" options={{ headerShown: false }} /></Stack.Protected>
-  </Stack>;
+  </Stack></>;
 }
 export default function RootLayout() {
   const [ready, setReady] = useState(false);

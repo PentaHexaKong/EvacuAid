@@ -3,7 +3,8 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { apiRequest } from '../profile/api';
-import { useBuddyNative, useInboxNotifications } from './native';
+import * as Speech from 'expo-speech';
+import { useBuddyNative, useInboxNotifications, useBuddySpeech } from './native';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), requestBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: false }), watchPositionAsync: jest.fn().mockResolvedValue({ remove: jest.fn() }), getCurrentPositionAsync: jest.fn(), hasStartedLocationUpdatesAsync: jest.fn().mockResolvedValue(false), stopLocationUpdatesAsync: jest.fn(), Accuracy: { High: 4 } }));
@@ -163,4 +164,12 @@ test('both Buddy stop paths leave the alert area task and credentials alone', as
   await act(async () => {});
   expect(jest.mocked(Location.stopLocationUpdatesAsync).mock.calls).toEqual([['evacuaid.buddy-location.v1'], ['evacuaid.buddy-location.v1']]);
   expect(jest.mocked(SecureStore.deleteItemAsync).mock.calls).toEqual([['evacuaid.buddy-location-session.v1'], ['evacuaid.buddy-location-session.v1']]);
+});
+
+
+test.each([true, false])('speech cleanup can leave the emergency shelter announcement running (%s)', stopSpeechOnUnmount => {
+  jest.mocked(Speech.stop).mockClear();
+  const view = renderHook(() => useBuddySpeech({ language: 'en', onCommand: jest.fn(), stopSpeechOnUnmount }));
+  view.unmount();
+  expect(Speech.stop).toHaveBeenCalledTimes(stopSpeechOnUnmount ? 1 : 0);
 });

@@ -447,5 +447,22 @@
   "reachOff": "Off",
   "reachPreciseOff": "Precise location is off. Helpers need it to find you.",
   "alertAreaTitle": "Update my area for warnings",
-  "alertAreaDetail": "Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request."
+  "alertAreaDetail": "Uses rough location only when you move about 500 m. Never shared with a buddy outside a help request.",
+  "emergencyClose": "Close",
+  "emergencyAskBuddy": "Ask {{name}} for help",
+  "emergencyFindHelper": "Find a helper nearby",
+  "emergencyShareCaption": "Shares your location with {{name}}",
+  "emergencyShareCaptionNearby": "Shares your location with helpers nearby",
+  "emergencyEvacuate": "Start evacuation",
+  "emergencySafe": "I'm safe",
+  "emergencyCheckPeople": "Check on {{names}}",
+  "emergencyNeedHelp": "I need help",
+  "emergencyAlwaysTitle": "Keep warnings following you?",
+  "emergencyAlwaysBody": "Allow location \"Always\" so EvacuAid can warn you when you move into a danger zone. It only updates after you move about 500 m.",
+  "emergencyAlwaysAllow": "Allow",
+  "emergencyVoicePrompt": "Say help, go, or safe.",
+  "emergencyVoiceUnknown": "Sorry, I didn't catch that. Say help, go, or safe.",
+  "emergencyEnded": "This warning has ended.",
+  "homeMarkedSafe": "You marked yourself safe.",
+  "homeMarkedEvacuating": "You're evacuating."
 }
