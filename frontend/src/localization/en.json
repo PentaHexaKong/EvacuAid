@@ -1,8 +1,5 @@
 {
-  "buddy": {
-    "fallbackSearching": "{{name}} didn't answer. Looking for helpers nearby.",
-    "fallbackSearchingNoName": "No answer yet. Looking for helpers nearby."
-  },
+  "buddy": "Buddy · example",
   "helpRequestLater": "Answer later",
   "helpRequestTitle": "{{name}} needs your help",
   "helpRequestTitleNearby": "Someone near you needs help",
@@ -71,7 +68,6 @@
   "inactive": "Simulation paused",
   "mapLabel": "Map of two fictional participants. The same positions are listed below.",
   "you": "You · example",
-  "buddy": "Buddy · example",
   "current": "Current simulated update",
   "stale": "Out of date",
   "unavailable": "Position unavailable",
@@ -525,5 +521,25 @@
   "alertsSpokenStay": "Okay. Say “help” on Home if you need someone.",
   "alertsReadAgain": "Read warnings again",
   "homeHeadlineDanger": "{{level}} from {{hazard}}.",
-  "evacuateLocating": "Finding your position…"
+  "evacuateLocating": "Finding your position…",
+  "authAccountNote": "Your profile is saved to your account. Signing out keeps it.",
+  "authWelcome": "Welcome back",
+  "authCreateAccount": "Create account",
+  "authDescription": "Sign in to keep your profile, alerts and Buddy connections together.",
+  "authName": "Name (optional)",
+  "authEmail": "Email",
+  "authPassword": "Password",
+  "authPasswordHint": "Use 12?128 characters.",
+  "authSignIn": "Sign in",
+  "authHaveAccount": "Already have an account? Sign in",
+  "authNeedAccount": "New here? Create account",
+  "authInvalidInput": "Enter a valid email and password. New passwords need at least 12 characters.",
+  "authInvalidCredentials": "Email or password is incorrect.",
+  "authRegisterConflict": "Unable to create this account. Try signing in or use another email.",
+  "authRateLimited": "Too many attempts. Wait a minute and try again.",
+  "authTryAgain": "Could not sign in. Check your connection and try again.",
+  "authSignOut": "Sign out",
+  "authSignOutBody": "Sign out on this phone? Your account and saved profile will be kept.",
+  "authUpgradeGuest": "Keep my previous guest profile",
+  "authUpgradeSelected": "Previous profile selected ? tap to create a new profile"
 }

@@ -59,7 +59,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
   };
 });
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => mockEvac }));
-jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, deleteGuest: mockDeleteGuest, startNewGuest: jest.fn() }) }));
+jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'test-token', user: { id: 'user-1' }, status: 'ready', error: null, ensureGuest: mockEnsureGuest, signOut: mockDeleteGuest, startNewGuest: jest.fn() }) }));
 jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/profile/api'), apiRequest: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 
@@ -350,57 +350,56 @@ function ProfileDeleteGate() {
   return <View><AppText testID="preferences">{JSON.stringify(preferences)}</AppText>{ready && preferences.completed ? <ProfileScreen /> : <AppText>Setup</AppText>}</View>;
 }
 
-test('a failed profile delete restores completed onboarding and all preferences without changing saved storage', async () => {
+test('a failed sign out preserves onboarding and preferences', async () => {
   const value = { ...defaults, completed: true, largerText: true, strongerContrast: true, voiceEnabled: false, vibrationEnabled: false, textEnabled: false, language: 'en' as const };
   await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(value));
   mockProfile.name = 'Billy';
   mockDeleteGuest.mockRejectedValueOnce(new Error('network'));
   const alert = jest.spyOn(Alert, 'alert');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  await waitFor(() => expect(view.getByRole('button', { name: en.authSignOut })).toBeTruthy());
   expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
   const saved = await AsyncStorage.getItem(PREFERENCES_KEY);
   expect(saved).toBe('{"completed":true}');
-  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  fireEvent.press(view.getByRole('button', { name: en.authSignOut }));
   await act(async () => alert.mock.calls[0][2]![1].onPress!());
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.authTryAgain));
   expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual(value);
   expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe(saved);
   expect(view.getByText('Billy')).toBeTruthy();
-  expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy();
+  expect(view.getByRole('button', { name: en.authSignOut })).toBeTruthy();
   expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
 });
 
-test('a successful profile delete resets onboarding before deleting the guest', async () => {
+test('sign out keeps onboarding and the account profile', async () => {
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
   const alert = jest.spyOn(Alert, 'alert');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
+  await waitFor(() => expect(view.getByRole('button', { name: en.authSignOut })).toBeTruthy());
   mockDeleteGuest.mockImplementationOnce(async () => {
-    expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
+    expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":true}');
   });
-  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  fireEvent.press(view.getByRole('button', { name: en.authSignOut }));
   await act(async () => alert.mock.calls[0][2]![1].onPress!());
   await waitFor(() => expect(mockDeleteGuest).toHaveBeenCalledTimes(1));
   await act(async () => {});
-  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual({ ...defaults, completed: false, language: 'en' });
-  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":false}');
-  expect(view.getByText('Setup')).toBeTruthy();
-  expect(alert).not.toHaveBeenCalledWith(en.deleteProfileError);
+  expect(JSON.parse(view.getByTestId('preferences').props.children)).toEqual({ ...defaults, completed: true, language: 'en' });
+  expect(await AsyncStorage.getItem(PREFERENCES_KEY)).toBe('{"completed":true}');
+  expect(view.queryByText('Setup')).toBeNull();
+  expect(alert).not.toHaveBeenCalledWith(en.authTryAgain);
 });
 
-test('a failed onboarding restore still shows the profile deletion error', async () => {
+test('a local sign out failure shows an error', async () => {
   await AsyncStorage.setItem(PREFERENCES_KEY, '{"completed":true}');
   mockDeleteGuest.mockImplementationOnce(async () => {
-    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage'));
     throw new Error('network');
   });
   const alert = jest.spyOn(Alert, 'alert');
   const view = render(<PreferencesProvider><ProfileProvider><ProfileDeleteGate /></ProfileProvider></PreferencesProvider>);
-  await waitFor(() => expect(view.getByRole('button', { name: en.deleteProfile })).toBeTruthy());
-  fireEvent.press(view.getByRole('button', { name: en.deleteProfile }));
+  await waitFor(() => expect(view.getByRole('button', { name: en.authSignOut })).toBeTruthy());
+  fireEvent.press(view.getByRole('button', { name: en.authSignOut }));
   await act(async () => alert.mock.calls[0][2]![1].onPress!());
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.deleteProfileError));
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(en.authTryAgain));
   expect(mockDeleteGuest).toHaveBeenCalledTimes(1);
 });
 

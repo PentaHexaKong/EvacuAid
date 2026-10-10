@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import * as TaskManager from 'expo-task-manager';
+import { authSession } from '@/features/profile/auth-session';
 import { apiRequest } from '@/features/profile/api';
 import { ensureBackground } from './permissions';
 import { alertAreaRunning, askAlwaysAndStart, startAlertArea, stopAlertArea } from './alert-area';
@@ -10,6 +11,7 @@ jest.mock('expo-location', () => ({ getBackgroundPermissionsAsync: jest.fn().moc
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn().mockResolvedValue(undefined), deleteItemAsync: jest.fn().mockResolvedValue(undefined), AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'after-unlock' }));
 jest.mock('expo-task-manager', () => ({ isTaskDefined: jest.fn(() => false), defineTask: jest.fn() }));
 jest.mock('@/features/profile/api', () => ({ apiRequest: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('@/features/profile/auth-session',()=>({authSession:{restore:jest.fn(),current:jest.fn()}}));
 jest.mock('./permissions', () => ({ ensureBackground: jest.fn().mockResolvedValue('granted') }));
 
 const task = jest.mocked(TaskManager.defineTask).mock.calls.find(([name]) => name === 'evacuaid-alert-area')![1];
@@ -18,7 +20,9 @@ const update = { data: { locations: [fix(1, 1000), fix(3, 2000)] }, error: null,
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify({ token: 'guest', userId: 'user' }));
+  jest.mocked(authSession.restore).mockResolvedValue({access_token:'guest',user:{id:'user'}} as never);
+  jest.mocked(authSession.current).mockResolvedValue('guest');
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify({ userId: 'user' }));
 });
 
 test('the area task posts only the last fix using the profile API contract', async () => {
@@ -44,7 +48,7 @@ test('stopAlertArea never stops or clears the Buddy task', async () => {
 
 test('start stores credentials and uses the requested coarse movement options', async () => {
   await startAlertArea('guest', 'user');
-  expect(SecureStore.setItemAsync).toHaveBeenCalledWith('evacuaid.alert-area-credentials.v1', JSON.stringify({ token: 'guest', userId: 'user' }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
+  expect(SecureStore.setItemAsync).toHaveBeenCalledWith('evacuaid.alert-area-credentials.v1', JSON.stringify({ userId: 'user' }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
   expect(Location.startLocationUpdatesAsync).toHaveBeenCalledWith('evacuaid-alert-area', { accuracy: Location.Accuracy.Low, distanceInterval: 500, deferredUpdatesDistance: 500, pausesUpdatesAutomatically: true, activityType: Location.ActivityType.Other, showsBackgroundLocationIndicator: false });
   await expect(alertAreaRunning()).resolves.toBe(true);
 });
@@ -77,4 +81,9 @@ test('Android does not start background tracking without a foreground service', 
     expect(Location.startLocationUpdatesAsync).not.toHaveBeenCalled();
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   } finally { platform.restore(); }
+});
+
+test("another account never receives location updates for the previous account", async()=>{
+ jest.mocked(authSession.restore).mockResolvedValue({access_token:"other",user:{id:"other-user"}} as never);
+ await task(update);expect(apiRequest).not.toHaveBeenCalled();expect(Location.stopLocationUpdatesAsync).toHaveBeenCalled();
 });

@@ -22,7 +22,7 @@ import IconRefresh from '@tabler/icons-react-native/IconRefresh';
 import IconSelector from '@tabler/icons-react-native/IconSelector';
 import IconTextCaption from '@tabler/icons-react-native/IconTextCaption';
 import IconTextSize from '@tabler/icons-react-native/IconTextSize';
-import IconTrash from '@tabler/icons-react-native/IconTrash';
+import IconLogout from '@tabler/icons-react-native/IconLogout';
 import IconUser from '@tabler/icons-react-native/IconUser';
 import IconUsers from '@tabler/icons-react-native/IconUsers';
 import IconVolume from '@tabler/icons-react-native/IconVolume';
@@ -115,20 +115,17 @@ export function ProfileScreen() {
     finally { setBusy(false); }
   };
 
-  const removeProfile = () => Alert.alert(t('deleteProfile'), t('deleteProfileBody'), [
+  const confirmSignOut = () => Alert.alert(t('authSignOut'), t('authSignOutBody'), [
     { text: t('cancel'), style: 'cancel' },
-    { text: t('deleteProfile'), style: 'destructive', onPress: () => void (async () => {
+    { text: t('authSignOut'), style: 'destructive', onPress: () => void (async () => {
       if (pending.current) return;
       pending.current = true;
       setBusy(true);
-      let restore: (() => Promise<void>) | undefined;
       try {
-        // Onboarding first, so the gate shows setup rather than a missing session while the delete runs.
-        restore = await resetOnboarding();
-        await session.deleteGuest();
+        await stopAlertArea();
+        await session.signOut();
       } catch {
-        if (restore) await restore().catch(() => {});
-        Alert.alert(t('deleteProfileError'));
+        Alert.alert(t('authTryAgain'));
       }
       finally { pending.current = false; setBusy(false); }
     })() },
@@ -152,6 +149,7 @@ export function ProfileScreen() {
     <View style={{ gap: 4 }}>
       <View style={styles.eyebrow}><IconUser size={16} color={colors.muted} /><AppText variant="small" style={{ color: colors.muted }}>{t('accountInfo')}</AppText></View>
       <AppText variant="title" accessibilityRole="header">{name || t('profileFallback')}</AppText>
+      {session.account?.email && <AppText style={{ color: colors.muted }}>{session.account.email}</AppText>}
       {profile?.phone ? <AppText style={{ color: colors.muted }}>{profile.phone}</AppText> : null}
     </View>
     <View style={[styles.status, { marginTop: 20 }]}>
@@ -184,12 +182,12 @@ export function ProfileScreen() {
     <View style={styles.groupDivider} />
     <View>
       <SettingsRow first Icon={IconDatabase} label={t('dataSources')} onPress={() => Alert.alert(t('dataSources'), t('dataSourcesBody'))} />
-      <SettingsRow Icon={IconTrash} label={t('deleteProfile')} destructive onPress={removeProfile} />
+      <SettingsRow Icon={IconLogout} label={t('authSignOut')} destructive onPress={confirmSignOut} />
     </View>
     {preferencesError && <View style={{ gap: 8, marginTop: 16 }}><AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('preferencesSyncError')}</AppText><ActionButton variant="secondary" label={t('retry')} onPress={() => void retryPreferences()} /></View>}
     <View style={{ gap: 4, marginTop: 28 }}>
       <AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{t('appVersion', { version: Constants.expoConfig?.version ?? '' })}</AppText>
-      <AppText variant="small" style={{ color: colors.muted }}>{t('guestSessionNote')}</AppText>
+      <AppText variant="small" style={{ color: colors.muted }}>{t('authAccountNote')}</AppText>
     </View>
   </Page>;
 }

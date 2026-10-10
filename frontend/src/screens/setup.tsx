@@ -32,7 +32,9 @@ import { PreferencesPreview, usePreferences } from '@/features/preferences/conte
 import { defaults, type Preferences } from '@/features/preferences/storage';
 import { ensureForeground, ensureNotifications, isPrecise, type PermissionResult } from '@/features/location/permissions';
 import { prepareNotificationChannel } from '@/features/location/push-token';
-import { ONBOARDING_NEEDS_KEY, type AccessibilityType } from '@/features/profile/context';
+import { ONBOARDING_NEEDS_KEY, useProfile, type AccessibilityType } from '@/features/profile/context';
+import { useGuestSession } from '@/features/profile/session';
+import { apiRequest } from '@/features/profile/api';
 
 // React Native's iOS Switch composes alignSelf: 'flex-start', which pins it to the top of a centred row.
 const SWITCH_CENTER = { alignSelf: 'center' } as const;
@@ -59,6 +61,8 @@ export type ReachPermissions = { location?: Location.LocationObject; notificatio
 export function SetupScreen({ editing = false, onDone, onReach, beforePreferences, footer }: { editing?: boolean; onDone?: (target?: string) => void; onReach?: (permissions: ReachPermissions) => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const { preferences, save } = usePreferences();
+  const profile = useProfile();
+  const session = useGuestSession();
   const [step, setStep] = useState<Step>('welcome');
   const [draft, setDraft] = useState(preferences);
   const [busy, setBusy] = useState(false);
@@ -67,7 +71,15 @@ export function SetupScreen({ editing = false, onDone, onReach, beforePreference
   const [needs, setNeeds] = useState<AccessibilityType[]>([]);
   const insets = useSafeAreaInsets();
   const finish = (skip = false, target?: string) => guarded(setBusy, setError, async () => {
-    if (!skip && needs.length) await AsyncStorage.setItem(ONBOARDING_NEEDS_KEY, JSON.stringify(needs));
+    if (!skip && needs.length) {
+      if (profile.ready) await profile.saveAccessibility(needs.map(type=>({type,severity:null})));
+      else if (session.token && session.user) {
+        await apiRequest(`/v1/users/${session.user.id}/accessibility`,session.token,
+          {method:'PUT',body:JSON.stringify({items:needs.map(type=>({type,severity:null}))})});
+        void profile.retry().catch(()=>{});
+      }
+      else await AsyncStorage.setItem(ONBOARDING_NEEDS_KEY, JSON.stringify(needs));
+    }
     await save({ ...(skip ? preferences : draft), completed: true });
     onDone?.(target);
   });

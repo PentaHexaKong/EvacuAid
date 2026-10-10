@@ -1,8 +1,5 @@
 {
-  "buddy": {
-    "fallbackSearching": "{{name}} belum menjawab. Mencari pendamping di sekitar.",
-    "fallbackSearchingNoName": "Belum ada jawaban. Mencari pendamping di sekitar."
-  },
+  "buddy": "Buddy · contoh",
   "helpRequestLater": "Jawab nanti",
   "helpRequestTitle": "{{name}} butuh bantuanmu",
   "helpRequestTitleNearby": "Seseorang di dekatmu butuh bantuan",
@@ -71,7 +68,6 @@
   "inactive": "Simulasi dijeda",
   "mapLabel": "Peta dua peserta fiktif. Posisi yang sama tercantum di bawah.",
   "you": "Kamu · contoh",
-  "buddy": "Buddy · contoh",
   "current": "Pembaruan simulasi terkini",
   "stale": "Sudah tidak terkini",
   "unavailable": "Posisi tidak tersedia",
@@ -525,5 +521,25 @@
   "alertsSpokenStay": "Baik. Ucapkan “tolong” di Beranda jika butuh seseorang.",
   "alertsReadAgain": "Bacakan lagi peringatan",
   "homeHeadlineDanger": "{{level}} untuk {{hazard}}.",
-  "evacuateLocating": "Mencari posisimu…"
+  "evacuateLocating": "Mencari posisimu…",
+  "authAccountNote": "Profil disimpan di akun Anda dan tetap ada saat keluar.",
+  "authWelcome": "Selamat datang kembali",
+  "authCreateAccount": "Buat akun",
+  "authDescription": "Masuk untuk mengakses profil, peringatan, dan koneksi Buddy Anda.",
+  "authName": "Nama (opsional)",
+  "authEmail": "Email",
+  "authPassword": "Kata sandi",
+  "authPasswordHint": "Gunakan 12?128 karakter.",
+  "authSignIn": "Masuk",
+  "authHaveAccount": "Sudah punya akun? Masuk",
+  "authNeedAccount": "Belum punya akun? Daftar",
+  "authInvalidInput": "Masukkan email dan kata sandi yang valid. Kata sandi baru minimal 12 karakter.",
+  "authInvalidCredentials": "Email atau kata sandi salah.",
+  "authRegisterConflict": "Akun tidak dapat dibuat. Coba masuk atau gunakan email lain.",
+  "authRateLimited": "Terlalu banyak percobaan. Tunggu satu menit lalu coba lagi.",
+  "authTryAgain": "Tidak dapat masuk. Periksa koneksi lalu coba lagi.",
+  "authSignOut": "Keluar",
+  "authSignOutBody": "Keluar dari ponsel ini? Akun dan profil tersimpan tetap ada.",
+  "authUpgradeGuest": "Simpan profil tamu saya sebelumnya",
+  "authUpgradeSelected": "Profil sebelumnya dipilih ? ketuk untuk membuat profil baru"
 }

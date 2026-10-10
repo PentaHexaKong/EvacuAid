@@ -2,7 +2,9 @@ import { act, renderHook } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
+import * as TaskManager from 'expo-task-manager';
 import { apiRequest } from '../profile/api';
+import { authSession } from '../profile/auth-session';
 import * as Speech from 'expo-speech';
 import { useBuddyNative, useInboxNotifications, useBuddySpeech } from './native';
 
@@ -14,6 +16,18 @@ jest.mock('expo-task-manager', () => ({ isTaskDefined: jest.fn(() => false), def
 jest.mock('expo-speech', () => ({ stop: jest.fn(), speak: jest.fn() }));
 jest.mock('expo-speech-recognition', () => ({ ExpoSpeechRecognitionModule: {}, useSpeechRecognitionEvent: jest.fn() }));
 jest.mock('../profile/api', () => ({ apiRequest: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../profile/auth-session',()=>({authSession:{get:jest.fn(()=>({user:{id:'user-1'}})),restore:jest.fn(),current:jest.fn()}}));
+
+test.each(['user-1','other-user'])('background Buddy location stays bound to its consenting account (%s)',async(userId)=>{
+ jest.mocked(apiRequest).mockClear();
+ jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(JSON.stringify({userId:'user-1',sessionId:'request'}));
+ jest.mocked(authSession.restore).mockResolvedValueOnce({access_token:'old',user:{id:userId}} as never);
+ jest.mocked(authSession.current).mockResolvedValueOnce('current-account-token');
+ const task=jest.mocked(TaskManager.defineTask).mock.calls.find(([name])=>name==='evacuaid.buddy-location.v1')![1];
+ await task({data:{locations:[{coords:{latitude:1,longitude:2,accuracy:5},timestamp:1000}]},error:null,executionInfo:{eventId:'test',taskName:'evacuaid.buddy-location.v1'}});
+ if(userId==='user-1') expect(apiRequest).toHaveBeenCalledWith('/v1/buddy/requests/request/location','current-account-token',expect.objectContaining({method:'PUT'}));
+ else expect(apiRequest).not.toHaveBeenCalled();
+});
 
 test('never obtains or uploads coordinates before an accepted session', async () => {
   const { result } = renderHook(() => useBuddyNative({ active: false, sessionId: 'request', token: 'token', onRefresh: jest.fn() }));

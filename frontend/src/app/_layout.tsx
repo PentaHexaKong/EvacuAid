@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, Platform, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
@@ -18,6 +18,7 @@ import { i18n, localizationReady } from '@/localization';
 import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
 import { AlertGate, markAlertPresented } from '@/features/alerts/alert-gate';
+import { AuthScreen } from '@/screens/auth';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -33,7 +34,7 @@ function FirstRunGate() {
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
   useEffect(() => {
-    if ((reach.location || reach.notifications) && session.status === 'idle') void session.ensureGuest().catch(() => {});
+    if (session.status === 'idle') void session.ensureGuest().catch(() => {});
   }, [reach, session.status, session.ensureGuest]);
   useEffect(() => {
     if (!reach.notifications || !session.token) return;
@@ -77,7 +78,8 @@ function FirstRunGate() {
   }, [preferences.completed, buddyTarget, returnTo, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
-  if (preferences.completed && session.status !== 'ready') {
+  if (session.status === 'signed-out') return <AuthScreen />;
+  if (session.status !== 'ready') {
     if (session.status === 'error') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
@@ -91,10 +93,7 @@ function GuestSessionError() {
     <AppText variant="title" accessibilityRole="header">{t('sessionUnavailable')}</AppText>
     <AppText accessibilityRole="alert">{session.errorKind === 'network' ? t('apiNetworkUnavailable') : session.error}</AppText>
     <ActionButton label={t('retry')} loading={session.status === 'loading'} onPress={() => void session.ensureGuest().catch(() => {})} />
-    {session.canStartNew && <ActionButton variant="secondary" label={t('startNewGuest')} onPress={() => Alert.alert(t('startNewGuestTitle'), t('startNewGuestBody'), [
-      { text: t('cancel'), style: 'cancel' },
-      { text: t('startNewGuest'), style: 'destructive', onPress: () => void session.startNewGuest().catch(() => {}) },
-    ])} />}
+
   </Page>;
 }
 function Navigation() {

@@ -13,9 +13,11 @@ import { SetupScreen } from './setup';
 import { OverviewScreen } from './overview';
 
 let mockAccessibility: { type: string; severity: null }[] = [];
+let mockProfileReady = false;
+const mockSaveAccessibility = jest.fn().mockResolvedValue(undefined);
 let mockIncomingContacts: Pick<import('@/features/buddy/api').Contact, 'name' | 'latestAlertResponse'>[] = [];
 let mockNotifications: boolean | undefined;
-jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility }) }));
+jest.mock('@/features/profile/context', () => ({ ...jest.requireActual('@/features/profile/context'), useProfile: () => ({ accessibility: mockAccessibility, ready:mockProfileReady,saveAccessibility:mockSaveAccessibility }) }));
 jest.mock('@/features/buddy/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncomingContacts }));
 jest.mock('@/features/location/permissions', () => ({ ...jest.requireActual('@/features/location/permissions'), ensureForeground: jest.fn(), ensureNotifications: jest.fn() }));
 jest.mock('@/features/location/push-token', () => ({ prepareNotificationChannel: jest.fn().mockResolvedValue(undefined) }));
@@ -46,7 +48,18 @@ const { selectLanguage } = jest.requireMock('@/localization') as { selectLanguag
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 
-beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockLanguage = 'en'; mockAccessibility = []; mockIncomingContacts = []; await AsyncStorage.clear(); });
+beforeEach(async () => { jest.restoreAllMocks(); jest.clearAllMocks(); mockProfileReady=false; mockLanguage = 'en'; mockAccessibility = []; mockIncomingContacts = []; await AsyncStorage.clear(); });
+
+test('onboarding after login saves multiple support needs directly to the account',async()=>{
+ mockProfileReady=true;
+ const done=jest.fn();const view=render(<PreferencesProvider><SetupScreen onDone={done} /></PreferencesProvider>);
+ await act(async()=>{});fireEvent.press(view.getByRole('button',{name:'Get started'}));
+ fireEvent.press(view.getByRole('checkbox',{name:'Older adult'}));fireEvent.press(view.getByRole('checkbox',{name:'Limited mobility'}));
+ fireEvent.press(view.getByRole('button',{name:'Continue'}));fireEvent.press(view.getByRole('button',{name:'Continue'}));
+ await act(async()=>fireEvent.press(view.getByRole('button',{name:'Not now'})));
+ expect(mockSaveAccessibility).toHaveBeenCalledWith([{type:'ELDERLY',severity:null},{type:'MOBILITY_LIMITATION',severity:null}]);
+ expect(await AsyncStorage.getItem(ONBOARDING_NEEDS_KEY)).toBeNull();expect(done).toHaveBeenCalled();
+});
 
 test('preferences preview is local, cancel does not save, and failed saves remain retryable', async () => {
   const done = jest.fn();

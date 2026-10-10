@@ -8,13 +8,14 @@ import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { speak as speakAloud } from '../feedback/speech';
 import type { ApiError } from '../profile/api';
+import { authSession } from '../profile/auth-session';
 import { buddyRequest } from './api';
 import { ensureBackground, ensureForeground, ensureNotifications } from '@/features/location/permissions';
 import { prepareNotificationChannel, registerPushToken } from '@/features/location/push-token';
 
 const TASK = 'evacuaid.buddy-location.v1';
 const SESSION_KEY = 'evacuaid.buddy-location-session.v1';
-type SavedSession = { token: string; sessionId: string };
+type SavedSession = { userId: string; sessionId: string };
 // No distance filter: iOS only reports movement past it, so someone standing still would look like they lost GPS. Uploads stay at one per 5 s.
 const WATCH = { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 0 };
 const UPLOAD_GAP_MS = 5000;
@@ -34,7 +35,10 @@ if (!TaskManager.isTaskDefined(TASK)) TaskManager.defineTask<{ locations: Locati
   if (!saved) return;
   const session = JSON.parse(saved) as SavedSession;
   try {
-    await buddyRequest(session.token, path(session.sessionId), 'PUT', position(data.locations[data.locations.length - 1]));
+    const account = await authSession.restore();
+    if (!account || account.user.id !== session.userId) { await stopBackground(); return; }
+    const token = await authSession.current(account.access_token);
+    await buddyRequest(token, path(session.sessionId), 'PUT', position(data.locations[data.locations.length - 1]));
   } catch (cause) {
     if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) await stopBackground();
   }
@@ -103,7 +107,9 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       if (generation.current !== run) { watch.current?.remove(); watch.current = null; ensureCurrent(); }
       setTracking(true);
       if (!manageBackground) return;
-      await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, sessionId }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
+      const account = authSession.get();
+      if (!account) throw new Error('Sign in before enabling background location.');
+      await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ userId: account.user.id, sessionId }), { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
       const permission = await ensureBackground();
       ensureCurrent();
@@ -118,7 +124,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
   const enableNotifications = async () => {
     setError(null);
     try {
-      if (!token) throw new Error(message('Connect your guest profile first.', 'Hubungkan profil tamu terlebih dahulu.'));
+      if (!token) throw new Error(message('Sign in first.', 'Masuk terlebih dahulu.'));
       await prepareNotificationChannel();
       const permission = await ensureNotifications();
       setSettingsBlocked(permission === 'blocked');
@@ -145,7 +151,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     else void SecureStore.getItemAsync(SESSION_KEY).then(async saved => {
       if (!saved || cancelled || generation.current !== restoreGeneration) return;
       const prior = JSON.parse(saved) as SavedSession;
-      if (prior.sessionId !== sessionId || prior.token !== token) { await stopBackground(); return; }
+      if (prior.sessionId !== sessionId || prior.userId !== authSession.get()?.user.id) { await stopBackground(); return; }
       const permission = await Location.getForegroundPermissionsAsync();
       if (cancelled || generation.current !== restoreGeneration) return;
       if (!permission.granted) { await stopBackground(); return; }

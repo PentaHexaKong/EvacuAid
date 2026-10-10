@@ -19,6 +19,12 @@ export const applyResponse = (id: string, response: AlertItem['myResponse']) => 
 // Warnings the person answered with "evacuating" or "needs help": the ones an arrival should close.
 export const activeAlertIds = () => state.items.filter(item => item.myResponse === 'EVACUATING' || item.myResponse === 'NEEDS_HELP').map(item => item.id);
 export const findAlert = (id: string | undefined) => state.items.find(item => item.id === id);
+export function clearAlertSession() {
+  generation += 1;
+  pending = null;
+  currentToken = null;
+  publish({ status: 'loading', items: [], updatedAt: null, stale: false });
+}
 async function load(token: string) {
   if (pending) return pending;
   const started = generation;

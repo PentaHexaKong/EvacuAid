@@ -90,6 +90,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setAccessibility(items);
       setReady(true);
     } catch (cause) {
+      if (currentToken.current !== token) return;
       setError(cause instanceof Error ? cause.message : 'Could not load profile.');
       throw cause;
     }
@@ -103,6 +104,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const saveProfile = async (patch: Partial<Pick<UserProfile, 'name' | 'phone' | 'needs_assistance' | 'share_location_with_buddies'>> & { accessibility?: AccessibilityItem[] }) => {
     if (!token || !profile) throw new Error('Profile is not ready');
     const updated = await apiRequest<UserProfile>(`/v1/users/${profile.id}`, token, { method: 'PATCH', body: JSON.stringify(patch) });
+    if (currentToken.current !== token) return;
     setProfile(updated);
     if (patch.accessibility) setAccessibility(patch.accessibility);
   };
@@ -115,12 +117,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const updated = await apiRequest<UserProfile>(`/v1/users/${profile.id}/location`, token, {
       method: 'PUT', body: JSON.stringify({ latitude, longitude, accuracy_m: accuracy, observed_at: observedAt }),
     });
+    if (currentToken.current !== token) return;
     setProfile(updated);
     void resetAlerts();
   };
   const deleteLocation = async () => {
     if (!token || !profile) throw new Error('Profile is not ready');
     const updated = await apiRequest<UserProfile>(`/v1/users/${profile.id}/location`, token, { method: 'DELETE' });
+    if (currentToken.current !== token) return;
     setProfile(updated);
     void resetAlerts();
   };

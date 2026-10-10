@@ -1,95 +1,77 @@
 import { act, renderHook } from '@testing-library/react-native';
 import * as SecureStore from 'expo-secure-store';
 import { apiRequest, type UserProfile } from './api';
-import { GuestSessionProvider, GUEST_TOKEN_KEY, useGuestSession } from './session';
+import { GuestSessionProvider, useAuthSession } from './session';
+import { authSession, AUTH_KEY, createAuthSession, GUEST_TOKEN_KEY, type AuthTokens } from './auth-session';
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(),
-}));
-jest.mock('./api', () => ({ apiRequest: jest.fn() }));
-
-const profile = { id: 'guest-1', name: null } as UserProfile;
-const wrapper = ({ children }: { children: React.ReactNode }) => <GuestSessionProvider>{children}</GuestSessionProvider>;
-
-beforeEach(() => {
-  jest.resetAllMocks();
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
-  jest.mocked(SecureStore.setItemAsync).mockResolvedValue(undefined);
-  jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
+jest.mock('expo-secure-store',()=>({ getItemAsync:jest.fn(),setItemAsync:jest.fn(),deleteItemAsync:jest.fn(),AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY:1 }));
+jest.mock('./api',()=>({ apiRequest:jest.fn(),configureAuthRecovery:jest.fn() }));
+const pair = (suffix='1'): AuthTokens => ({ access_token:'access-'+suffix,refresh_token:'refresh-'+suffix,expires_in:900,refresh_expires_in:3600,
+  user:{id:'user-1',email:'citizen@example.com',name:'Dwi',role:'CITIZEN'} });
+const wrapper = ({children}:{children:React.ReactNode})=><GuestSessionProvider>{children}</GuestSessionProvider>;
+beforeEach(async()=>{
+  jest.resetAllMocks();jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
+  jest.mocked(SecureStore.setItemAsync).mockResolvedValue(undefined);jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
+  jest.mocked(apiRequest).mockResolvedValue(undefined);
+  await authSession.signOut();jest.clearAllMocks();
 });
 
-test('restores a saved token and does not create a second guest', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('stored-token');
-  jest.mocked(apiRequest).mockResolvedValue(profile);
-  const { result } = renderHook(useGuestSession, { wrapper });
-
-  await act(async () => result.current.ensureGuest());
-
-  expect(result.current.status).toBe('ready');
-  expect(result.current.token).toBe('stored-token');
-  expect(apiRequest).toHaveBeenCalledWith('/v1/me', 'stored-token');
-  expect(apiRequest).toHaveBeenCalledTimes(1);
-  expect(apiRequest).not.toHaveBeenCalledWith('/v1/guest-sessions', undefined, { method: 'POST' });
+test('no credentials shows sign in and never creates a guest',async()=>{
+ const {result}=renderHook(useAuthSession,{wrapper});
+ await act(async()=>result.current.ensureGuest());
+ expect(result.current.status).toBe('signed-out');expect(apiRequest).not.toHaveBeenCalled();
 });
-
-test('a rejected token does not silently create another guest', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('expired-token');
-  jest.mocked(apiRequest).mockRejectedValue(Object.assign(new Error('invalid session'), { status: 401 }));
-  const { result } = renderHook(useGuestSession, { wrapper });
-
-  await act(async () => result.current.ensureGuest().catch(() => {}));
-
-  expect(result.current.status).toBe('error');
-  expect(result.current.canStartNew).toBe(true);
-  expect(apiRequest).toHaveBeenCalledTimes(1);
-  expect(apiRequest).toHaveBeenCalledWith('/v1/me', 'expired-token');
+test('login loads the profile and stores only the refresh secret',async()=>{
+ jest.mocked(apiRequest).mockResolvedValueOnce(pair()).mockResolvedValueOnce({id:'user-1',name:'Dwi'} as UserProfile);
+ const {result}=renderHook(useAuthSession,{wrapper});
+ await act(async()=>result.current.login('citizen@example.com','a-long-password'));
+ expect(result.current.status).toBe('ready');expect(result.current.token).toBe('access-1');
+ const stored=jest.mocked(SecureStore.setItemAsync).mock.calls[0][1];
+ expect(JSON.parse(stored)).toEqual({refreshToken:'refresh-1',userId:'user-1'});
+ expect(stored).not.toContain('access-1');expect(stored).not.toContain('a-long-password');
 });
-
-test('a network failure cannot be bypassed by starting a new guest', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('stored-token');
-  jest.mocked(apiRequest).mockRejectedValue(new Error('network unavailable'));
-  const { result } = renderHook(useGuestSession, { wrapper });
-
-  await act(async () => result.current.ensureGuest().catch(() => {}));
-
-  expect(result.current.canStartNew).toBe(false);
-  await expect(result.current.startNewGuest()).rejects.toThrow('only available after');
-  expect(apiRequest).toHaveBeenCalledTimes(1);
+test('restores via refresh, with one rotation for concurrent requests',async()=>{
+ const manager=createAuthSession();
+ jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify({refreshToken:'refresh-old',userId:'user-1'}));
+ jest.mocked(apiRequest).mockResolvedValue(pair());
+ const values=await Promise.all([manager.restore(),manager.restore(),manager.restore()]);
+ expect(values.every(value=>value?.access_token==='access-1')).toBe(true);expect(apiRequest).toHaveBeenCalledTimes(1);
 });
-
-test('a user can explicitly replace a rejected token with a new guest', async () => {
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce('expired-token').mockResolvedValue(null);
-  jest.mocked(apiRequest)
-    .mockRejectedValueOnce(Object.assign(new Error('invalid session'), { status: 401 }))
-    .mockResolvedValueOnce({ access_token: 'new-token', user: profile });
-  const { result } = renderHook(useGuestSession, { wrapper });
-  await act(async () => result.current.ensureGuest().catch(() => {}));
-
-  await act(async () => result.current.startNewGuest());
-
-  expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(GUEST_TOKEN_KEY);
-  expect(SecureStore.setItemAsync).toHaveBeenCalledWith(GUEST_TOKEN_KEY, 'new-token');
-  expect(result.current.status).toBe('ready');
-  expect(result.current.token).toBe('new-token');
+test('concurrent expired requests share rotation and old closures use the newest JWT',async()=>{
+ const manager=createAuthSession();jest.mocked(apiRequest).mockResolvedValueOnce({...pair(),expires_in:0}).mockResolvedValueOnce(pair('2'));
+ await manager.authenticate('login','citizen@example.com','a-long-password');
+ const values=await Promise.all([manager.current('access-1'),manager.current('access-1')]);
+ expect(values).toEqual(['access-2','access-2']);expect(apiRequest).toHaveBeenCalledTimes(2);
+ expect(await manager.recover('access-1')).toBe('access-2');expect(apiRequest).toHaveBeenCalledTimes(2);
 });
-
-test('deleting the profile leaves the session idle, so the next ensureGuest creates a new guest instead of an error', async () => {
-  jest.mocked(apiRequest)
-    .mockResolvedValueOnce({ access_token: 'first-token', user: profile })
-    .mockResolvedValueOnce(undefined)
-    .mockResolvedValueOnce({ access_token: 'second-token', user: { ...profile, id: 'guest-2' } });
-  const { result } = renderHook(useGuestSession, { wrapper });
-  await act(async () => result.current.ensureGuest());
-
-  await act(async () => result.current.deleteGuest());
-  expect(apiRequest).toHaveBeenCalledWith('/v1/guest-sessions/current', 'first-token', { method: 'DELETE' });
-  expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(GUEST_TOKEN_KEY);
-  expect(result.current.status).toBe('idle');
-  expect(result.current.token).toBeNull();
-
-  await act(async () => result.current.ensureGuest());
-  expect(result.current.status).toBe('ready');
-  expect(result.current.token).toBe('second-token');
+test.each([401,undefined])('failed refresh (%s) clears the secret and never retries it',async(status)=>{
+ const manager=createAuthSession();jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify({refreshToken:'old',userId:'user-1'}));
+ jest.mocked(apiRequest).mockRejectedValue(Object.assign(new Error('refresh failed'),{status}));
+ await expect(manager.restore()).rejects.toThrow('refresh failed');
+ expect(manager.get()).toBeNull();expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(AUTH_KEY);
+ jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);await manager.restore();expect(apiRequest).toHaveBeenCalledTimes(1);
+});
+test('logout clears local credentials even when revocation cannot reach server',async()=>{
+ const manager=createAuthSession();jest.mocked(apiRequest).mockResolvedValueOnce(pair()).mockRejectedValueOnce(new Error('offline'));
+ await manager.authenticate('login','citizen@example.com','a-long-password');await manager.signOut();
+ expect(manager.get()).toBeNull();await expect(manager.current('access-1')).rejects.toMatchObject({status:401});
+ expect(apiRequest).toHaveBeenLastCalledWith('/v1/auth/logout',undefined,{method:'POST',body:JSON.stringify({refresh_token:'refresh-1'})});
+});
+test('registration upgrades a guest only by explicit choice and sends no role',async()=>{
+ const manager=createAuthSession();jest.mocked(SecureStore.getItemAsync).mockResolvedValue('guest-secret');jest.mocked(apiRequest).mockResolvedValue(pair());
+ await manager.authenticate('register',' citizen@example.com ','a-long-password','Dwi',true);
+ expect(apiRequest).toHaveBeenCalledWith('/v1/auth/register','guest-secret',{method:'POST',body:JSON.stringify({email:'citizen@example.com',password:'a-long-password',name:'Dwi'})});
+ expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(GUEST_TOKEN_KEY);
+});
+test('secure storage failure revokes the newly issued family',async()=>{
+ const manager=createAuthSession();jest.mocked(SecureStore.setItemAsync).mockRejectedValue(new Error('keychain unavailable'));jest.mocked(apiRequest).mockResolvedValue(pair());
+ await expect(manager.authenticate('login','citizen@example.com','a-long-password')).rejects.toThrow('keychain unavailable');
+ expect(manager.get()).toBeNull();expect(apiRequest).toHaveBeenLastCalledWith('/v1/auth/logout',undefined,expect.anything());
+});
+test('logout during rotation cannot restore a signed out account',async()=>{
+ const manager=createAuthSession();jest.mocked(apiRequest).mockResolvedValueOnce(pair());await manager.authenticate('login','citizen@example.com','a-long-password');
+ let resolve!:(value:AuthTokens)=>void;
+ jest.mocked(apiRequest).mockImplementationOnce(()=>new Promise(done=>{resolve=done;})).mockResolvedValue(undefined);
+ const rotation=manager.refresh().catch(()=>null);await manager.signOut();resolve(pair('2'));await rotation;
+ expect(manager.get()).toBeNull();
 });

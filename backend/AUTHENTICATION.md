@@ -1,6 +1,6 @@
 # App authentication
 
-Backend implementation only: the phone frontend is unchanged and still needs register/login/token-storage screens. Account credentials extend the existing `users` row, preferences and accessibility records. Roles do not represent accessibility needs.
+The phone frontend now includes login/registration screens, account session restoration, automatic refresh and logout. Account credentials extend the existing `users` row, preferences and accessibility records. Roles do not represent accessibility needs.
 
 The government dashboard remains instant-access by explicit project decision. `/v1/command/*`, dashboard simulation and safe-house management retain their existing public access. These routes are an intentional exception to role-gating, not evidence of a protected government deployment. Put the dashboard behind trusted network access before exposing its write features publicly.
 
@@ -116,12 +116,35 @@ docker compose -p evacuaid-auth-test -f testocando/docker-compose.test.yml run -
 
 ## Changed files and verification
 
-New files: `app/authConfig.py`, `app/authCli.py`, `app/models/auth.py`, `app/db/models/auth.py`, `app/services/authService.py`, `app/services/authRateLimit.py`, `app/routers/auth.py`, `tests/test_auth.py`, `alembic/versions/20261010_14_auth.py`, this guide, and `../testocando/command/migrations/versions/20261010_15_auth_merge.py`.
+New backend files: `app/authConfig.py`, `app/authCli.py`, `app/models/auth.py`, `app/db/models/auth.py`, `app/services/authService.py`, `app/services/authRateLimit.py`, `app/routers/auth.py`, `tests/test_auth.py`, `alembic/versions/20261010_14_auth.py`, this guide, and `../testocando/command/migrations/versions/20261010_15_auth_merge.py`.
 
-Modified backend files: `app/auth.py`, `app/main.py`, `app/db/models/{__init__,user,session}.py`, `app/models/user.py`, `app/routers/{users,sessions,buddy_dev,externalData}.py`, `tests/{conftest,test_migration_roundtrip}.py`, `requirements.txt`, `.env.example`. Also changed root `.gitignore` to retain this guide and `../testocando/docker-compose.test.yml` to explicitly configure test authentication. Ignored local `.env` was configured with a generated signing secret; no secret value is documented. No frontend files changed.
+Modified backend files: `app/auth.py`, `app/main.py`, `app/db/models/{__init__,user,session}.py`, `app/models/user.py`, `app/routers/{users,sessions,buddy_dev,externalData}.py`, `tests/{conftest,test_migration_roundtrip}.py`, `requirements.txt`, `.env.example`. Also changed root `.gitignore` to retain this guide and `../testocando/docker-compose.test.yml` to explicitly configure test authentication. Ignored local `.env` was configured with a generated signing secret; no secret value is documented. The later frontend integration is described below.
 
 The full backend plus command regression run passed **315 tests** on the dedicated PostGIS test database, including JWT failures, Argon2id storage, duplicate registration rollback, refresh rotation/replay/concurrency, logout, ownership and assigned-case denial, admin assignment/bootstrap, accessibility aliases, rate limits and migration profile preservation. Existing deprecation warnings from pytest-asyncio/Python, Shapely and Alembic remain. `git diff --check` passed.
 
 Live root Compose verification also passed after rebuilding/restarting the shared backend: registration 201, login/me/profile reads 200, refresh rotation 200, replay and descendant refresh rejection 401, logout 204, and access JWT remaining valid until expiry. The temporary verification account was removed. Unauthenticated auth/me returned 401, production guest creation returned 404, and both `/command-center/` on port 8080 and public command regions returned 200. Backend and dashboard health checks passed; the running combined migration is `20261010_15_auth_merge`.
 
-Operational limitations: refresh records retain replay tombstones; schedule retention cleanup after family expiry as data grows. Rate-limiter buckets clean expired records on subsequent auth activity. There is no email verification, password reset or MFA; these must be designed before broader account rollout. App frontend login integration and physical-phone testing remain pending because this task prohibits frontend changes.
+Operational limitations: refresh records retain replay tombstones; schedule retention cleanup after family expiry as data grows. Rate-limiter buckets clean expired records on subsequent auth activity. There is no email verification, password reset or MFA; these must be designed before broader account rollout. Physical-phone testing remains pending.
+
+## Phone frontend integration
+
+`frontend/src/screens/auth.tsx` provides localized Indonesian/English account entry before onboarding/navigation. New registration cannot select a role. Existing saved guest profiles can be upgraded only through an explicit choice, and only if the backend accepts the unexpired guest credential. Logout retains the account/profile; there is no unsupported account-deletion button.
+
+`frontend/src/features/profile/auth-session.ts` holds access JWTs in memory and stores a single refresh-token/user-ID record in Expo SecureStore using device-only, after-first-unlock accessibility. No passwords or access JWTs are persisted. Restoration rotates the saved refresh token. The shared API transport refreshes proactively near expiry and retries a protected 401 once; concurrent requests share one rotation. Failed/ambiguous refresh clears the saved session and asks for login instead of replaying the old refresh secret. Logout attempts server revocation even if secure-storage deletion fails; local logout still works when the backend is offline and secure storage is available.
+
+The existing session hook/provider names remain compatibility aliases for account authentication. They no longer create guest profiles. Buddy and alert-area background tasks retain only their user/session IDs and obtain credentials from the shared account session. Cross-account background location uploads are stopped. Profile loads/saves and preference synchronization reject late results from a previous session. Another account's preferences are read from the backend rather than overwritten with old device defaults.
+
+The local ignored frontend `.env` points at the verified current host LAN address; use the current computer IP for physical phones, `http://10.0.2.2:8000` for Android emulators, and restart Expo after changing `EXPO_PUBLIC_API_BASE_URL`.
+
+Frontend verification commands (from `frontend`): `npm run typecheck`, `npm test -- --silent`, `npm run export:native`, `npm run lint`. The transport/session source also passed a live backend smoke check with mocked device storage: registration, login, concurrent automatic refresh, logout/revocation; the temporary account was removed. Device SecureStore/background behavior still requires physical-device testing. The dashboard files and its instant-access policy remain unchanged.
+
+Frontend results: the full suite passed **658 tests across 68 suites**; subsequent focused onboarding/Buddy tests passed **54 tests**, including three added checks for authenticated multi-valued onboarding and account-bound background uploads. TypeScript passed, Android and iOS exports passed, and lint of the new auth service/provider/screen/transport passed. Repository-wide lint remains blocked by existing React hook/ref violations (including the pre-existing profile-clearing effect). Existing declared development dependencies were restored locally without changing the dependency manifest or lockfile.
+
+Frontend new files: `src/features/profile/auth-session.ts`, `src/screens/auth.tsx`, `src/screens/auth.test.tsx`, `src/features/preferences/account-switch.test.tsx`. Modified the root layout, shared API/session/profile/preferences contexts, setup/profile screens, alert cache clearing, Buddy and alert-area background tasks, localization, the logout icon declaration, and associated regression tests.
+
+Start the phone development client from the repository root:
+
+```powershell
+cd frontend
+npm start -- --clear
+```

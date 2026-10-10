@@ -14,13 +14,19 @@ export type ApiError = Error & { status?: number; kind?: 'network' | 'http' | 'c
 
 const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
 
-export async function apiRequest<T>(path: string, token?: string, init: RequestInit = {}): Promise<T> {
+type AuthRecovery = { current: (token: string) => Promise<string>; refresh: (token: string) => Promise<string> };
+let authRecovery: AuthRecovery | null = null;
+export function configureAuthRecovery(value: AuthRecovery | null) { authRecovery = value; }
+
+export async function apiRequest<T>(path: string, token?: string, init: RequestInit = {}, retried = false): Promise<T> {
   if (!apiBaseUrl) {
     const error = new Error('EXPO_PUBLIC_API_BASE_URL is not configured') as ApiError;
     error.kind = 'config';
     throw error;
   }
   let response: Response;
+  const recovery = token && !path.startsWith('/v1/auth/') ? authRecovery : null;
+  if (token && recovery) token = await recovery.current(token);
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
@@ -39,6 +45,10 @@ export async function apiRequest<T>(path: string, token?: string, init: RequestI
     throw error;
   }
   if (!response.ok) {
+    if (response.status === 401 && token && recovery && !retried) {
+      const renewed = await recovery.refresh(token);
+      return apiRequest<T>(path, renewed, init, true);
+    }
     let message = `Request failed (${response.status})`;
     try {
       const body = await response.json() as { detail?: unknown };

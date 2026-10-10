@@ -1,96 +1,54 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import { apiRequest, type ApiError, type UserProfile } from './api';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { apiRequest, configureAuthRecovery, type ApiError, type UserProfile } from './api';
+import { authSession, type AuthTokens, type AuthUser } from './auth-session';
+import { clearAlertSession } from '@/features/alerts/use-alerts';
+export { GUEST_TOKEN_KEY } from './auth-session';
 
-export const GUEST_TOKEN_KEY = 'evacuaid.guest-token.v1';
-type SessionStatus = 'idle' | 'loading' | 'ready' | 'error';
+type SessionStatus = 'idle' | 'loading' | 'ready' | 'signed-out' | 'error';
 type SessionContextValue = {
-  token: string | null;
-  user: UserProfile | null;
-  status: SessionStatus;
-  error: string | null;
-  errorKind: 'network' | 'http' | 'config' | null;
-  canStartNew: boolean;
+  token: string | null; user: UserProfile | null; account: AuthUser | null;
+  status: SessionStatus; error: string | null; errorKind: 'network' | 'http' | 'config' | null;
   ensureGuest: () => Promise<void>;
-  deleteGuest: () => Promise<void>;
-  startNewGuest: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name?: string, upgradeGuest?: boolean) => Promise<void>;
+  signOut: () => Promise<void>;
 };
-
-const Context = createContext<SessionContextValue>({
-  token: null, user: null, status: 'idle', error: null, errorKind: null, canStartNew: false,
-  ensureGuest: async () => {}, deleteGuest: async () => {}, startNewGuest: async () => {},
-});
-
+const Context = createContext<SessionContextValue>({ token:null,user:null,account:null,status:'idle',error:null,errorKind:null,
+  ensureGuest:async()=>{},login:async()=>{},register:async()=>{},signOut:async()=>{} });
+// Keep the existing hook name so feature callers all share the authenticated session.
 export const useGuestSession = () => useContext(Context);
-
+export const useAuthSession = useGuestSession;
 export function GuestSessionProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [status, setStatus] = useState<SessionStatus>('idle');
-  const [error, setError] = useState<string | null>(null);
-  const [errorKind, setErrorKind] = useState<'network' | 'http' | 'config' | null>(null);
-  const [canStartNew, setCanStartNew] = useState(false);
-  const pending = useRef<Promise<void> | null>(null);
-
-  const ensureGuest = async () => {
-    if (pending.current) return pending.current;
-    const operation = (async () => {
-      setStatus('loading');
-      setError(null);
-      setErrorKind(null);
-      try {
-        const savedToken = await SecureStore.getItemAsync(GUEST_TOKEN_KEY);
-        if (savedToken) {
-          try {
-            const profile = await apiRequest<UserProfile>('/v1/me', savedToken);
-            setToken(savedToken);
-            setUser(profile);
-            setCanStartNew(false);
-          } catch (cause) {
-            setCanStartNew((cause as ApiError)?.status === 401);
-            throw cause;
-          }
-        } else {
-          const created = await apiRequest<{ access_token: string; user: UserProfile }>('/v1/guest-sessions', undefined, { method: 'POST' });
-          try { await SecureStore.setItemAsync(GUEST_TOKEN_KEY, created.access_token); }
-          catch (cause) {
-            await apiRequest<void>('/v1/guest-sessions/current', created.access_token, { method: 'DELETE' }).catch(() => {});
-            throw cause;
-          }
-          setToken(created.access_token);
-          setUser(created.user);
-          setCanStartNew(false);
-        }
-        setStatus('ready');
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not connect to EvacuAid.');
-        setErrorKind((cause as ApiError)?.kind ?? null);
-        setStatus('error');
-        throw cause;
-      }
-    })();
-    pending.current = operation;
-    try { await operation; } finally { pending.current = null; }
-  };
-
-  const deleteGuest = async () => {
-    if (!token) throw new Error('Guest session is not ready');
-    await apiRequest<void>('/v1/guest-sessions/current', token, { method: 'DELETE' });
-    await SecureStore.deleteItemAsync(GUEST_TOKEN_KEY);
-    setToken(null);
-    setUser(null);
-    // Idle, not an error: finishing onboarding again creates the next guest profile.
-    setStatus('idle');
-  };
-
-  const startNewGuest = async () => {
-    if (!canStartNew) throw new Error('A new guest profile is only available after the saved session is rejected.');
-    await SecureStore.deleteItemAsync(GUEST_TOKEN_KEY);
-    setToken(null);
-    setUser(null);
-    setStatus('idle');
-    await ensureGuest();
-  };
-
-  return <Context.Provider value={{ token, user, status, error, errorKind, canStartNew, ensureGuest, deleteGuest, startNewGuest }}>{children}</Context.Provider>;
+  const [value,setValue] = useState<AuthTokens | null>(authSession.get());
+  const [user,setUser] = useState<UserProfile | null>(null);
+  const [status,setStatus] = useState<SessionStatus>('idle');
+  const [error,setError] = useState<string | null>(null);
+  const [errorKind,setErrorKind] = useState<SessionContextValue['errorKind']>(null);
+  useEffect(() => {
+    configureAuthRecovery({ current:authSession.current,refresh:authSession.recover });
+    return authSession.subscribe(next => { setValue(next); if (!next) { clearAlertSession();setUser(null);setStatus('signed-out'); } });
+  },[]);
+  const run = useCallback(async (operation: () => Promise<AuthTokens | null>, keepForm = false) => {
+    if (keepForm) clearAlertSession();
+    if (!keepForm) setStatus('loading');setError(null);setErrorKind(null);
+    try {
+      const next = await operation();
+      if (!next) { setStatus('signed-out');return; }
+      setValue(next);
+      const profile = await apiRequest<UserProfile>('/v1/me',next.access_token);
+      if (authSession.get()?.user.id !== next.user.id) return;
+      setUser(profile);setStatus('ready');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not sign in.');
+      setErrorKind((cause as ApiError).kind ?? null);
+      setStatus(authSession.get() ? 'error' : 'signed-out');
+      throw cause;
+    }
+  },[]);
+  const ensureGuest = useCallback(() => run(authSession.restore),[run]);
+  return <Context.Provider value={{ token:value?.access_token ?? null,user,account:value?.user ?? null,status,error,errorKind,
+    ensureGuest,login:(email,password)=>run(()=>authSession.authenticate('login',email,password),true),
+    register:(email,password,name,upgrade)=>run(()=>authSession.authenticate('register',email,password,name,upgrade),true),
+    signOut:async()=>{ await authSession.signOut();setValue(null);setUser(null);setStatus('signed-out');setError(null); }
+  }}>{children}</Context.Provider>;
 }
