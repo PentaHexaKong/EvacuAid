@@ -5,9 +5,10 @@ import { useAccess } from '@/features/access/use-access';
 import { colors } from '@/theme';
 
 export default function Tabs() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const tabs = tabsFor(useAccess());
-  return <NativeTabs tintColor={colors.primary} disableTransparentOnScrollEdge minimizeBehavior="never">
+  // The native tab bar keeps the labels it was created with, so a language switch rebuilds it.
+  return <NativeTabs key={i18n.language} tintColor={colors.primary} disableTransparentOnScrollEdge minimizeBehavior="never">
     <NativeTabs.Trigger name="(overview)" disablePopToTop disableScrollToTop>
       <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
       <NativeTabs.Trigger.Label>{t('overview')}</NativeTabs.Trigger.Label>
