@@ -46,7 +46,8 @@ class AssistanceRequest(Base):
     helper_id = synonym('buddyUserId')
     created_at = synonym('requestedAt')
     updated_at = synonym('updatedAt')
-    is_buddy: Mapped[bool] = mapped_column('pilot', Boolean, default=False, server_default='false')
+    # True for requests made through the Buddy flow; the column keeps its original name.
+    buddy_flow: Mapped[bool] = mapped_column('pilot', Boolean, default=False, server_default='false')
     message: Mapped[str] = mapped_column(Text, default='', server_default='')
     support_needs: Mapped[list] = mapped_column(JSONB, default=list, server_default='[]')
     idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True)

@@ -17,7 +17,7 @@ from tests.test_hazards import syntheticEvidence, syntheticRoute
 async def sessionFixture(db, leg):
     requester = await user_service.create_user(db, UserCreate(name='SYNTHETIC_TEST_REQUESTER'))
     helper = await user_service.create_user(db, UserCreate(name='SYNTHETIC_TEST_HELPER'))
-    request = BuddyRequest(requester_id=requester.id, helper_id=helper.id, status='ACCEPTED' if leg == 'TO_REQUESTER' else 'ARRIVED', is_buddy=True, idempotency_key='SYNTHETIC_TEST_ROUTE', sharing_consent=True, meeting_confirmed=leg == 'TO_SHELTER')
+    request = BuddyRequest(requester_id=requester.id, helper_id=helper.id, status='ACCEPTED' if leg == 'TO_REQUESTER' else 'ARRIVED', buddy_flow=True, idempotency_key='SYNTHETIC_TEST_ROUTE', sharing_consent=True, meeting_confirmed=leg == 'TO_SHELTER')
     db.add(request)
     await db.flush()
     for user, longitude in ((helper, 0), (requester, 0.01)):

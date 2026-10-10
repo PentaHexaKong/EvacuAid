@@ -291,7 +291,7 @@ async def create_request(payload: RequestCreate, db: AsyncSession = Depends(get_
         raise HTTPException(409, 'confirmed trusted contact required')
     if await service.occupied(db, actor.id) or (payload.helperUserId and await service.occupied(db, payload.helperUserId)):
         raise HTTPException(409, 'participant already has active assistance')
-    row = BuddyRequest(requester_id=actor.id, status='WAITING' if payload.helperUserId else 'FALLBACK_REQUIRED', is_buddy=True, message=payload.message, support_needs=payload.supportNeeds, sharing_consent=True, idempotency_key=payload.idempotencyKey, latitude=payload.latitude, longitude=payload.longitude)
+    row = BuddyRequest(requester_id=actor.id, status='WAITING' if payload.helperUserId else 'FALLBACK_REQUIRED', buddy_flow=True, message=payload.message, support_needs=payload.supportNeeds, sharing_consent=True, idempotency_key=payload.idempotencyKey, latitude=payload.latitude, longitude=payload.longitude)
     db.add(row)
     await db.flush()
     if payload.helperUserId:

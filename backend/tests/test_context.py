@@ -53,7 +53,7 @@ async def testContextShowsOnlyActiveAssistanceRequest(dbSession, monkeypatch):
     buddy = await user_service.create_user(dbSession, UserCreate(name='Sari'))
     await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
     relationship = BuddyRelationship(userId=user.id, buddyUserId=buddy.id, level='PRIMARY', status='ACTIVE')
-    request = BuddyRequest(requester_id=user.id, helper_id=buddy.id, status='ACCEPTED', is_buddy=True)
+    request = BuddyRequest(requester_id=user.id, helper_id=buddy.id, status='ACCEPTED', buddy_flow=True)
     dbSession.add_all([relationship, request])
     await dbSession.commit()
 

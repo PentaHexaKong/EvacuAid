@@ -201,7 +201,7 @@ async def test_parallel_requests_keep_single_canonical_assignment(dbSession):
         assert sorted([first.status_code, second.status_code]) == [201, 409]
         requests = (await dbSession.execute(select(AssistanceRequest).where(AssistanceRequest.userId == uuid.UUID(owner_id)))).scalars().all()
         assert len(requests) == 1
-        assert requests[0].is_buddy
+        assert requests[0].buddy_flow
 
 
 @pytest.mark.asyncio
@@ -214,7 +214,7 @@ async def test_two_leg_navigation_uses_maneuvers_and_requester_mobility(dbSessio
     owner = await user_service.create_user(dbSession, UserCreate(name='Requester'))
     helper = await user_service.create_user(dbSession, UserCreate(name='Helper'))
     await user_service.update_accessibility(dbSession, owner.id, AccessibilityUpdate(items=[{'type': 'MOBILITY_LIMITATION'}]))
-    request = BuddyRequest(requester_id=owner.id, helper_id=helper.id, status='ACCEPTED', is_buddy=True, idempotency_key='route-test', sharing_consent=True)
+    request = BuddyRequest(requester_id=owner.id, helper_id=helper.id, status='ACCEPTED', buddy_flow=True, idempotency_key='route-test', sharing_consent=True)
     dbSession.add(request)
     await dbSession.flush()
     for user in (owner, helper):
@@ -250,7 +250,7 @@ async def test_requester_sees_helper_approach_route(dbSession, monkeypatch):
 
     owner = await user_service.create_user(dbSession, UserCreate(name='Requester'))
     helper = await user_service.create_user(dbSession, UserCreate(name='Helper'))
-    request = BuddyRequest(requester_id=owner.id, helper_id=helper.id, status='EN_ROUTE', is_buddy=True, idempotency_key='approach-test', sharing_consent=True)
+    request = BuddyRequest(requester_id=owner.id, helper_id=helper.id, status='EN_ROUTE', buddy_flow=True, idempotency_key='approach-test', sharing_consent=True)
     dbSession.add(request)
     await dbSession.flush()
     now = datetime.now(timezone.utc)

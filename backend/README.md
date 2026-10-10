@@ -75,11 +75,8 @@ Profile endpoints:
 - `POST /v1/buddy-invitations/{relationshipId}/accept`
 - `POST /v1/buddy-invitations/{relationshipId}/reject`
 - `GET /v1/users/{userId}/buddy-candidates`
-- `POST /v1/assistance/requests`
-- `GET /v1/assistance/requests/{requestId}`
-- `GET /v1/users/{userId}/assistance/requests`
-- `GET /v1/users/{buddyUserId}/assistance/assignments`
-- `POST /v1/assistance/requests/{requestId}/{notify|accept|decline|depart|arrive|evacuating|safe|cancel}`
+
+Buddy endpoints use `/v1/buddy`; `/v1/buddy-pilot` still answers for older app builds.
 
 `/v1/context` loads the persisted user, location, accessibility, and preferences, then delegates exposure and recommendation generation to the risk service. Its action includes stable `reason_codes` and presentation requirements. Accessibility changes delivery requirements, not hazard severity.
 

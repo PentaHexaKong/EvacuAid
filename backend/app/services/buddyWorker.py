@@ -21,7 +21,7 @@ async def tick():
             row.status = 'EXPIRED'
         await db.execute(update(BuddyAvailability).where(BuddyAvailability.observed_at < service.now() - timedelta(minutes=2)).values(latitude=None, longitude=None, observed_at=None, accuracy_m=None))
         await db.execute(delete(BuddyMessage).where(BuddyMessage.created_at < service.now() - timedelta(hours=24)))
-        await db.execute(delete(BuddyRequest).where(BuddyRequest.is_buddy.is_(True), BuddyRequest.status.in_(service.TERMINAL), BuddyRequest.updated_at < service.now() - timedelta(days=30)))
+        await db.execute(delete(BuddyRequest).where(BuddyRequest.buddy_flow.is_(True), BuddyRequest.status.in_(service.TERMINAL), BuddyRequest.updated_at < service.now() - timedelta(days=30)))
         await db.execute(delete(BuddyInbox).where(BuddyInbox.created_at < service.now() - timedelta(days=30)))
         await db.commit()
         rows = (await db.execute(select(BuddyOutbox).where(BuddyOutbox.sent_at.is_(None), BuddyOutbox.next_at <= service.now()).order_by(BuddyOutbox.next_at).limit(20).with_for_update(skip_locked=True))).scalars().all()

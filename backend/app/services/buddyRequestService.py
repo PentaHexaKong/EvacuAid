@@ -42,7 +42,7 @@ async def current_request(db, user_id, include_offers=False):
     if include_offers:
         offered = select(BuddyAttempt.request_id).where(BuddyAttempt.helper_id == user_id, BuddyAttempt.status == 'PENDING', BuddyAttempt.expires_at > now())
         participants.append(BuddyRequest.id.in_(offered))
-    return (await db.execute(select(BuddyRequest).where(BuddyRequest.is_buddy.is_(True), or_(*participants), BuddyRequest.status.not_in(TERMINAL)).order_by(BuddyRequest.created_at.desc()))).scalars().first()
+    return (await db.execute(select(BuddyRequest).where(BuddyRequest.buddy_flow.is_(True), or_(*participants), BuddyRequest.status.not_in(TERMINAL)).order_by(BuddyRequest.created_at.desc()))).scalars().first()
 
 
 def legacyStatus(status):
@@ -63,7 +63,7 @@ async def session_event(db, request):
 
 
 async def get_request(db, request_id, actor, connected=False):
-    request = (await db.execute(select(BuddyRequest).where(BuddyRequest.id == request_id, BuddyRequest.is_buddy.is_(True)).with_for_update())).scalar_one_or_none()
+    request = (await db.execute(select(BuddyRequest).where(BuddyRequest.id == request_id, BuddyRequest.buddy_flow.is_(True)).with_for_update())).scalar_one_or_none()
     if not request:
         raise HTTPException(404, 'request not found')
     offered = (await db.execute(select(BuddyAttempt.id).where(BuddyAttempt.request_id == request_id, BuddyAttempt.helper_id == actor, BuddyAttempt.status == 'PENDING', BuddyAttempt.expires_at > now()))).first()
