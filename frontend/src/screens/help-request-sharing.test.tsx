@@ -16,7 +16,7 @@ jest.mock('expo-speech', () => ({ stop: jest.fn(), speak: jest.fn() }));
 jest.mock('expo-speech-recognition', () => ({ ExpoSpeechRecognitionModule: {}, useSpeechRecognitionEvent: jest.fn() }));
 jest.mock('@/features/profile/api', () => ({ apiRequest: jest.fn().mockResolvedValue(undefined) }));
 
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'request' }), useRouter: () => ({ back: jest.fn(), replace: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useLocalSearchParams: () => ({ id: 'request' }), useRouter: () => ({ back: jest.fn(), replace: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'token', user: { id: 'helper' } }) }));
