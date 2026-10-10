@@ -60,7 +60,7 @@ export function HelpRequestScreen() {
         <View style={styles.top}><StatusChip dot tone={friend ? 'critical' : 'caution'} label={a.c(friend ? 'needsHelpChip' : 'nearbyEmergency')} /><Tap accessibilityLabel={t('helpRequestLater')} onPress={back} style={styles.close}><IconX size={24} color={palette.ink} /></Tap></View>
         <Enter index={0} style={styles.center}><PersonAvatar name={name} size={88} /></Enter>
         <Enter index={1}><AppText variant="title" accessibilityRole="header" style={[styles.text, { color: palette.ink }]}>{t(friend ? 'helpRequestTitle' : 'helpRequestTitleNearby', { name })}</AppText></Enter>
-        <Enter index={2}><AppText style={[styles.text, { color: palette.ink, opacity: 0.7 }]}>{detail}</AppText></Enter>
+        <Enter index={2}><AppText style={[styles.text, { color: palette.ink, opacity: 0.85 }]}>{detail}</AppText></Enter>
         {!!session?.message && <Enter index={3} style={styles.quote}><AppText style={{ color: palette.ink }}>“{session.message}”</AppText></Enter>}
         <Enter index={4} style={{ gap: 12 }}>
           <AppText accessibilityRole="timer" accessibilityLiveRegion="none" accessibilityLabel={t('helpRequestCountdown', { time: clock(Math.ceil(seconds / 15) * 15) })} style={[styles.text, { color: palette.ink, fontVariant: ['tabular-nums'] }]}>{t('helpRequestCountdown', { time: clock(seconds) })}</AppText>
