@@ -8,8 +8,8 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
   // A dev build downloads its bundle from Metro on every fresh launch.
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
   // A saved language preference wins over the device language, so switch it in the app when it is not English yet.
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
-  await expect(screen.getByRole('button', 'Alerts')).toBeVisible();
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await expect(screen.getByRole('tab', 'Alerts')).toBeVisible();
 
   await screen.getByRole('tab', 'Buddy').tap();
   await expect(screen.getByText('Help others')).toBeVisible();
@@ -44,7 +44,7 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
   await walk();
   await app.open();
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
-  if (await screen.getByRole('button', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
   await screen.getByRole('tab', 'Buddy').tap();
   const { code } = await agent.extract('the Buddy code shown under "Your code", in the form XXXX-XXXX', { schema: z.object({ code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/) }) });
 
