@@ -7,7 +7,7 @@ from app.repositories import shelterRepository
 
 
 def shelterResponse(shelter: Shelter) -> ShelterResponse:
-    return ShelterResponse(id=shelter.id, name=shelter.name, latitude=shelter.latitude, longitude=shelter.longitude, status=shelter.status, wheelchairAccessible=shelter.wheelchairAccessible, capacity=shelter.capacity, currentOccupancy=shelter.currentOccupancy, source=shelter.source)
+    return ShelterResponse(id=shelter.id, name=shelter.name, latitude=shelter.latitude, longitude=shelter.longitude, entranceLatitude=shelter.entranceLatitude, entranceLongitude=shelter.entranceLongitude, entranceNote=shelter.entranceNote, status=shelter.status, wheelchairAccessible=shelter.wheelchairAccessible, capacity=shelter.capacity, currentOccupancy=shelter.currentOccupancy, source=shelter.source)
 
 
 async def createShelter(session: AsyncSession, payload: ShelterCreate) -> Shelter:

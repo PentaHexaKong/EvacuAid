@@ -14,6 +14,9 @@ class Shelter(Base):
     __table_args__ = (
         CheckConstraint('latitude BETWEEN -90 AND 90', name='ck_shelter_latitude'),
         CheckConstraint('longitude BETWEEN -180 AND 180', name='ck_shelter_longitude'),
+        CheckConstraint('entrance_latitude BETWEEN -90 AND 90', name='ck_shelter_entrance_latitude'),
+        CheckConstraint('entrance_longitude BETWEEN -180 AND 180', name='ck_shelter_entrance_longitude'),
+        CheckConstraint('(entrance_latitude IS NULL) = (entrance_longitude IS NULL)', name='ck_shelter_entrance_pair'),
         CheckConstraint('capacity IS NULL OR capacity >= 0', name='ck_shelter_capacity'),
         CheckConstraint('current_occupancy IS NULL OR current_occupancy >= 0', name='ck_shelter_occupancy'),
     )
@@ -22,6 +25,9 @@ class Shelter(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    entranceLatitude: Mapped[float | None] = mapped_column('entrance_latitude', Float, nullable=True)
+    entranceLongitude: Mapped[float | None] = mapped_column('entrance_longitude', Float, nullable=True)
+    entranceNote: Mapped[str | None] = mapped_column('entrance_note', String(200), nullable=True)
     location: Mapped[object] = mapped_column(Geography(geometry_type='POINT', srid=4326), nullable=False)
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     shelterType: Mapped[str] = mapped_column('shelter_type', String(64), nullable=False)

@@ -60,7 +60,8 @@ async def session_route(db, request, actor, payload):
         for shelter, distance in candidates:
             suitable, reasons = shelterService.suitabilityReasons(shelter, payload.profile == 'WHEELCHAIR')
             if suitable:
-                destinations.append((shelter, (shelter.latitude, shelter.longitude), reasons))
+                destination = (shelter.entranceLatitude, shelter.entranceLongitude) if shelter.entranceLatitude is not None and shelter.entranceLongitude is not None else (shelter.latitude, shelter.longitude)
+                destinations.append((shelter, destination, reasons))
     try:
         evidence = await navigationService.routeEvidence(db, center=origin)
     except hazardRepository.HazardStateUnavailable:
@@ -69,7 +70,7 @@ async def session_route(db, request, actor, payload):
     if evidence is not None and payload.leg != 'TO_REQUESTER':
         viable = []
         for shelter, destination, reasons in destinations:
-            if navigationService.destinationExcluded(*destination, [item for item in evidence if isinstance(item, HazardEvidence)]):
+            if navigationService.destinationExcluded(shelter.latitude, shelter.longitude, [item for item in evidence if isinstance(item, HazardEvidence)]):
                 rejection_reasons.extend(['SHELTER_IN_CRITICAL_HAZARD', 'AUTHORITATIVE_HAZARD_INTERSECTION'])
             else:
                 viable.append((shelter, destination, reasons))
@@ -127,5 +128,5 @@ async def session_route(db, request, actor, payload):
             if changed:
                 await pilotService.session_event(db, request)
         await db.commit()
-        return {'routeStatus': 'READY', 'leg': payload.leg, 'destination': {'shelterId': shelter.id if shelter else None, 'name': shelter.name if shelter else 'Requester', 'latitude': destination[0], 'longitude': destination[1], 'source': shelter.source if shelter else 'ACCEPTED_SESSION'}, 'route': {'distanceM': route.distanceM, 'durationSec': route.durationSec, 'geometry': route.geometry, 'profile': payload.profile, 'maneuvers': route.maneuvers}, 'evaluation': {'safetyStatus': hazard, 'accessibilityStatus': 'UNKNOWN' if wheelchair else 'COMPATIBLE', 'reasonCodes': reasons}, 'selectionReasonCodes': reasons, 'rejectedCandidates': []}
+        return {'routeStatus': 'READY', 'leg': payload.leg, 'destination': {'shelterId': shelter.id if shelter else None, 'name': shelter.name if shelter else 'Requester', 'latitude': destination[0], 'longitude': destination[1], 'source': shelter.source if shelter else 'ACCEPTED_SESSION', 'entranceNote': shelter.entranceNote if shelter else None, 'entranceLatitude': shelter.entranceLatitude if shelter else None, 'entranceLongitude': shelter.entranceLongitude if shelter else None}, 'route': {'distanceM': route.distanceM, 'durationSec': route.durationSec, 'geometry': route.geometry, 'profile': payload.profile, 'maneuvers': route.maneuvers}, 'evaluation': {'safetyStatus': hazard, 'accessibilityStatus': 'UNKNOWN' if wheelchair else 'COMPATIBLE', 'reasonCodes': reasons}, 'selectionReasonCodes': reasons, 'rejectedCandidates': []}
     return {'routeStatus': 'UNAVAILABLE', 'leg': payload.leg, 'selectionReasonCodes': list(dict.fromkeys(['NO_FEASIBLE_ROUTE'] + rejection_reasons)) if rejection_reasons else ['NO_SUITABLE_ROUTE']}
