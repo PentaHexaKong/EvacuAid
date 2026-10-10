@@ -150,7 +150,7 @@
   "homeReadAlert": "Read the full alert",
   "discoverTitle": "Discover",
   "profileTitle": "Profile",
-  "profileFallback": "Guest profile",
+  "profileFallback": "Your profile",
   "savedOnDevice": "Saved on this device",
   "editProfile": "Profile details",
   "profileDetails": "Name and phone are optional. Add assistance and accessibility needs if useful.",
