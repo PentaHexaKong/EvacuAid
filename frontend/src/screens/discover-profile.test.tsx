@@ -32,8 +32,9 @@ let mockId = 'rain';
 let mockLanguage = 'en';
 let mockProfile: Record<string, unknown>;
 let mockPreferences: Record<string, unknown>;
+let mockAlertId: string | undefined;
 let mockFocus: string | undefined;
-jest.mock('expo-router', () => ({ useIsFocused: () => true, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus }) }));
+jest.mock('expo-router', () => ({ useIsFocused: () => true, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: mockId, focus: mockFocus, alertId: mockAlertId }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: { name: string }) => {
   const text = (mockLanguage === 'en' ? jest.requireActual('../localization/en.json') : jest.requireActual('../localization/id.json'))[key] ?? key;
   return params?.name ? text.replace('{{name}}', params.name) : text;
@@ -63,7 +64,7 @@ jest.mock('@/features/profile/api', () => ({ ...jest.requireActual('@/features/p
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 
 beforeEach(async () => {
-  jest.restoreAllMocks(); jest.clearAllMocks(); mockId = 'rain'; mockLanguage = 'en'; await AsyncStorage.clear();
+  jest.restoreAllMocks(); jest.clearAllMocks(); mockId = 'rain'; mockAlertId = undefined; mockLanguage = 'en'; await AsyncStorage.clear();
   mockEnsureGuest.mockResolvedValue(undefined);
   mockDeleteGuest.mockReset().mockResolvedValue(undefined);
   mockEvac = { phase: 'needsLocation', origin: null, shelters: null, route: null, reason: null, errorKind: null, findRoute: jest.fn(), locate: jest.fn(), clearRoute: jest.fn() };
@@ -233,6 +234,8 @@ test('a ready route shows the figures and unknown evidence, with no external map
   expect(view.getByText('Walk to Community hall')).toBeTruthy();
   expect(view.getByText(en.hazard_UNKNOWN)).toBeTruthy();
   expect(view.getByText(en.routeAccess_UNKNOWN)).toBeTruthy();
+  const content = JSON.stringify(view.toJSON());
+  expect(content.indexOf(en.evacuateStart)).toBeLessThan(content.indexOf(en.hazard_UNKNOWN));
   expect(view.queryByRole('button', { name: /Apple Maps|Google Maps/ })).toBeNull();
   fireEvent.press(view.getByRole('button', { name: en.evacuateStart }));
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/evacuate', params: { shelterId: 's1' } });
@@ -514,4 +517,13 @@ test('turning on warnings area uses guest credentials and offers Settings when b
   action.onPress?.();
   expect(settings).toHaveBeenCalled();
   expect(view.getByRole('switch', { name: 'Update my area for warnings' })).toHaveProp('value', false);
+});
+
+
+test('Discover forwards the emergency alert id when starting guidance', () => {
+  mockAlertId = 'rain';
+  evac({ phase: 'ready', origin, shelters: [hall], route: readyRoute });
+  const view = render(<DiscoverScreen />);
+  fireEvent.press(view.getByRole('button', { name: en.evacuateStart }));
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/evacuate', params: { shelterId: 's1', alertId: 'rain' } });
 });
