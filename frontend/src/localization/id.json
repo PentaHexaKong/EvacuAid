@@ -503,5 +503,6 @@
   "evacuateNeedsLocation": "Panduan memerlukan lokasimu.",
   "evacuateNoRoute": "Rute jalan kaki yang aman tidak ditemukan.",
   "evacuateSpokenStart": "Panduan menuju {{name}}, {{distance}}.",
-  "evacuateRouteOutdated": "Rute belum bisa diperbarui. Petunjuk ini mungkin sudah tidak sesuai."
+  "evacuateRouteOutdated": "Rute belum bisa diperbarui. Petunjuk ini mungkin sudah tidak sesuai.",
+  "helpRequestRefused": "Belum berhasil. Periksa koneksi dan lokasimu, lalu coba lagi."
 }

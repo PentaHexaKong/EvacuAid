@@ -503,5 +503,6 @@
   "evacuateNeedsLocation": "Guidance needs your location.",
   "evacuateNoRoute": "No safe walking route was found.",
   "evacuateSpokenStart": "Guidance to {{name}}, {{distance}}.",
-  "evacuateRouteOutdated": "Couldn't update your route. These directions may be out of date."
+  "evacuateRouteOutdated": "Couldn't update your route. These directions may be out of date.",
+  "helpRequestRefused": "That didn't go through. Check your connection and location, then try again."
 }

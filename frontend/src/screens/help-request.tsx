@@ -49,8 +49,10 @@ export function HelpRequestScreen() {
   const palette = sky[attempt ? friend ? 'awas' : 'siaga' : 'normal'];
   const contact = state.incomingContacts.find(item => item.userId === session?.requesterUserId);
   const detail = [...(session?.supportNeeds ?? []).map(a.support), friend ? relationLabel(contact?.relation, a.c) : a.c('gpsSystemLine', { name })].filter(Boolean).join(' · ');
-  const accept = async () => { if (attempt && await a.transition('accept', { attemptId: attempt.id, sharingConsent: true })) router.replace({ pathname: '/buddy', params: { requestId: id } }); };
-  const decline = async () => { if (attempt && await a.transition('decline', { attemptId: attempt.id })) router.back(); };
+  // The shared error is cleared by the next background refresh, so a refused answer is kept here until the next try.
+  const [refused, setRefused] = useState(false);
+  const accept = async () => { if (!attempt) return; setRefused(false); if (await a.transition('accept', { attemptId: attempt.id, sharingConsent: true })) router.replace({ pathname: '/buddy', params: { requestId: id } }); else setRefused(true); };
+  const decline = async () => { if (!attempt) return; setRefused(false); if (await a.transition('decline', { attemptId: attempt.id })) router.back(); else setRefused(true); };
   const back = () => { haptics.tap(); router.back(); };
   return <LinearGradient colors={palette.stops as [string, string, ...string[]]} style={styles.fill}>
     <ScrollView accessibilityViewIsModal contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
@@ -65,7 +67,7 @@ export function HelpRequestScreen() {
           <View style={styles.track}><View style={[StyleSheet.absoluteFill, { backgroundColor: palette.ink, opacity: 0.15 }]} /><View style={{ height: 4, width: `${fill}%`, backgroundColor: palette.ink }} /></View>
         </Enter>
         <View style={styles.fill} />
-        {a.issue && <AppText accessibilityRole="alert" style={{ color: palette.ink }}>{a.issue}</AppText>}
+        {(a.issue || refused) && <AppText accessibilityRole="alert" style={[styles.text, { color: palette.ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>}
         <View style={{ gap: 12 }}>
           <View style={{ gap: 6 }}><ActionButton variant="gradient" label={t('helpRequestAccept', { name })} loading={state.busy} onPress={() => { haptics.tap(); void accept(); }} /><AppText variant="small" style={[styles.text, { color: palette.ink }]}>{t('helpRequestConsent', { name })}</AppText></View>
           <ActionButton variant="secondary" label={t('helpRequestDecline')} loading={state.busy} onPress={() => { haptics.tap(); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
