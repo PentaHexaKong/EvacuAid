@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
 import { useTranslation } from 'react-i18next';
 import IconArrowLeft from '@tabler/icons-react-native/IconArrowLeft';
+import IconMapDown from '@tabler/icons-react-native/IconMapDown';
 import { ActionButton, AppText, Enter, Field, Page, Tap } from '@/components/ui';
 import { LanguageMenu } from '@/components/native-controls';
 import { Mascot } from '@/components/mascot';
@@ -17,17 +18,17 @@ import { colors } from '@/theme';
 
 type Mode = 'choose' | 'signin' | 'register';
 
-export function AuthScreen() {
+export function AuthScreen({ onOffline }: { onOffline?: () => void } = {}) {
   const [mode,setMode] = useState<Mode>('choose');
   const [hasGuest,setHasGuest] = useState(false);
   useEffect(() => { void SecureStore.getItemAsync(GUEST_TOKEN_KEY).then(value=>setHasGuest(!!value)).catch(()=>{}); },[]);
   return mode === 'choose'
-    ? <ChooseEntry hasGuest={hasGuest} onAccount={setMode} />
+    ? <ChooseEntry hasGuest={hasGuest} onAccount={setMode} onOffline={onOffline} />
     : <AccountForm key={mode} register={mode === 'register'} hasGuest={hasGuest} onMode={setMode} />;
 }
 
 // The first screen: an account, or straight in as a guest. It shares the setup welcome's sky so the two read as one flow.
-function ChooseEntry({ hasGuest, onAccount }: { hasGuest: boolean; onAccount: (mode: Mode) => void }) {
+function ChooseEntry({ hasGuest, onAccount, onOffline }: { hasGuest: boolean; onAccount: (mode: Mode) => void; onOffline?: () => void }) {
   const { t, i18n } = useTranslation();
   const session = useAuthSession();
   const { preferences, save } = usePreferences();
@@ -53,7 +54,12 @@ function ChooseEntry({ hasGuest, onAccount }: { hasGuest: boolean; onAccount: (m
     <StatusBar style="light" />
     <BrandBackdrop />
     <Page transparent fill edgeInsets={insets}>
-      <View style={[styles.row, { justifyContent: 'flex-end' }]}>
+      {/* Downloaded regions work without an account or a connection, so they sit outside the choice. */}
+      <View style={[styles.row, { justifyContent: onOffline ? 'space-between' : 'flex-end' }]}>
+        {onOffline && <Tap accessibilityLabel={t('offlineTitle')} disabled={busy} onPress={onOffline} style={styles.offline}>
+          <IconMapDown size={20} color={colors.surface} />
+          <AppText variant="button" style={{ color: colors.surface }}>{t('offlineShort')}</AppText>
+        </Tap>}
         <LanguageMenu label={t('language')} value={i18n.language} disabled={busy} onChange={language => void changeLanguage(language)} />
       </View>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.mascotStage}>
@@ -128,7 +134,8 @@ function AccountForm({ register, hasGuest, onMode }: { register: boolean; hasGue
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  offline: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, flexShrink: 1 },
   back: { width: 44, height: 44, marginLeft: -10 },
   mascotStage: { flex: 1, minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   textButton: { minHeight: 48, justifyContent: 'center' },

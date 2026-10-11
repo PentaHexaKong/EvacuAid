@@ -19,6 +19,7 @@ import { colors, SystemReduceMotionContext } from '@/theme';
 import { GuestSessionProvider, useGuestSession } from '@/features/profile/session';
 import { AlertGate, markAlertPresented } from '@/features/alerts/alert-gate';
 import { AuthScreen } from '@/screens/auth';
+import { OfflineRegionsScreen } from '@/screens/offline-regions';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -26,10 +27,12 @@ void SplashScreen.preventAutoHideAsync().catch(() => {});
 export const unstable_settings = { initialRouteName: '(tabs)', anchor: '(tabs)' };
 
 function FirstRunGate() {
+  const { t } = useTranslation();
   const { ready, preferences } = usePreferences();
   const session = useGuestSession();
   const profile = useProfile();
   const [reach, setReach] = useState<ReachPermissions>({});
+  const [offlineOpen, setOfflineOpen] = useState(false);
   const router = useRouter();
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
@@ -81,9 +84,10 @@ function FirstRunGate() {
   }, [preferences.completed, buddyTarget, returnTo, session.status, router]);
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
-  if (session.status === 'signed-out') return <AuthScreen />;
+  if (offlineOpen) return <OfflineRegionsScreen onBack={() => setOfflineOpen(false)} />;
+  if (session.status === 'signed-out') return <AuthScreen onOffline={() => setOfflineOpen(true)} />;
   if (session.status !== 'ready') {
-    if (session.status === 'error') return <GuestSessionError />;
+    if (session.status === 'error') return <><GuestSessionError /><ActionButton label={t('offlineTitle')} onPress={() => setOfflineOpen(true)} /></>;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
   return preferences.completed ? <Navigation /> : <SetupScreen start={entered ? 'help' : 'welcome'} onReach={permissions => setReach(value => ({ ...value, ...permissions }))} onDone={target => setReturnTo(target ?? '/')} />;

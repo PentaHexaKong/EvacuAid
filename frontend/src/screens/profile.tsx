@@ -189,6 +189,7 @@ export function ProfileScreen() {
     <View style={styles.groupDivider} />
     <View>
       <SettingsRow first Icon={IconDatabase} label={t('dataSources')} onPress={() => Alert.alert(t('dataSources'), t('dataSourcesBody'))} />
+      <SettingsRow Icon={IconDatabase} label={t('offlineTitle')} onPress={() => router.push('/offline-regions')} />
       <SettingsRow Icon={IconLogout} label={t(session.guest ? 'guestLeave' : 'authSignOut')} destructive={!session.guest} onPress={confirmSignOut} />
     </View>
     {preferencesError && <View style={{ gap: 8, marginTop: 16 }}><AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('preferencesSyncError')}</AppText><ActionButton variant="secondary" label={t('retry')} onPress={() => void retryPreferences()} /></View>}

@@ -331,3 +331,7 @@ declare module '@tabler/icons-react-native/IconLogout' {
   const Icon: typeof import('@tabler/icons-react-native').IconLogout;
   export default Icon;
 }
+declare module '@tabler/icons-react-native/IconMapDown' {
+  const Icon: typeof import('@tabler/icons-react-native').IconMapDown;
+  export default Icon;
+}
