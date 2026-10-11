@@ -58,12 +58,12 @@ async function guarded(setBusy: (busy: boolean) => void, setError: (error: boole
 
 export type ReachPermissions = { location?: Location.LocationObject; notifications?: boolean };
 
-export function SetupScreen({ editing = false, onDone, onReach, beforePreferences, footer }: { editing?: boolean; onDone?: (target?: string) => void; onReach?: (permissions: ReachPermissions) => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
+export function SetupScreen({ editing = false, start = 'welcome', onDone, onReach, beforePreferences, footer }: { editing?: boolean; start?: Step; onDone?: (target?: string) => void; onReach?: (permissions: ReachPermissions) => void; beforePreferences?: ReactNode; footer?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const { preferences, save } = usePreferences();
   const profile = useProfile();
   const session = useGuestSession();
-  const [step, setStep] = useState<Step>('welcome');
+  const [step, setStep] = useState<Step>(start);
   const [draft, setDraft] = useState(preferences);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -129,7 +129,7 @@ export function SetupScreen({ editing = false, onDone, onReach, beforePreference
   </View>;
 }
 
-function BrandBackdrop() {
+export function BrandBackdrop() {
   return <Animated.View entering={FadeIn.duration(duration.enter)} exiting={FadeOut.duration(duration.enter)} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
     <LinearGradient colors={brand.stops as [string, string, string]} locations={[0, 0.42, 1]} start={{ x: 0.85, y: 0 }} end={{ x: 0.15, y: 1 }} style={StyleSheet.absoluteFill} />
     <Svg width="100%" height="100%" viewBox="0 0 390 844" preserveAspectRatio="xMidYMin slice">

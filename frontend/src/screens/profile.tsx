@@ -115,7 +115,14 @@ export function ProfileScreen() {
     finally { setBusy(false); }
   };
 
-  const confirmSignOut = () => Alert.alert(t('authSignOut'), t('authSignOutBody'), [
+  const leaveGuest = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    try { await stopAlertArea(); await session.signOut(); }
+    catch { Alert.alert(t('authTryAgain')); }
+    finally { pending.current = false; }
+  };
+  const confirmSignOut = () => session.guest ? void leaveGuest() : Alert.alert(t('authSignOut'), t('authSignOutBody'), [
     { text: t('cancel'), style: 'cancel' },
     { text: t('authSignOut'), style: 'destructive', onPress: () => void (async () => {
       if (pending.current) return;
@@ -182,12 +189,12 @@ export function ProfileScreen() {
     <View style={styles.groupDivider} />
     <View>
       <SettingsRow first Icon={IconDatabase} label={t('dataSources')} onPress={() => Alert.alert(t('dataSources'), t('dataSourcesBody'))} />
-      <SettingsRow Icon={IconLogout} label={t('authSignOut')} destructive onPress={confirmSignOut} />
+      <SettingsRow Icon={IconLogout} label={t(session.guest ? 'guestLeave' : 'authSignOut')} destructive={!session.guest} onPress={confirmSignOut} />
     </View>
     {preferencesError && <View style={{ gap: 8, marginTop: 16 }}><AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('preferencesSyncError')}</AppText><ActionButton variant="secondary" label={t('retry')} onPress={() => void retryPreferences()} /></View>}
     <View style={{ gap: 4, marginTop: 28 }}>
       <AppText variant="small" style={{ color: colors.muted, fontVariant: ['tabular-nums'] }}>{t('appVersion', { version: Constants.expoConfig?.version ?? '' })}</AppText>
-      <AppText variant="small" style={{ color: colors.muted }}>{t('authAccountNote')}</AppText>
+      <AppText variant="small" style={{ color: colors.muted }}>{t(session.guest ? 'guestProfileNote' : 'authAccountNote')}</AppText>
     </View>
   </Page>;
 }

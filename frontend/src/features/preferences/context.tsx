@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaults, parsePreferences, PREFERENCES_KEY, type Preferences } from './storage';
 import { apiRequest, preferencesFromApi, preferencesToApi } from '@/features/profile/api';
 import { useGuestSession } from '@/features/profile/session';
+import { authSession } from '@/features/profile/auth-session';
 import { isLanguage, LANGUAGE_KEY } from '@/localization/language';
 
 type ApiPreferences = {
@@ -50,7 +51,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       try { parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {}; } catch {}
       const hasLegacyValues = ['largerText', 'strongerContrast', 'voiceEnabled', 'vibrationEnabled', 'textEnabled', 'language']
         .some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
-      const needsMigration = !account && !syncedUserId && (hasLegacyValues || isLanguage(oldLanguage));
+      const needsMigration = (!account && !syncedUserId && (hasLegacyValues || isLanguage(oldLanguage))) || authSession.takeFreshGuest(user.id);
       if (needsMigration) {
         const selectedLanguage = isLanguage(parsed.language) ? parsed.language : isLanguage(oldLanguage) ? oldLanguage : local.language;
         remote = await apiRequest<ApiPreferences>('/v1/users/' + user.id + '/preferences', token, {

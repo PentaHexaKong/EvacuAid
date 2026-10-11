@@ -33,6 +33,9 @@ function FirstRunGate() {
   const router = useRouter();
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
+  // Someone who just came through the entry screen has seen the welcome; setup starts at the first real question.
+  const [entered, setEntered] = useState(false);
+  if (session.status === 'signed-out' && !entered) setEntered(true);
   useEffect(() => {
     if (session.status === 'idle') void session.ensureGuest().catch(() => {});
   }, [reach, session.status, session.ensureGuest]);
@@ -83,7 +86,7 @@ function FirstRunGate() {
     if (session.status === 'error') return <GuestSessionError />;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
-  return preferences.completed ? <Navigation /> : <SetupScreen onReach={permissions => setReach(value => ({ ...value, ...permissions }))} onDone={target => setReturnTo(target ?? '/')} />;
+  return preferences.completed ? <Navigation /> : <SetupScreen start={entered ? 'help' : 'welcome'} onReach={permissions => setReach(value => ({ ...value, ...permissions }))} onDone={target => setReturnTo(target ?? '/')} />;
 }
 
 function GuestSessionError() {

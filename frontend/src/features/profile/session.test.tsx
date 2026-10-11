@@ -75,3 +75,43 @@ test('logout during rotation cannot restore a signed out account',async()=>{
  const rotation=manager.refresh().catch(()=>null);await manager.signOut();resolve(pair('2'));await rotation;
  expect(manager.get()).toBeNull();
 });
+const keyStore = () => {
+  const saved = new Map<string,string>();
+  jest.mocked(SecureStore.getItemAsync).mockImplementation(async key=>saved.get(key) ?? null);
+  jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key,value)=>{ saved.set(key,value); });
+  jest.mocked(SecureStore.deleteItemAsync).mockImplementation(async key=>{ saved.delete(key); });
+  return saved;
+};
+test('a guest is created once, survives leaving guest mode and resumes on restore',async()=>{
+ const saved=keyStore();const manager=createAuthSession();
+ jest.mocked(apiRequest).mockResolvedValueOnce({access_token:'guest-secret',user:{id:'guest-1',name:null}});
+ const started=await manager.startGuest();
+ expect(started.access_token).toBe('guest-secret');expect(started.user.email).toBeNull();expect(manager.isGuest()).toBe(true);
+ expect(saved.get(GUEST_TOKEN_KEY)).toBe('guest-secret');
+ await manager.signOut();
+ expect(manager.get()).toBeNull();expect(saved.get(GUEST_TOKEN_KEY)).toBe('guest-secret');
+ expect(apiRequest).not.toHaveBeenCalledWith('/v1/auth/logout',expect.anything(),expect.anything());
+ jest.mocked(apiRequest).mockResolvedValueOnce({id:'guest-1',name:'Dwi'});
+ const resumed=await manager.restore();
+ expect(resumed?.access_token).toBe('guest-secret');expect(resumed?.user.id).toBe('guest-1');
+ expect(apiRequest).toHaveBeenLastCalledWith('/v1/me',undefined,{headers:{Authorization:'Bearer guest-secret'}});
+ expect(await manager.current('guest-secret')).toBe('guest-secret');
+});
+test('an expired guest is forgotten so the choice screen shows again',async()=>{
+ const saved=keyStore();saved.set(GUEST_TOKEN_KEY,'stale');const manager=createAuthSession();
+ jest.mocked(apiRequest).mockRejectedValueOnce(Object.assign(new Error('Unauthorized'),{status:401,kind:'http'}));
+ expect(await manager.restore()).toBeNull();expect(saved.has(GUEST_TOKEN_KEY)).toBe(false);
+});
+test('a guest rejected mid-session signs out instead of retrying',async()=>{
+ const saved=keyStore();const manager=createAuthSession();
+ jest.mocked(apiRequest).mockResolvedValueOnce({access_token:'guest-secret',user:{id:'guest-1',name:null}});
+ await manager.startGuest();
+ await expect(manager.recover('guest-secret')).rejects.toMatchObject({status:401});
+ expect(manager.get()).toBeNull();expect(saved.has(GUEST_TOKEN_KEY)).toBe(false);
+});
+test('only a newly created guest is marked fresh, once',async()=>{
+ keyStore();const manager=createAuthSession();
+ jest.mocked(apiRequest).mockResolvedValueOnce({access_token:'guest-secret',user:{id:'guest-1',name:null}});
+ await manager.startGuest();
+ expect(manager.takeFreshGuest('other')).toBe(false);expect(manager.takeFreshGuest('guest-1')).toBe(true);expect(manager.takeFreshGuest('guest-1')).toBe(false);
+});

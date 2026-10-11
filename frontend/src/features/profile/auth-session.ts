@@ -4,7 +4,7 @@ import { apiRequest, type ApiError } from './api';
 
 export const AUTH_KEY = 'evacuaid.auth-session.v1';
 export const GUEST_TOKEN_KEY = 'evacuaid.guest-token.v1';
-export type AuthUser = { id: string; email: string; name: string | null; role: 'CITIZEN' | 'RESPONDER' | 'GOVERNMENT' | 'ADMIN' };
+export type AuthUser = { id: string; email: string | null; name: string | null; role: 'CITIZEN' | 'RESPONDER' | 'GOVERNMENT' | 'ADMIN' };
 export type AuthTokens = { access_token: string; refresh_token: string; expires_in: number; refresh_expires_in: number; user: AuthUser };
 type Saved = { refreshToken: string; userId: string };
 
@@ -12,6 +12,8 @@ const signedOut = () => Object.assign(new Error('Please sign in again.'), { stat
 
 export function createAuthSession() {
   let tokens: AuthTokens | null = null;
+  let guest = false;
+  let freshGuest: string | null = null;
   let expiresAt = 0;
   let generation = 0;
   let refreshPending: Promise<AuthTokens | null> | null = null;
@@ -26,7 +28,7 @@ export function createAuthSession() {
     return next;
   };
   const clear = async () => {
-    tokens = null; knownTokens.clear(); expiresAt = 0; notify();
+    tokens = null; guest = false; knownTokens.clear(); expiresAt = 0; notify();
     await storage(() => SecureStore.deleteItemAsync(AUTH_KEY));
   };
   const revoke = (raw: string) => apiRequest<void>('/v1/auth/logout', undefined,
@@ -38,7 +40,7 @@ export function createAuthSession() {
         await SecureStore.setItemAsync(AUTH_KEY, JSON.stringify({ refreshToken: value.refresh_token, userId: value.user.id }),
           { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
         if (generation !== version) { await SecureStore.deleteItemAsync(AUTH_KEY); throw signedOut(); }
-        tokens = value; knownTokens.add(value.access_token); expiresAt = Date.now() + value.expires_in * 1000; notify();
+        tokens = value; guest = false; knownTokens.add(value.access_token); expiresAt = Date.now() + value.expires_in * 1000; notify();
       });
       return value;
     } catch (cause) {
@@ -72,7 +74,8 @@ export function createAuthSession() {
     const version = generation;
     const operation = (async () => {
       const raw = await SecureStore.getItemAsync(AUTH_KEY);
-      if (!raw || version !== generation) return null;
+      if (version !== generation) return null;
+      if (!raw) return resumeGuest(version);
       let saved: Saved;
       try {
         saved = JSON.parse(raw) as Saved;
@@ -82,6 +85,49 @@ export function createAuthSession() {
     })();
     restorePending = operation;
     try { return await operation; } finally { if (restorePending === operation) restorePending = null; }
+  };
+  // A guest bearer is a plain token from development backends: no refresh, so it lasts until the server expires it.
+  const adoptGuest = (token: string, user: { id: string; name: string | null }) => {
+    guest = true; tokens = { access_token: token, refresh_token: '', expires_in: 0, refresh_expires_in: 0,
+      user: { id: user.id, email: null, name: user.name, role: 'CITIZEN' } };
+    knownTokens.clear(); knownTokens.add(token); expiresAt = Infinity; notify();
+    return tokens;
+  };
+  const dropGuest = async () => {
+    await storage(() => SecureStore.deleteItemAsync(GUEST_TOKEN_KEY));
+    if (guest) { tokens = null; guest = false; knownTokens.clear(); notify(); }
+  };
+  const resumeGuest = async (version: number) => {
+    const raw = await SecureStore.getItemAsync(GUEST_TOKEN_KEY);
+    if (!raw) return null;
+    try {
+      // Not passed as the token argument: this bearer is not known to the session yet, so recovery would reject it.
+      const user = await apiRequest<{ id: string; name: string | null }>('/v1/me', undefined, { headers: { Authorization: `Bearer ${raw}` } });
+      if (version !== generation) return null;
+      return adoptGuest(raw, user);
+    } catch (cause) {
+      // Expired or deleted on the server: forget it and offer the choice again.
+      if ((cause as ApiError).status === 401) { await dropGuest(); return null; }
+      throw cause;
+    }
+  };
+  const startGuest = async () => {
+    const version = ++generation;
+    await refreshPending?.catch(() => {});
+    const resumed = await resumeGuest(version);
+    if (resumed) return resumed;
+    if (version !== generation) throw signedOut();
+    const created = await apiRequest<{ access_token: string; user: { id: string; name: string | null } }>('/v1/guest-sessions', undefined, { method: 'POST' });
+    try {
+      await AsyncStorage.multiRemove(['evacuaid.profile.v1','evacuaid.onboarding-needs.v1']);
+      await storage(() => SecureStore.setItemAsync(GUEST_TOKEN_KEY, created.access_token, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }));
+    } catch (cause) {
+      await apiRequest<void>('/v1/guest-sessions/current', undefined, { method: 'DELETE', headers: { Authorization: `Bearer ${created.access_token}` } }).catch(() => {});
+      throw cause;
+    }
+    if (version !== generation) throw signedOut();
+    freshGuest = created.user.id;
+    return adoptGuest(created.access_token, created.user);
   };
   const authenticate = async (mode: 'login' | 'register', email: string, password: string, name?: string, upgradeGuest = false) => {
     const version = ++generation;
@@ -102,6 +148,8 @@ export function createAuthSession() {
   };
   const signOut = async () => {
     generation++;
+    // Leaving a guest keeps its token, so "Continue as guest" or creating an account can pick the same profile back up.
+    if (guest) { tokens = null; guest = false; knownTokens.clear(); notify(); return; }
     const current = tokens;
     try { await clear(); }
     finally {
@@ -115,11 +163,15 @@ export function createAuthSession() {
     if (!tokens) throw signedOut();
     return tokens.access_token;
   };
-  return { restore, authenticate, signOut, refresh, current,
+  return { restore, authenticate, startGuest, signOut, refresh, current,
     get: () => tokens,
+    isGuest: () => guest,
+    // True once for a guest this device just created, so its preferences can start from the choices made before it existed.
+    takeFreshGuest: (userId: string) => { const fresh = freshGuest === userId; if (fresh) freshGuest = null; return fresh; },
     subscribe: (listener: (value: AuthTokens | null) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     recover: async (rejected: string) => {
       if (!tokens || !knownTokens.has(rejected)) throw signedOut();
+      if (guest) { await dropGuest(); throw signedOut(); }
       if (tokens.access_token === rejected) await refresh();
       if (!tokens) throw signedOut();
       return tokens.access_token;

@@ -6,15 +6,16 @@ export { GUEST_TOKEN_KEY } from './auth-session';
 
 type SessionStatus = 'idle' | 'loading' | 'ready' | 'signed-out' | 'error';
 type SessionContextValue = {
-  token: string | null; user: UserProfile | null; account: AuthUser | null;
+  token: string | null; user: UserProfile | null; account: AuthUser | null; guest: boolean;
   status: SessionStatus; error: string | null; errorKind: 'network' | 'http' | 'config' | null;
   ensureGuest: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string, upgradeGuest?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
 };
-const Context = createContext<SessionContextValue>({ token:null,user:null,account:null,status:'idle',error:null,errorKind:null,
-  ensureGuest:async()=>{},login:async()=>{},register:async()=>{},signOut:async()=>{} });
+const Context = createContext<SessionContextValue>({ token:null,user:null,account:null,guest:false,status:'idle',error:null,errorKind:null,
+  ensureGuest:async()=>{},continueAsGuest:async()=>{},login:async()=>{},register:async()=>{},signOut:async()=>{} });
 // Keep the existing hook name so feature callers all share the authenticated session.
 export const useGuestSession = () => useContext(Context);
 export const useAuthSession = useGuestSession;
@@ -46,8 +47,8 @@ export function GuestSessionProvider({ children }: { children: ReactNode }) {
     }
   },[]);
   const ensureGuest = useCallback(() => run(authSession.restore),[run]);
-  return <Context.Provider value={{ token:value?.access_token ?? null,user,account:value?.user ?? null,status,error,errorKind,
-    ensureGuest,login:(email,password)=>run(()=>authSession.authenticate('login',email,password),true),
+  return <Context.Provider value={{ token:value?.access_token ?? null,user,account:value?.user ?? null,guest:!!value && authSession.isGuest(),status,error,errorKind,
+    ensureGuest,continueAsGuest:()=>run(authSession.startGuest,true),login:(email,password)=>run(()=>authSession.authenticate('login',email,password),true),
     register:(email,password,name,upgrade)=>run(()=>authSession.authenticate('register',email,password,name,upgrade),true),
     signOut:async()=>{ await authSession.signOut();setValue(null);setUser(null);setStatus('signed-out');setError(null); }
   }}>{children}</Context.Provider>;

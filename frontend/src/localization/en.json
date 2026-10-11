@@ -541,5 +541,13 @@
   "authSignOut": "Sign out",
   "authSignOutBody": "Sign out on this phone? Your account and saved profile will be kept.",
   "authUpgradeGuest": "Keep my previous guest profile",
-  "authUpgradeSelected": "Previous profile selected. Tap to create a new profile instead."
+  "authUpgradeSelected": "Previous profile selected. Tap to create a new profile instead.",
+  "entryBody": "Official alerts, evacuation guidance and help from people you trust, delivered the way you need.",
+  "entryGuest": "Continue as guest",
+  "entryGuestDetail": "Your profile stays on this phone",
+  "entryGuestResume": "Pick up your guest profile",
+  "authGuestUnavailable": "Guest mode is not available on this server. Sign in or create an account.",
+  "authRegisterDescription": "An account keeps your profile, alerts and Buddy connections when you change phones.",
+  "guestLeave": "Sign in or create account",
+  "guestProfileNote": "You are using a guest profile on this phone. Create an account to keep it on another phone."
 }

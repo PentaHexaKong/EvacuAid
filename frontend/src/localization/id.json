@@ -541,5 +541,13 @@
   "authSignOut": "Keluar",
   "authSignOutBody": "Keluar dari ponsel ini? Akun dan profil tersimpan tetap ada.",
   "authUpgradeGuest": "Simpan profil tamu saya sebelumnya",
-  "authUpgradeSelected": "Profil sebelumnya dipilih. Ketuk untuk membuat profil baru."
+  "authUpgradeSelected": "Profil sebelumnya dipilih. Ketuk untuk membuat profil baru.",
+  "entryBody": "Info resmi, panduan evakuasi, dan bantuan dari orang tepercaya, disampaikan dengan cara yang kamu butuhkan.",
+  "entryGuest": "Lanjut sebagai tamu",
+  "entryGuestDetail": "Profilmu tersimpan di ponsel ini",
+  "entryGuestResume": "Lanjutkan profil tamumu",
+  "authGuestUnavailable": "Mode tamu tidak tersedia di server ini. Masuk atau buat akun.",
+  "authRegisterDescription": "Akun menyimpan profil, peringatan, dan koneksi Buddy Anda saat berganti ponsel.",
+  "guestLeave": "Masuk atau buat akun",
+  "guestProfileNote": "Anda memakai profil tamu di ponsel ini. Buat akun agar profil bisa dipakai di ponsel lain."
 }
