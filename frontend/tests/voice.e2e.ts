@@ -29,6 +29,8 @@ test('someone with a visual need gets a Home led by Speak, and Ask for help wait
   await expect(screen.getByRole('button', 'Tap to speak')).toBeVisible();
 
   await agent.act('open Profile, then Profile details, turn off every accessibility need, save the profile, and close the Profile sheet');
+  // Changing the needs rebuilds the tab bar; wait for it before tapping.
+  await expect(screen.getByRole('tab', 'Home')).toBeVisible({ timeout: 30_000 });
   await screen.getByRole('tab', 'Home').tap();
   await expect(screen.getByRole('button', 'Speak')).not.toBeVisible();
 });

@@ -18,6 +18,8 @@ test('signing out returns to sign-in, and signing in opens the app', { timeout: 
   await screen.getByLabel('Email').press('Enter');
   await screen.getByLabel('Password').fill(tester.password);
   await screen.getByLabel('Password').press('Enter');
-  // iOS may offer to save the password over the app; the tab bar is still there underneath.
+  // iOS may offer to save the password, and its dialog hides the app from the screen reader tree until it is answered.
+  const notNow = screen.getByRole('button', 'Not Now');
+  if (await expect(notNow).toBeVisible({ timeout: 8_000 }).then(() => true, () => false)) await notNow.tap();
   await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 60_000 });
 });
