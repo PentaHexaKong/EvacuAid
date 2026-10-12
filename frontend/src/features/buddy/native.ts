@@ -206,7 +206,7 @@ export function useBuddySpeech({ language, onCommand, stopSpeechOnUnmount = true
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) throw new Error(language === 'id' ? 'Izin mikrofon dan pengenalan suara diperlukan. Kontrol sentuh tetap tersedia.' : 'Microphone and speech permission are required. Touch controls remain available.');
       mine.current = true;
-      ExpoSpeechRecognitionModule.start({ lang: language === 'id' ? 'id-ID' : 'en-US', interimResults: false, continuous: false });
+      ExpoSpeechRecognitionModule.start({ lang: language === 'id' ? 'id-ID' : 'en-US', interimResults: false, continuous: false, iosCategory: { category: 'playAndRecord', categoryOptions: ['defaultToSpeaker', 'allowBluetooth'], mode: 'default' } });
     } catch (cause) { mine.current = false; setError(cause instanceof Error ? cause.message : 'Speech recognition unavailable.'); }
   };
   const cancelListening = useCallback(() => { if (!mine.current) return; mine.current = false; setListening(false); ExpoSpeechRecognitionModule.abort(); }, []);

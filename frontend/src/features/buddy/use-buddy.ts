@@ -71,7 +71,7 @@ export function useBuddy(token: string | null) {
       if (stopped || running || AppState.currentState !== 'active') return;
       running = true;
       try { await refresh(); } finally { running = false; }
-      if (!stopped && AppState.currentState === 'active') timer = setTimeout(poll, currentSession.current && !terminalStatuses.has(currentSession.current.status) ? 2000 : 15000);
+      if (!stopped && AppState.currentState === 'active') timer = setTimeout(poll, currentSession.current && !terminalStatuses.has(currentSession.current.status) ? 2000 : 4000);
     };
     void poll();
     const subscription = AppState.addEventListener('change', state => {

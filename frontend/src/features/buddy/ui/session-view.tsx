@@ -170,7 +170,9 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
   const step = session.status === 'ACCEPTED' ? { label: c('depart'), action: 'depart' } : session.status === 'EN_ROUTE' ? { label: c('arrive'), action: 'arrive' } : session.status === 'ARRIVED' ? { label: c('pickup'), action: 'evacuating' } : session.status === 'EVACUATING' ? { label: c('complete'), action: 'report-complete' } : null;
 
   // Leaving for the friend, and leaving with them for the gathering point, are the two moments the walk starts: guidance opens with them.
-  const advance = () => { void transition(step!.action).then(done => { if (done && step!.action === 'depart') void startNavigation('TO_REQUESTER'); else if (done && step!.action === 'evacuating') void startNavigation('TO_SHELTER'); }); };
+  // Read through ?. so the compiler's render-time dependency read is safe when no step applies (e.g. COMPLETION_PENDING).
+  const stepAction = step?.action;
+  const advance = () => { if (!stepAction) return; void transition(stepAction).then(done => { if (done && stepAction === 'depart') void startNavigation('TO_REQUESTER'); else if (done && stepAction === 'evacuating') void startNavigation('TO_SHELTER'); }); };
   const stepButton = active && step && <Animated.View key={session.status} entering={reduceMotion ? undefined : FadeIn.duration(duration.state)}>
     <ActionButton label={step.label} disabled={session.status === 'ARRIVED' && !session.meetingConfirmed} loading={state.busy} onPress={() => { if (session.status === 'ACCEPTED') advance(); else confirm(step.label, advance); }} />
   </Animated.View>;
