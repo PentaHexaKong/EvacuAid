@@ -2,8 +2,11 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import Boolean, Float, Integer, case, func, select
+from sqlalchemy import Boolean, Float, Integer, case, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
+
+from app.db.models.hazard import HazardRecord
 
 from app.db.session import get_session
 from app.models.hazard import HazardType
@@ -26,7 +29,7 @@ def readProjection(region, payload, geometry, centroid):
     for shelter in payload['shelters']:
         if shelter.get('status') == 'FULL':
             shelter['status'] = 'UNKNOWN'
-    detail = RegionDetail.model_validate(payload)
+    detail = RegionDetail.model_validate({**payload,'geometry':geometry,'centroid':centroid})
     now = datetime.now(timezone.utc)
     if detail.snapshotExpiresAt is None or detail.snapshotExpiresAt <= now:
         detail.snapshotStale = True
@@ -47,9 +50,16 @@ def readProjection(region, payload, geometry, centroid):
     return detail
 
 
-def projectionQuery():
-    return select(Region,RegionalOperationalSnapshot.payload,
-        func.ST_AsGeoJSON(Region.geometry),func.ST_AsGeoJSON(Region.centroid)).outerjoin(
+def projectionQuery(summary=False):
+    payload = RegionalOperationalSnapshot.payload
+    geometry = Region.geometry
+    if summary:
+        payload = payload.op('-')('hazards').op('-')('shelters')
+        tolerance = case({'VILLAGE':.0001,'DISTRICT':.0002,'CITY_REGENCY':.0005,'PROVINCE':.001},value=Region.administrativeLevel)
+        geometry = func.ST_SimplifyPreserveTopology(geometry,tolerance)
+    return select(Region,payload,
+        func.ST_AsGeoJSON(geometry,5) if summary else func.ST_AsGeoJSON(geometry),func.ST_AsGeoJSON(Region.centroid)).options(
+        defer(Region.geometry),defer(Region.centroid)).outerjoin(
         RegionalOperationalSnapshot,Region.id==RegionalOperationalSnapshot.regionId)
 
 
@@ -58,11 +68,22 @@ def projectRow(row):
     return readProjection(row[0],row[1],json.loads(row[2]),json.loads(row[3]))
 
 
-async def detailFor(session,regionId):
+async def detailFor(session,regionId,hazardGeometry=False):
     row = (await session.execute(projectionQuery().where(Region.id==regionId))).first()
     if row is None:
         raise HTTPException(404,'Region not found')
-    return projectRow(row)
+    detail = projectRow(row)
+    if hazardGeometry and detail.hazards:
+        import json
+        rows = (await session.execute(select(HazardRecord.source,HazardRecord.sourceId,
+            func.ST_AsGeoJSON(func.ST_SimplifyPreserveTopology(func.ST_Intersection(HazardRecord.geometry,Region.geometry),.0001),5))
+            .select_from(HazardRecord).join(Region,Region.id==regionId)
+            .where(tuple_(HazardRecord.source,HazardRecord.sourceId).in_([(h.source,h.sourceId) for h in detail.hazards])))).all()
+        geometries = {(source,sourceId):json.loads(geometry) for source,sourceId,geometry in rows}
+        for hazard in detail.hazards:
+            # Snapshots written before geometry left the payload have no sourceId but still carry their shape.
+            hazard.geometry = geometries.get((hazard.source,hazard.sourceId),hazard.geometry)
+    return detail
 
 
 @router.get('/regions',response_model=list[RegionSummary])
@@ -70,7 +91,7 @@ async def listRegions(administrativeLevel: AdministrativeLevel | None = None,par
     hazardType: HazardType | None = None,signalLevel: SignalLevel | None = None,
     dataMode: str = Query('REFERENCE',pattern='^(REFERENCE|SIMULATION)$'),
     limit: int = Query(200,ge=1,le=1000),offset: int = Query(0,ge=0),session: AsyncSession = Depends(get_session)):
-    query = projectionQuery().where(Region.dataMode==dataMode)
+    query = projectionQuery(summary=True).where(Region.dataMode==dataMode)
     if administrativeLevel:
         query=query.where(Region.administrativeLevel==administrativeLevel)
     if parentRegionId:
@@ -96,12 +117,12 @@ async def listRegions(administrativeLevel: AdministrativeLevel | None = None,par
 
 @router.get('/regions/{regionId}',response_model=RegionDetail)
 async def regionDetail(regionId: UUID,session: AsyncSession = Depends(get_session)):
-    return await detailFor(session,regionId)
+    return await detailFor(session,regionId,hazardGeometry=True)
 
 
 @router.get('/regions/{regionId}/hazards',response_model=list[HazardSummary])
 async def regionHazards(regionId: UUID,session: AsyncSession = Depends(get_session)):
-    return (await detailFor(session,regionId)).hazards
+    return (await detailFor(session,regionId,hazardGeometry=True)).hazards
 
 
 @router.get('/regions/{regionId}/shelters',response_model=list[ShelterSummary])
