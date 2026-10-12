@@ -245,7 +245,7 @@ function HelpStep({ draft, needs, busy, onNeeds, onChange, onNext, onLater, onBa
 
 function WarningStep({ busy, onFinish, onHelp, onBack }: { busy: boolean; onFinish: () => void; onHelp: () => void; onBack: () => void }) {
   const { t } = useTranslation();
-  const alert: AlertViewModel = { id: 'preview', level: 'waspada', title: 'rainTitle', area: t('exampleArea'), issued: '17 Sep 2026 · 08:30 WIB', window: null, body: '', steps: ['rainStep1', 'rainStep2', 'rainStep3'], coordinate: { latitude: -6.2665, longitude: 106.809 } };
+  const alert: AlertViewModel = { id: 'preview', level: 'waspada', simulation: false, title: 'rainTitle', area: t('exampleArea'), issued: '17 Sep 2026 · 08:30 WIB', window: null, body: '', steps: ['rainStep1', 'rainStep2', 'rainStep3'], coordinate: { latitude: -6.2665, longitude: 106.809 } };
   return <>
     <StepHeader current={2} busy={busy} onBack={onBack} />
     <View style={{ gap: 10 }}>

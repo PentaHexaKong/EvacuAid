@@ -82,6 +82,28 @@ async def test_alert_location_coverage_and_item(dbSession):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('source, simulation', [('DEMO_SIMULATION', True), ('TEST_OFFICIAL', False)])
+async def test_alert_simulation_list_and_payload(dbSession, source, simulation):
+    row = await warning(dbSession, source=source)
+    actor = User(latitude=-6.2, longitude=106.8, locationObservedAt=datetime.now(timezone.utc))
+    dbSession.add(actor)
+    await dbSession.commit()
+    alerts = await alertService.listAlerts(dbSession, actor)
+    assert len(alerts.items) == 1 and alerts.items[0].simulation is simulation
+    payload = alertService.payload(row)
+    if simulation:
+        assert payload['simulation'] is True
+        assert payload['title'].startswith('Simulasi:')
+        assert payload['body'].startswith('Ini simulasi, bukan peringatan resmi. ')
+        assert payload['interruptionLevel'] == 'active'
+    else:
+        assert 'simulation' not in payload
+        assert payload['title'] == 'Peringatan AWAS'
+        assert payload['body'] == 'Banjir di area Anda. Buka EvacuAid untuk langkah selanjutnya.'
+        assert payload['interruptionLevel'] == 'time-sensitive'
+
+
+@pytest.mark.asyncio
 async def test_alert_sorting_filtering_and_boundary(dbSession):
     now = datetime.now(timezone.utc)
     waspada = await warning(dbSession, 'WASPADA')

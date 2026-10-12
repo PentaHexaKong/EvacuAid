@@ -30,6 +30,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       COMMAND_API_KEY: ${COMMAND_API_KEY:-}
       VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
+      COMMAND_MOCK_ALERTS_ENABLED: ${COMMAND_MOCK_ALERTS_ENABLED:-0}
       ALERT_PUSH_ENABLED: ${ALERT_PUSH_ENABLED:-true}
       PYTHONPATH: /app:/app/testocando
     command: ['sh', '-c', 'alembic -c /app/testocando/alembic.ini upgrade head && exec uvicorn command.main:app --host 0.0.0.0 --port 8000']

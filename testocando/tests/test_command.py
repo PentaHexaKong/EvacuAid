@@ -388,9 +388,11 @@ async def testExpiredSnapshotMasksOperationalValues(commandSession):
     await addHazard(commandSession,hazard('CRITICAL_HAZARD'))
     await refreshSnapshots(commandSession)
     payload=await snapshot(commandSession)
+    payload['simulation']={'signalLevel':'CRITICAL','hazardTypes':['FLOOD'],'names':['Expired drill']}
     payload['snapshotExpiresAt']=(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat()
     result=readProjection(None,payload,regionDocument()['features'][-1]['geometry'],{'type':'Point','coordinates':[.01,.01]})
     assert result.snapshotStale
+    assert result.simulation is None
     assert result.signalLevel=='UNKNOWN'
     assert result.estimatedExposedPopulation is None
     assert result.activeAssistanceCount is None
@@ -545,3 +547,127 @@ def testDashboardProxyUsesSharedComposeServices(monkeypatch):
     handler.rfile=BytesIO(b'{}')
     Handler.do_POST(handler)
     assert calls.pop()==('http://valhalla:8002/route',b'{}')
+
+
+@pytest.mark.asyncio
+async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch):
+    import math
+    from geoalchemy2.shape import to_shape
+    from app.services import alertService, alertSimulation
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')
+    document=regionDocument()
+    other=copy.deepcopy(document['features'][-1])
+    other['properties'].update(code='REFERENCE-2-other',name='Other village')
+    # Split the fixture village into west and east halves so both stay inside their district.
+    document['features'][-1]['geometry']['coordinates']=[[[0,0],[.01,0],[.01,.02],[0,.02],[0,0]]]
+    other['geometry']['coordinates']=[[[.01,0],[.02,0],[.02,.02],[.01,.02],[.01,0]]]
+    document['features'].append(other)
+    await importRegions(commandSession,document)
+    await refreshSnapshots(commandSession)
+    now=datetime.now(timezone.utc)
+    inside=User(latitude=.005,longitude=.005,location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=now)
+    outside=User(latitude=.005,longitude=.015,location=from_shape(Point(.015,.005),srid=4326),locationObservedAt=now)
+    commandSession.add_all([inside,outside]); await commandSession.flush()
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
+            url='/v1/command/mock-disasters'
+            regionsUrl='/v1/command/regions?administrativeLevel=VILLAGE'
+            before=(await client.get(regionsUrl)).json()
+            village=next(row for row in before if row['code']=='REFERENCE-3')
+            assert before[0]['id']!=village['id']
+            payload={'id':str(uuid.uuid4()),'name':' Flood drill ','hazardType':'FLOOD','latitude':.005,'longitude':.005,'radiusM':300,'severity':'CRITICAL'}
+            response=await client.post(url,json=payload)
+            assert response.status_code==201, response.text
+            assert response.json()['name']=='Flood drill'
+            listed=(await client.get(url)).json()
+            assert len(listed)==1
+            assert listed[0]['radiusM']==300
+            assert datetime.fromisoformat(listed[0]['expiresAt'].replace('Z','+00:00'))>now
+            regions=(await client.get(regionsUrl)).json()
+            assert regions[0]['id']==village['id']
+            region=regions[0]
+            assert region['simulation']=={'signalLevel':'CRITICAL','hazardTypes':['FLOOD'],'names':['Flood drill']}
+            for key in ['signalLevel','hazardTypes','authoritativeCriticalHazard','estimatedExposedPopulation','exposureFraction']:
+                assert region[key]==village[key]
+            detail=(await client.get('/v1/command/regions/'+village['id'])).json()
+            assert detail['hazards']==[]
+            alerts=await alertService.listAlerts(commandSession,inside)
+            assert len(alerts.items)==1
+            assert alerts.items[0].level=='awas'
+            assert not (await alertService.listAlerts(commandSession,outside)).items
+            row=(await commandSession.execute(select(HazardRecord).where(HazardRecord.sourceId=='command-mock-'+payload['id']))).scalar_one()
+            assert row.evidenceMetadata['officialStatus']=='AWAS'
+            points=list(to_shape(row.geometry).exterior.coords)
+            assert len(points)==65 and points[0]==points[-1]
+            for longitude,latitude in points:
+                lat1,lat2=map(math.radians,[payload['latitude'],latitude])
+                dLat=lat2-lat1
+                dLon=math.radians(longitude-payload['longitude'])
+                distance=6371000*2*math.asin(math.sqrt(math.sin(dLat/2)**2+math.cos(lat1)*math.cos(lat2)*math.sin(dLon/2)**2))
+                assert abs(distance-payload['radiusM'])<payload['radiusM']*.01
+            expiresAt=datetime.now(timezone.utc)+timedelta(seconds=30)
+            row.validUntil=expiresAt
+            await commandSession.flush()
+            await refreshSnapshots(commandSession)
+            snapshot=(await client.get('/v1/command/regions/'+village['id'])).json()
+            assert datetime.fromisoformat(snapshot['snapshotExpiresAt'].replace('Z','+00:00'))<=expiresAt
+            replay=await client.post(url,json={**payload,'name':'Updated drill','radiusM':350})
+            assert replay.status_code==201
+            assert len((await client.get(url)).json())==1
+            assert (await client.get(url)).json()[0]['radiusM']==350
+            assert (await client.delete(url+'/'+payload['id'])).status_code==204
+            assert (await client.get(url)).json()==[]
+            assert next(row for row in (await client.get(regionsUrl)).json() if row['id']==village['id'])['simulation'] is None
+            assert not (await alertService.listAlerts(commandSession,inside)).items
+            assert (await client.delete(url+'/'+str(uuid.uuid4()))).status_code==404
+            cliRow,_=await alertSimulation.apply(commandSession,'awas',center=(.005,.005))
+            cliId=cliRow.id
+            assert (await client.post(url,json=payload)).status_code==201
+            assert (await client.delete(url)).status_code==204
+            assert (await client.get(url)).json()==[]
+            assert (await commandSession.execute(select(HazardRecord.id).where(HazardRecord.source==alertSimulation.SOURCE))).scalars().all()==[cliId]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def testMockDisasterValidationAndKey(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+            url='/v1/command/mock-disasters'
+            payload={'id':str(uuid.uuid4()),'name':'Drill','hazardType':'FLOOD','latitude':.005,'longitude':.005,'radiusM':300,'severity':'CRITICAL'}
+            for method,path in [('POST',url),('GET',url),('DELETE',url),('DELETE',url+'/'+payload['id'])]:
+                assert (await client.request(method,path,json=payload if method=='POST' else None)).status_code==401
+            for invalid in [{'radiusM':49},{'name':'  '},{'radiusM':300.5},{'radiusM':True},{'radiusM':50001},{'latitude':91},{'longitude':181},{'latitude':0,'longitude':179.999,'radiusM':300},{'latitude':89.999,'longitude':0,'radiusM':300},{'extra':True}]:
+                response=await client.post(url,json={**payload,**invalid},headers={'X-Command-Key':'test-command-key'})
+                assert response.status_code==422, response.text
+            monkeypatch.delenv('COMMAND_MOCK_ALERTS_ENABLED',raising=False)
+            response=await client.post(url,json=payload,headers={'X-Command-Key':'test-command-key'})
+            assert response.status_code==403
+            assert response.json()=={'detail':'Mock disasters are disabled on this server. Set COMMAND_MOCK_ALERTS_ENABLED=1 to allow test alerts.'}
+            assert (await client.get(url,headers={'X-Command-Key':'test-command-key'})).status_code==200
+            assert (await client.delete(url,headers={'X-Command-Key':'test-command-key'})).status_code==204
+    finally:
+        app.dependency_overrides.clear()
+
+
+
+def testMockDisasterDeleteProxy(monkeypatch):
+    from mapshit.server import Handler
+    monkeypatch.setattr('mapshit.server.BACKEND_URL','http://backend:8000')
+    calls=[]
+    handler=SimpleNamespace(path='/api/command/mock-disasters',forward=lambda *args:calls.append(args))
+    Handler.do_DELETE(handler)
+    assert calls.pop()==('http://backend:8000/v1/command/mock-disasters',)
+    handler.path='/api/command/mock-disasters/'+str(uuid.uuid4())
+    Handler.do_DELETE(handler)
+    assert calls.pop()==('http://backend:8000/v1/command'+handler.path.removeprefix('/api/command'),)

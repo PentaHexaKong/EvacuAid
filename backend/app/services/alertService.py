@@ -30,9 +30,13 @@ async def activeAlert(db, alertId, statuses=('WASPADA', 'SIAGA', 'AWAS')):
     return next((row for row in rows if str(alertKey(row)) == str(alertId)), None)
 
 
+def isSimulation(row):
+    return row.source.upper().startswith(('DEMO', 'SIMULATION', 'SYNTHETIC')) or row.evidenceMetadata.get('simulation') is True or row.evidenceMetadata.get('commandMock') is True
+
+
 def item(row, response=None):
     centroid = to_shape(row.geometry).centroid
-    return AlertItem(id=alertKey(row), level=row.evidenceMetadata['officialStatus'].lower(), hazardType=row.hazardType, source=row.source, area=row.evidenceMetadata.get('area'), issuedAt=row.observedAt or row.validFrom, validUntil=row.validUntil, latitude=centroid.y, longitude=centroid.x, myResponse=response)
+    return AlertItem(id=alertKey(row), level=row.evidenceMetadata['officialStatus'].lower(), hazardType=row.hazardType, source=row.source, simulation=isSimulation(row), area=row.evidenceMetadata.get('area'), issuedAt=row.observedAt or row.validFrom, validUntil=row.validUntil, latitude=centroid.y, longitude=centroid.x, myResponse=response)
 
 
 async def listAlerts(db, actor):
@@ -55,7 +59,10 @@ async def respond(db, actor, alertId, response):
 
 def payload(row):
     status = row.evidenceMetadata['officialStatus']
-    return {'alertId': str(alertKey(row)), 'level': status.lower(), 'title': f'Peringatan {status}', 'body': f'{HAZARD_WORDS.get(row.hazardType, "Bahaya")} di area Anda. Buka EvacuAid untuk langkah selanjutnya.', 'interruptionLevel': 'time-sensitive'}
+    result = {'alertId': str(alertKey(row)), 'level': status.lower(), 'title': f'Peringatan {status}', 'body': f'{HAZARD_WORDS.get(row.hazardType, "Bahaya")} di area Anda. Buka EvacuAid untuk langkah selanjutnya.', 'interruptionLevel': 'time-sensitive'}
+    if isSimulation(row):
+        result.update(title=f'Simulasi: Peringatan {status}', body='Ini simulasi, bukan peringatan resmi. ' + result['body'], simulation=True, interruptionLevel='active')
+    return result
 
 
 async def enqueueAlerts(db):

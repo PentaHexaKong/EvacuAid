@@ -70,6 +70,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_DELETE(self):
+        if self.path == '/api/command/mock-disasters' or self.path.startswith('/api/command/mock-disasters/'):
+            self.forward(f'{BACKEND_URL}/v1/command{self.path.removeprefix("/api/command")}')
+            return
+        self.send_error(404)
+
     def do_POST(self):
         contentLength = int(self.headers.get('Content-Length', '0'))
         body = self.rfile.read(contentLength)

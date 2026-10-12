@@ -9,6 +9,7 @@ from app.main import app, lifespan as backendLifespan
 from command.aggregation import refreshSnapshots
 from command.api import router
 from command.safeHouses import router as safeHouseRouter
+from command.mockDisasters import router as mockDisasterRouter
 
 logger=logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ async def lifespan(app):
 app.router.lifespan_context=lifespan
 app.include_router(router)
 app.include_router(safeHouseRouter)
+app.include_router(mockDisasterRouter)
 
 
 @app.middleware('http')
