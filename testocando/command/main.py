@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+from time import perf_counter
 from contextlib import asynccontextmanager
 
 from app.db.session import SessionLocal
@@ -14,11 +15,15 @@ logger=logging.getLogger(__name__)
 
 async def refreshLoop():
     while True:
+        started=perf_counter()
+        count=0
         try:
             async with SessionLocal() as session,session.begin():
-                await refreshSnapshots(session)
+                count=await refreshSnapshots(session)
         except Exception:
+            count=0
             logger.exception('Command projection refresh failed; stale data remains UNKNOWN')
+        logger.info('Command projection refresh cycle: regions=%s duration_ms=%.0f',count,(perf_counter()-started)*1000)
         await asyncio.sleep(60)
 
 

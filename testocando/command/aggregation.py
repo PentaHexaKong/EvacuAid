@@ -3,8 +3,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import defer
 
-from app.models.hazard import HazardEvidence
+from app.models.hazard import Authority, EvidenceType, HazardEvidence, HazardType
 from command.models import Region, RegionalOperationalSnapshot
 from command.schemas import AssistanceAggregate, HazardSummary, RegionDetail, ShelterSummary
 
@@ -92,7 +93,7 @@ async def refreshSnapshots(session):
     now = datetime.now(timezone.utc)
     if not (await session.execute(text('SELECT pg_try_advisory_xact_lock(173401, 1)'))).scalar():
         return 0
-    regions = (await session.execute(select(Region).order_by(Region.code))).scalars().all()
+    regions = (await session.execute(select(Region).options(defer(Region.geometry),defer(Region.centroid)).order_by(Region.code))).scalars().all()
     if not regions:
         return 0
     params = {'now': now, 'cutoff': now - timedelta(hours=24)}
@@ -117,19 +118,26 @@ async def refreshSnapshots(session):
     needs = {}
     for row in needRows:
         needs.setdefault(row['region_id'], {})[row['type']] = row['count']
-    hazardRows = (await session.execute(text('''SELECT r.id AS region_id, h.*,
-      ST_AsGeoJSON(h.geometry)::json AS geojson FROM command_regions r
-      JOIN hazard_evidence h ON ST_Intersects(r.geometry, h.geometry)
+    hazardRows = (await session.execute(text('''SELECT r.id AS region_id, h.id AS evidence_id
+      FROM command_regions r JOIN hazard_evidence h ON ST_Intersects(r.geometry, h.geometry)
       WHERE r.data_mode = 'REFERENCE' '''))).mappings().all()
-    evidence = {}
-    for row in hazardRows:
-        item = HazardEvidence(sourceId=row['source_id'], source=row['source'], hazardType=row['hazard_type'],
-            authority=row['authority'], evidenceType=row['evidence_type'], geometry=row['geojson'],
+    evidenceIds = list({row['evidence_id'] for row in hazardRows})
+    evidenceRows = (await session.execute(text('''SELECT id, source_id, source, hazard_type, authority,
+      evidence_type, severity, confidence, observed_at, valid_from, valid_until, metadata
+      FROM hazard_evidence WHERE id = ANY(:ids)'''), {'ids': evidenceIds})).mappings().all() if evidenceIds else []
+    classified = {}
+    for row in evidenceRows:
+        item = HazardEvidence.model_construct(sourceId=row['source_id'], source=row['source'], hazardType=HazardType(row['hazard_type']),
+            authority=Authority(row['authority']), evidenceType=EvidenceType(row['evidence_type']), geometry=None,
             severity=row['severity'], confidence=row['confidence'], observedAt=row['observed_at'],
-            validFrom=row['valid_from'], validUntil=row['valid_until'], metadata=row['metadata'])
+            validFrom=row['valid_from'], validUntil=row['valid_until'], metadata=row['metadata'] or {})
         provenance, freshness = classifyEvidence(item, now)
         if provenance != 'SIMULATION':
-            evidence.setdefault(row['region_id'], []).append((item, freshness, provenance))
+            classified[row['id']] = (item, freshness, provenance)
+    evidence = {}
+    for row in hazardRows:
+        if row['evidence_id'] in classified:
+            evidence.setdefault(row['region_id'], []).append(classified[row['evidence_id']])
     # Union prevents overlapping active warning polygons from counting twice.
     exposureRows = (await session.execute(text('''SELECT r.id AS region_id,
       least(1.0, greatest(0.0, ST_Area(ST_Intersection(r.geometry,
@@ -161,8 +169,6 @@ async def refreshSnapshots(session):
             capacity=row['capacity'], wheelchairAccessible=row['wheelchair_accessible'],
             source=row['source'], verifiedAt=row['verified_at'], dataMode='REFERENCE')
         shelters.setdefault(row['region_id'], []).append(summary)
-    geoRows = (await session.execute(text('SELECT id, ST_AsGeoJSON(geometry)::json AS geometry, ST_AsGeoJSON(centroid)::json AS centroid FROM command_regions'))).mappings().all()
-    geo = {r['id']: r for r in geoRows}
     routeRows = (await session.execute(text('''SELECT (payload->>'regionId')::uuid AS region_id,
       count(*) FILTER (WHERE status='PUBLISHED' AND result->>'routeStatus'='READY'
         AND (result->>'evaluatedAt')::timestamptz > CAST(:now AS timestamptz) - interval '5 minutes') AS feasible,
@@ -171,6 +177,7 @@ async def refreshSnapshots(session):
       FROM operational_routes GROUP BY payload->>'regionId' '''), {'now': now})).mappings().all()
     routeCounts = {r['region_id']: r for r in routeRows}
     byId = {r.id: r for r in regions}
+    snapshots = []
     for region in regions:
         simulation = region.dataMode == 'SIMULATION'
         regionEvidence = evidence.get(region.id, [])
@@ -194,7 +201,7 @@ async def refreshSnapshots(session):
             parent = byId.get(parent.parentId)
         expiry = min([now + timedelta(minutes=5)] + [item.validUntil for item,_,_ in regionEvidence if item.active(now) and item.validUntil])
         detail = RegionDetail(id=region.id, code=region.code, name=region.name, administrativeLevel=region.administrativeLevel,
-            parentRegionId=region.parentId, geometry=geo[region.id]['geometry'], centroid=geo[region.id]['centroid'],
+            parentRegionId=region.parentId, geometry={}, centroid={},
             population=region.population, populationReferenceYear=region.populationReferenceYear, populationSource=region.populationSource,
             boundarySource=region.boundarySource, dataMode=region.dataMode, signalLevel=signal,
             hazardTypes=sorted({item.hazardType.value for item,_,_ in regionEvidence if item.active(now)}),
@@ -208,8 +215,8 @@ async def refreshSnapshots(session):
             feasibleRouteCount=None if simulation else routeCounts.get(region.id, {}).get('feasible', 0),
             noFeasibleRouteCount=None if simulation else routeCounts.get(region.id, {}).get('unavailable', 0),
             shelters=regionShelters,
-            hazards=[HazardSummary(hazardType=item.hazardType.value,source=item.source,authority=item.authority.value,
-                evidenceType=item.evidenceType.value,provenanceClass=provenance,geometry=item.geometry,severity=item.severity,
+            hazards=[HazardSummary(hazardType=item.hazardType.value,source=item.source,sourceId=item.sourceId,authority=item.authority.value,
+                evidenceType=item.evidenceType.value,provenanceClass=provenance,geometry=None,severity=item.severity,
                 confidence=item.confidence,observedAt=item.observedAt,validFrom=item.validFrom,expiresAt=item.validUntil,
                 freshness=freshness,active=item.active(now)) for item,freshness,provenance in regionEvidence],
             metricProvenance={'population': 'Imported reference population; source/year supplied separately.',
@@ -223,7 +230,9 @@ async def refreshSnapshots(session):
                 'Safety counts refer to request statuses, not an independent citizen check-in feed.',
                 'No spatial population grid is configured; area-weighted estimates are approximate.',
                 'SIMULATION regions exclude all live citizen, hazard, and shelter data.' if simulation else 'Simulation evidence and shelters excluded.'])
-        payload = detail.model_dump(mode='json')
-        statement = insert(RegionalOperationalSnapshot).values(region_id=region.id,payload=payload,updated_at=now,expires_at=expiry)
-        await session.execute(statement.on_conflict_do_update(index_elements=['region_id'],set_={'payload': payload,'updated_at':now,'expires_at':expiry}))
+        payload = detail.model_dump(mode='json',exclude={'geometry','centroid'})
+        snapshots.append({'region_id':region.id,'payload':payload,'updated_at':now,'expires_at':expiry})
+    statement = insert(RegionalOperationalSnapshot).values(snapshots)
+    await session.execute(statement.on_conflict_do_update(index_elements=['region_id'],set_={
+        'payload':statement.excluded.payload,'updated_at':statement.excluded.updated_at,'expires_at':statement.excluded.expires_at}))
     return len(regions)

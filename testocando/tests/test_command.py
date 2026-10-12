@@ -159,6 +159,76 @@ async def testHierarchySpatialExposureAndUnion(commandSession):
 
 
 @pytest.mark.asyncio
+async def testSnapshotsExcludeRegionAndHazardGeometry(commandSession):
+    await importRegions(commandSession,regionDocument())
+    item=hazard()
+    await addHazard(commandSession,item)
+    await refreshSnapshots(commandSession)
+    payloads=(await commandSession.execute(select(RegionalOperationalSnapshot.payload))).scalars().all()
+    assert len(payloads)==4
+    for payload in payloads:
+        assert 'geometry' not in payload
+        assert 'centroid' not in payload
+        assert len(payload['hazards'])==1
+        assert payload['hazards'][0]['geometry'] is None
+        assert payload['hazards'][0]['sourceId']==item.sourceId
+
+
+@pytest.mark.asyncio
+async def testHazardEndpointsClipGeometryAndKeepPoints(commandSession):
+    from shapely.geometry import shape
+    await importRegions(commandSession,regionDocument())
+    polygon=hazard(geometry={'type':'Polygon','coordinates':[[[-.01,-.01],[.01,-.01],[.01,.03],[-.01,.03],[-.01,-.01]]]})
+    point=hazard('OBSERVATION',geometry={'type':'Point','coordinates':[.005,.005]})
+    await addHazard(commandSession,polygon)
+    await addHazard(commandSession,point)
+    await refreshSnapshots(commandSession)
+    regionId=str((await commandSession.execute(select(Region.id).where(Region.code=='REFERENCE-3'))).scalar_one())
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+            detail=await client.get('/v1/command/regions/'+regionId)
+            hazards=await client.get('/v1/command/regions/'+regionId+'/hazards')
+            assert detail.status_code==hazards.status_code==200
+            assert detail.json()['hazards']==hazards.json()
+            byId={item['sourceId']:item for item in hazards.json()}
+            clipped=shape(byId[polygon.sourceId]['geometry'])
+            boundary=shape(detail.json()['geometry'])
+            assert boundary.covers(clipped)
+            assert clipped.equals(shape(polygon.geometry).intersection(boundary))
+            assert byId[point.sourceId]['geometry']==point.geometry
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def testListSimplifiesDenseBoundaryAndDetailKeepsResolution(commandSession):
+    from math import cos, pi, sin
+    document=regionDocument()
+    ring=[[.01+.009*cos(2*pi*i/360),.01+.009*sin(2*pi*i/360)] for i in range(360)]
+    document['features'][-1]['geometry']['coordinates']=[ring+[ring[0]]]
+    await importRegions(commandSession,document)
+    await refreshSnapshots(commandSession)
+    stored=json.loads((await commandSession.execute(text("SELECT ST_AsGeoJSON(geometry) FROM command_regions WHERE code='REFERENCE-3'"))).scalar_one())
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+            response=await client.get('/v1/command/regions?administrativeLevel=VILLAGE')
+            assert response.status_code==200
+            summary=response.json()[0]
+            assert len(summary['geometry']['coordinates'][0][0]) < len(stored['coordinates'][0][0])
+            detail=await client.get('/v1/command/regions/'+summary['id'])
+            assert detail.status_code==200
+            assert detail.json()['geometry']==stored
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def testInvalidHierarchyRejectedAtomically(commandSession):
     document=regionDocument(); document['features'][3]['properties']['parentCode']='REFERENCE-0'
     with pytest.raises(ValueError,match='parent missing'):
@@ -317,7 +387,7 @@ async def testExpiredSnapshotMasksOperationalValues(commandSession):
     await refreshSnapshots(commandSession)
     payload=await snapshot(commandSession)
     payload['snapshotExpiresAt']=(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat()
-    result=readProjection(None,payload,None,None)
+    result=readProjection(None,payload,regionDocument()['features'][-1]['geometry'],{'type':'Point','coordinates':[.01,.01]})
     assert result.snapshotStale
     assert result.signalLevel=='UNKNOWN'
     assert result.estimatedExposedPopulation is None

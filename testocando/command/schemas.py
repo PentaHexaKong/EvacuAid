@@ -69,10 +69,11 @@ class ShelterSummary(PublicModel):
 class HazardSummary(PublicModel):
     hazardType: str
     source: str
+    sourceId: str | None = None  # absent in snapshots written before hazard geometry moved out of the payload
     authority: str
     evidenceType: str
     provenanceClass: str
-    geometry: dict
+    geometry: dict | None = None
     severity: float | None
     confidence: float | None
     observedAt: datetime | None
