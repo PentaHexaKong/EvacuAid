@@ -1,6 +1,8 @@
 import { act, render, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import RootLayout from '@/app/_layout';
+jest.mock('@/screens/field-operations', () => ({ FieldOperationsScreen: () => null }));
+jest.mock('@/features/operations/sync', () => ({ OperationsSync: () => null }));
 
 let mockCompleted = false;
 let mockToken: string | null = null;

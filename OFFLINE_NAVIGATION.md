@@ -85,7 +85,7 @@ It reuses Valhalla 3.9.0 tiles intersecting the buffered bbox at all three road 
 
 Map data is clipped from a public GeoJSON street source. Static graph files are hashed and stored as immutable objects; hazard changes do not rebuild the graph. Download clients reuse verified unchanged objects.
 
-Public shelter exports retain known status, occupancy, accessibility, entrance coordinates and observation/verification times.
+Public shelter exports retain reference capacity, reported status, accessibility, entrance coordinates and observation/verification times. Live occupancy is no longer exported or used for routing; see [FIELD_OPERATIONS.md](FIELD_OPERATIONS.md).
 
 Hazard exports retain authority, severity, confidence, observation/validity times, geometry, source identity and confirmedDamage where present. Community/citizen observations are excluded to avoid distributing potentially private exact locations. Simulation evidence is excluded. URL credentials, query strings and fragments are stripped.
 

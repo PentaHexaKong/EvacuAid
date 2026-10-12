@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class ShelterStatus(str, Enum):
     OPEN = 'OPEN'
-    FULL = 'FULL'
     CLOSED = 'CLOSED'
     UNKNOWN = 'UNKNOWN'
 
@@ -23,7 +22,6 @@ class ShelterCreate(BaseModel):
     shelterType: str = Field(min_length=1, max_length=64)
     status: ShelterStatus
     capacity: int | None = Field(default=None, ge=0)
-    currentOccupancy: int | None = Field(default=None, ge=0)
     wheelchairAccessible: bool | None = None
     medicalSupport: bool | None = None
     source: str = Field(min_length=1, max_length=128)
@@ -56,7 +54,6 @@ class ShelterResponse(BaseModel):
     status: ShelterStatus
     wheelchairAccessible: bool | None
     capacity: int | None
-    currentOccupancy: int | None
     source: str
 
 

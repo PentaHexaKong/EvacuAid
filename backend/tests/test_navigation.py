@@ -50,7 +50,7 @@ class FakeClient:
 
 
 async def shelter(dbSession, name, status='OPEN', wheelchairAccessible=None, capacity=None, currentOccupancy=None, latitude=-6.2, longitude=106.81):
-    return await shelterService.createShelter(dbSession, ShelterCreate(name=name, latitude=latitude, longitude=longitude, shelterType='TEST', status=status, wheelchairAccessible=wheelchairAccessible, capacity=capacity, currentOccupancy=currentOccupancy, source='TEST_FIXTURE'))
+    return await shelterService.createShelter(dbSession, ShelterCreate(name=name, latitude=latitude, longitude=longitude, shelterType='TEST', status=status, wheelchairAccessible=wheelchairAccessible, capacity=capacity, source='TEST_FIXTURE'))
 
 
 @pytest.mark.asyncio
@@ -67,7 +67,7 @@ async def testNearbySheltersAndSuitability(dbSession):
 async def testNavigationSelectsSuitableShelterAndRoutes(dbSession, monkeypatch):
     user = await user_service.create_user(dbSession, UserCreate(name='Route User'))
     await user_service.update_location(dbSession, user.id, LocationUpdate(latitude=-6.2, longitude=106.8, observed_at=datetime.now(timezone.utc)))
-    await shelter(dbSession, 'Full', status='FULL', latitude=-6.2001, longitude=106.8001)
+    await shelter(dbSession, 'Closed', status='CLOSED', latitude=-6.2001, longitude=106.8001)
     selected = await shelter(dbSession, 'Open', latitude=-6.201, longitude=106.801)
     async def emptyReports(session):
         return []
@@ -77,7 +77,7 @@ async def testNavigationSelectsSuitableShelterAndRoutes(dbSession, monkeypatch):
     assert response.destination.shelterId == selected.id
     assert response.route.geometry['type'] == 'LineString'
     assert response.route.maneuvers == []
-    assert any(item.reasonCodes == ['SHELTER_FULL'] for item in response.rejectedCandidates)
+    assert any(item.reasonCodes == ['SHELTER_CLOSED'] for item in response.rejectedCandidates)
 
 
 @pytest.mark.asyncio

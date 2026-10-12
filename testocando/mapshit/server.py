@@ -78,6 +78,16 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def do_PATCH(self):
+        if not self.path.startswith('/api/command/'):
+            self.send_error(404)
+            return
+        content_length = int(self.headers.get('Content-Length', '0'))
+        if content_length > 65536:
+            self.send_error(413)
+            return
+        self.forward(f'{BACKEND_URL}/v1/command{self.path.removeprefix("/api/command")}', self.rfile.read(content_length))
+
 
 if __name__ == '__main__':
     ThreadingHTTPServer((os.getenv('HOST', '127.0.0.1'), int(os.getenv('PORT', '8080'))), Handler).serve_forever()

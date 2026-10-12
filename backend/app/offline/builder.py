@@ -75,7 +75,7 @@ async def snapshot(region_id: str, buffer_m: float) -> dict:
         public_shelters = [
             {'id': str(s['id']), 'name': s['name'], 'latitude': s['latitude'], 'longitude': s['longitude'],
              'entranceLatitude': s['entrance_latitude'], 'entranceLongitude': s['entrance_longitude'],
-             'status': s['status'], 'capacity': s['capacity'], 'currentOccupancy': s['current_occupancy'],
+             'status': 'UNKNOWN' if s['status'] == 'FULL' else s['status'], 'capacity': s['capacity'],
              'wheelchairAccessible': s['wheelchair_accessible'], 'medicalSupport': s['medical_support'],
              'source': s['source'], 'verifiedAt': timestamp(s['verified_at']), 'updatedAt': timestamp(s['updated_at'])}
             for s in shelters

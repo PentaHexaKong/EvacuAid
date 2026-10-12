@@ -1,4 +1,5 @@
 import { setupMapTools } from './mapTools.js'
+import { setupOperations } from './operations.js'
 const $ = (id) => document.getElementById(id)
 const colors = { NORMAL: '#39a987', WATCH: '#d2b747', ELEVATED: '#e68b35', CRITICAL: '#dc4c53', UNKNOWN: '#82929e' }
 const number = (value) => value == null ? 'UNKNOWN' : new Intl.NumberFormat('en-US').format(value)
@@ -39,7 +40,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     if (response.status === 503) throw new Error('EvacuAid backend is unavailable. Start the backend to load regional data.')
     const error = await response.json().catch(() => ({}))
-    throw new Error(typeof error.detail === 'string' ? error.detail : 'Unable to save or load command data (HTTP ' + response.status + ').')
+    throw new Error(typeof error.detail === 'string' ? error.detail : error.detail?.message || 'Unable to save or load command data (HTTP ' + response.status + ').')
   }
   return response.json()
 }
@@ -62,7 +63,7 @@ function renderKpis() {
     ['Critical Regions', rows.some((r) => r.signalLevel !== 'UNKNOWN') ? rows.filter((r) => r.signalLevel === 'CRITICAL').length : null, 'Known official critical signals · ' + rows.filter((r) => r.signalLevel === 'UNKNOWN').length + ' regions UNKNOWN'],
     ['Estimated Population Exposed', sum('estimatedExposedPopulation'), 'Approximate · missing regions → UNKNOWN'],
     ['Active Assistance Requests', sum('activeAssistanceCount'), 'Recently located requester profiles'],
-    ['Available Shelters', sum('availableShelterCount'), 'Verified records only · inventory coverage UNKNOWN'],
+    ['Recorded Shelters', sum('recordedShelterCount'), 'Reference inventory · no live occupancy tracking'],
   ]
   $('kpis').replaceChildren()
   for (const [label, value, note] of values) {
@@ -119,16 +120,17 @@ async function selectRegion(id) {
       $('needs').append(item)
     }
     $('shelter-summary').replaceChildren()
-    for (const [label, value] of [['Available', detail.availableShelterCount], ['Reference capacity', detail.totalShelterCapacity], ['Known occupancy subtotal', detail.knownShelterOccupancy], ['Unknown occupancy records', detail.unknownShelterOccupancyCount]]) metric($('shelter-summary'), label, value)
+    for (const [label, value] of [['Recorded shelters', detail.recordedShelterCount], ['Reference capacity', detail.totalShelterCapacity]]) metric($('shelter-summary'), label, value)
     $('shelter-list').replaceChildren()
     $('hazard-list').replaceChildren()
     $('sources').replaceChildren()
     for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clearLayers()
     for (const shelter of detail.shelters) {
-      evidenceRow($('shelter-list'), shelter.name, 'Occupancy ' + number(shelter.currentOccupancy) + ' / ' + number(shelter.capacity) + ' · ' + shelter.source + ' · verified ' + time(shelter.verifiedAt), shelter.status === 'OPEN' ? shelter.capacityStatus : shelter.status)
-      L.geoJSON(shelter.geometry, { pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: '#176d60', fillColor: '#fff', fillOpacity: 1, weight: 2 }) }).bindPopup(element('span', '', shelter.name + ' · ' + shelter.capacityStatus)).addTo(layers.shelters)
+      evidenceRow($('shelter-list'), shelter.name, 'Reference capacity ' + number(shelter.capacity) + ' · Step-free access ' + (shelter.wheelchairAccessible === true ? 'Reported' : shelter.wheelchairAccessible === false ? 'Not reported accessible' : 'UNKNOWN') + ' · ' + shelter.source + ' · recorded ' + time(shelter.verifiedAt), shelter.status)
+      L.geoJSON(shelter.geometry, { pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: '#176d60', fillColor: '#fff', fillOpacity: 1, weight: 2 }) }).bindPopup(element('span', '', shelter.name + ' · Reference capacity ' + number(shelter.capacity))).addTo(layers.shelters)
     }
-    if (!detail.shelters.length) $('shelter-list').append(element('p', 'empty', 'No relevant shelter records. Occupancy coverage remains unknown.'))
+    if (!detail.shelters.length) $('shelter-list').append(element('p', 'empty', 'No relevant shelter reference records.'))
+    operations.setRegion(detail)
     evidenceRow($('sources'), 'Administrative boundary', detail.boundarySource, detail.dataMode)
     evidenceRow($('sources'), 'Reference population', (detail.populationSource || 'UNKNOWN') + ' / ' + (detail.populationReferenceYear || 'UNKNOWN'), detail.dataMode)
     for (const hazard of detail.hazards) {
@@ -186,6 +188,7 @@ async function updateParents() {
   } catch (error) { notice(error.message, 'error') }
 }
 const mapTools = setupMapTools({ map, api, refresh })
+const operations = setupOperations({ map, api, routeLayer: layers.routes, isPlacing: () => mapTools.isPlacing() })
 $('refresh').onclick = refresh
 for (const id of ['dataMode', 'level']) $(id).onchange = async () => { await updateParents(); await refresh() }
 for (const id of ['parent', 'hazard', 'signal']) $(id).onchange = refresh

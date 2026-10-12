@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.authConfig import settings, validate_startup
 from app.routers.auth import router as auth_router
 from app.routers.offline import router as offline_router
+from app.routers.operations import router as operations_router
 from redis.asyncio import Redis
 from sqlalchemy import text
 
@@ -57,6 +58,7 @@ app.add_middleware(CORSMiddleware, allow_origins=list(settings().cors_origins), 
     allow_methods=['GET','POST','PATCH','PUT','DELETE','OPTIONS'], allow_headers=['Authorization','Content-Type'])
 app.include_router(auth_router)
 app.include_router(offline_router)
+app.include_router(operations_router)
 app.include_router(alerts_router)
 app.include_router(buddy_router, prefix='/v1/buddy')
 # Old app builds call /v1/buddy-pilot; remove once they are retired.

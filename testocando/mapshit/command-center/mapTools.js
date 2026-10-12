@@ -106,8 +106,7 @@ export function setupMapTools({ map, api, refresh }) {
       if (draft.kind === 'hazard') Object.assign(item, { radius: Number($('mock-radius').value), hazardType: $('mock-hazard').value, severity: $('mock-severity').value })
       else {
         const optionalNumber = id => $(id).value === '' ? null : Number($(id).value)
-        Object.assign(item, { address: $('safe-address').value.trim() || null, status: $('safe-status').value, capacity: optionalNumber('safe-capacity'), currentOccupancy: optionalNumber('safe-occupancy'), wheelchairAccessible: $('safe-access').value === '' ? null : $('safe-access').value === 'true', verifiedNow: $('safe-verified').checked })
-        if (item.capacity != null && item.currentOccupancy != null && item.currentOccupancy > item.capacity) throw new Error('Occupancy cannot exceed capacity.')
+        Object.assign(item, { address: $('safe-address').value.trim() || null, status: $('safe-status').value, capacity: optionalNumber('safe-capacity'), wheelchairAccessible: $('safe-access').value === '' ? null : $('safe-access').value === 'true', verifiedNow: $('safe-verified').checked })
       }
       if (draft.mock) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')

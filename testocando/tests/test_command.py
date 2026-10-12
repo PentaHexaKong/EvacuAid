@@ -155,7 +155,7 @@ async def testHierarchySpatialExposureAndUnion(commandSession):
     assert result['exposureEstimationMethod']=='AREA_WEIGHTED_ESTIMATE'
     assert result['populationSource']=='Test population reference'
     assert result['availableResponderCount'] is None
-    assert result['feasibleRouteCount'] is None
+    assert result['feasibleRouteCount'] == 0
 
 
 @pytest.mark.asyncio
@@ -212,11 +212,11 @@ async def testAssistanceOverlappingNeedsAndShelterUnknown(commandSession):
     assert result['assistance']['elderlyNeedCount']==1
     assert result['assistance']['hearingNeedCount']==1
     assert result['assistance']['categoriesOverlap']
-    assert result['knownShelterOccupancy'] is None
-    assert result['unknownShelterOccupancyCount']==1
-    assert result['availableShelterCount'] is None
+    assert 'knownShelterOccupancy' not in result
+    assert 'availableShelterCount' not in result
+    assert result['recordedShelterCount']==1
     assert result['totalShelterCapacity']==100
-    assert result['shelters'][0]['capacityStatus']=='UNKNOWN'
+    assert 'capacityStatus' not in result['shelters'][0]
     assert 'PRIVATE' not in json.dumps(result)
 
 
@@ -331,8 +331,8 @@ async def testStaleShelterAndMissingLocationsStayUnknown(commandSession):
     await commandSession.flush(); await refreshSnapshots(commandSession)
     result=await snapshot(commandSession)
     assert result['registeredUserCount']==0
-    assert result['availableShelterCount'] is None
-    assert result['shelters'][0]['currentOccupancy'] is None
+    assert 'availableShelterCount' not in result
+    assert 'currentOccupancy' not in result['shelters'][0]
     assert result['signalLevel']=='UNKNOWN'
 
 
@@ -345,7 +345,7 @@ async def testSafeHouseCreatePersistsRefreshesAndRetries(commandSession):
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
             payload={'id':str(uuid.uuid4()),'name':' Government safe house ','latitude':.005,'longitude':.005,
-                'status':'OPEN','capacity':50,'currentOccupancy':5,'verifiedNow':True}
+                'status':'OPEN','capacity':50,'verifiedNow':True}
             response=await client.post('/v1/command/safe-houses',json=payload)
             assert response.status_code==201, response.text
             assert response.json()['name']=='Government safe house'
@@ -358,9 +358,9 @@ async def testSafeHouseCreatePersistsRefreshesAndRetries(commandSession):
             assert len(houses.json())==1
             regionId=str((await commandSession.execute(select(Region.id).where(Region.code=='REFERENCE-3'))).scalar_one())
             detail=(await client.get('/v1/command/regions/'+regionId)).json()
-            assert detail['availableShelterCount']==1
-            assert detail['knownShelterOccupancy']==5
-            assert detail['shelters'][0]['capacityStatus']=='AVAILABLE'
+            assert detail['recordedShelterCount']==1
+            assert 'knownShelterOccupancy' not in detail
+            assert 'capacityStatus' not in detail['shelters'][0]
             assert (await client.post('/v1/command/safe-houses',json={**payload,'name':'Changed'})).status_code==409
             assert len((await client.get('/v1/command/safe-houses')).json())==1
             for invalid in [{'latitude':91},{'longitude':-181},{'name':'  '},{'capacity':2,'currentOccupancy':3},{'capacity':-1},{'capacity':1.5},{'mock':True}]:
@@ -378,11 +378,11 @@ async def testUnverifiedSafeHouseRemainsUnknown(commandSession):
     app.dependency_overrides[get_session]=override
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
-            response=await client.post('/v1/command/safe-houses',json={'id':str(uuid.uuid4()),'name':'Unverified place','latitude':.005,'longitude':.005,'status':'OPEN','capacity':20,'currentOccupancy':0})
+            response=await client.post('/v1/command/safe-houses',json={'id':str(uuid.uuid4()),'name':'Unverified place','latitude':.005,'longitude':.005,'status':'OPEN','capacity':20})
             assert response.status_code==201
             result=await snapshot(commandSession)
-            assert result['availableShelterCount'] is None
-            assert result['shelters'][0]['capacityStatus']=='UNKNOWN'
+            assert 'availableShelterCount' not in result
+            assert 'capacityStatus' not in result['shelters'][0]
             assert result['shelters'][0]['verifiedAt'] is None
     finally:
         app.dependency_overrides.clear()

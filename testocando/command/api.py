@@ -19,6 +19,12 @@ def readProjection(region, payload, geometry, centroid):
             parentRegionId=region.parentId,geometry=geometry,centroid=centroid,population=region.population,
             populationReferenceYear=region.populationReferenceYear,populationSource=region.populationSource,
             boundarySource=region.boundarySource,dataMode=region.dataMode,limitations=['Regional projection has not been refreshed.'])
+    # Accept stored projections from before occupancy tracking was removed.
+    payload = {key:value for key,value in payload.items() if key not in {'availableShelterCount','shelterPressure','knownShelterOccupancy','unknownShelterOccupancyCount'}}
+    payload['shelters'] = [{key:value for key,value in shelter.items() if key not in {'currentOccupancy','capacityStatus'}} for shelter in payload.get('shelters', [])]
+    for shelter in payload['shelters']:
+        if shelter.get('status') == 'FULL':
+            shelter['status'] = 'UNKNOWN'
     detail = RegionDetail.model_validate(payload)
     now = datetime.now(timezone.utc)
     if detail.snapshotExpiresAt is None or detail.snapshotExpiresAt <= now:
@@ -31,14 +37,8 @@ def readProjection(region, payload, geometry, centroid):
         detail.exposureEstimationMethod = 'UNKNOWN'
         detail.hazardTypes = []
         detail.activeAssistanceCount = None
-        detail.availableShelterCount = None
-        detail.shelterPressure = None
         detail.assistance = AssistanceAggregate()
         detail.registeredUserCount = None
-        detail.knownShelterOccupancy = None
-        for shelter in detail.shelters:
-            shelter.capacityStatus = 'UNKNOWN'
-            shelter.currentOccupancy = None
     for hazard in detail.hazards:
         if hazard.expiresAt is not None and hazard.expiresAt <= now:
             hazard.active = False
@@ -86,10 +86,9 @@ async def listRegions(administrativeLevel: AdministrativeLevel | None = None,par
     critical=func.coalesce(case((current,payload['authoritativeCriticalHazard'].astext.cast(Boolean)),else_=False),False)
     exposed=case((current,payload['estimatedExposedPopulation'].astext.cast(Integer)),else_=None)
     assistance=case((current,payload['activeAssistanceCount'].astext.cast(Integer)),else_=None)
-    pressure=case((current,payload['shelterPressure'].astext.cast(Float)),else_=None)
     fresh=func.coalesce(case((current,payload['evidenceFreshness'].astext=='FRESH'),else_=False),False)
     rows=(await session.execute(query.order_by(ranking,critical.desc().nullslast(),exposed.desc().nullslast(),
-        assistance.desc().nullslast(),pressure.desc().nullslast(),fresh,Region.code).limit(limit).offset(offset))).all()
+        assistance.desc().nullslast(),fresh,Region.code).limit(limit).offset(offset))).all()
     details=[projectRow(row) for row in rows]
     return [RegionSummary.model_validate({key:value for key,value in d.model_dump().items() if key in RegionSummary.model_fields}) for d in details]
 

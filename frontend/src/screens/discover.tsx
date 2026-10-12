@@ -154,6 +154,7 @@ function Explore() {
             <IconChevronRight size={20} color={sky[level].ink} />
           </Pressable>}
           <Primary alertId={alertId} state={evacuation} focus={focus} locale={locale} onRoute={route} onLocate={evacuation.locate} onRetry={retry} onChooseAnother={chooseAnother} />
+          <ActionButton variant="secondary" label={t('opsTitle')} onPress={() => router.push('/field-operations')} />
         </View>
         {impact.items.length > 0 && <ImpactLegend items={impact.items} locale={locale} />}
         {evacuation.phase !== 'ready' && shelters.length > 1 && <View style={{ gap: 12 }}>
@@ -279,10 +280,7 @@ function accessKey(shelter: Shelter) {
 }
 
 function capacityText(shelter: Shelter, t: (key: string, options?: Record<string, unknown>) => string) {
-  if (shelter.status === 'FULL') return t('shelterFull');
-  if (shelter.status !== 'OPEN') return t('shelterStatusUnknown');
-  if (shelter.capacity == null || shelter.currentOccupancy == null) return t('capacityUnknown');
-  return t('capacityFilled', { used: shelter.currentOccupancy, total: shelter.capacity });
+  return shelter.capacity == null ? t('referenceCapacityUnknown') : t('referenceCapacity', { count: shelter.capacity });
 }
 
 

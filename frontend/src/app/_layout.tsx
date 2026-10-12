@@ -20,6 +20,8 @@ import { GuestSessionProvider, useGuestSession } from '@/features/profile/sessio
 import { AlertGate, markAlertPresented } from '@/features/alerts/alert-gate';
 import { AuthScreen } from '@/screens/auth';
 import { OfflineRegionsScreen } from '@/screens/offline-regions';
+import { OperationsSync } from '@/features/operations/sync';
+import { FieldOperationsScreen } from '@/screens/field-operations';
 import { ActionButton, AppText, Page } from '@/components/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -33,6 +35,7 @@ function FirstRunGate() {
   const profile = useProfile();
   const [reach, setReach] = useState<ReachPermissions>({});
   const [offlineOpen, setOfflineOpen] = useState(false);
+  const [operationsOpen, setOperationsOpen] = useState(false);
   const router = useRouter();
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const [buddyTarget, setBuddyTarget] = useState<string | null>(null);
@@ -85,9 +88,10 @@ function FirstRunGate() {
   useEffect(() => { if (ready) void SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
   if (offlineOpen) return <OfflineRegionsScreen onBack={() => setOfflineOpen(false)} />;
+  if (operationsOpen) return <><ActionButton label={t('back')} onPress={() => setOperationsOpen(false)} /><FieldOperationsScreen /></>;
   if (session.status === 'signed-out') return <AuthScreen onOffline={() => setOfflineOpen(true)} />;
   if (session.status !== 'ready') {
-    if (session.status === 'error') return <><GuestSessionError /><ActionButton label={t('offlineTitle')} onPress={() => setOfflineOpen(true)} /></>;
+    if (session.status === 'error') return <><GuestSessionError /><ActionButton label={t('offlineTitle')} onPress={() => setOfflineOpen(true)} />{session.account && <ActionButton label={t('opsTitle')} onPress={() => setOperationsOpen(true)} />}</>;
     return <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View>;
   }
   return preferences.completed ? <Navigation /> : <SetupScreen start={entered ? 'help' : 'welcome'} onReach={permissions => setReach(value => ({ ...value, ...permissions }))} onDone={target => setReturnTo(target ?? '/')} />;
@@ -134,6 +138,6 @@ export default function RootLayout() {
   }, []);
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><StatusBar style="dark" />
     {!ready ? <View style={{ flex: 1, backgroundColor: colors.canvas, justifyContent: 'center' }}><ActivityIndicator color={colors.primary} /></View> :
-    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><GuestSessionProvider><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
+    <SystemReduceMotionContext.Provider value={reduceMotion}><I18nextProvider i18n={i18n}><GuestSessionProvider><OperationsSync /><PreferencesProvider><ProfileProvider><FirstRunGate /></ProfileProvider></PreferencesProvider></GuestSessionProvider></I18nextProvider></SystemReduceMotionContext.Provider>}
   </SafeAreaProvider></GestureHandlerRootView>;
 }

@@ -7,7 +7,7 @@ from app.repositories import shelterRepository
 
 
 def shelterResponse(shelter: Shelter) -> ShelterResponse:
-    return ShelterResponse(id=shelter.id, name=shelter.name, latitude=shelter.latitude, longitude=shelter.longitude, entranceLatitude=shelter.entranceLatitude, entranceLongitude=shelter.entranceLongitude, entranceNote=shelter.entranceNote, status=shelter.status, wheelchairAccessible=shelter.wheelchairAccessible, capacity=shelter.capacity, currentOccupancy=shelter.currentOccupancy, source=shelter.source)
+    return ShelterResponse(id=shelter.id, name=shelter.name, latitude=shelter.latitude, longitude=shelter.longitude, entranceLatitude=shelter.entranceLatitude, entranceLongitude=shelter.entranceLongitude, entranceNote=shelter.entranceNote, status='UNKNOWN' if shelter.status == 'FULL' else shelter.status, wheelchairAccessible=shelter.wheelchairAccessible, capacity=shelter.capacity, source=shelter.source)
 
 
 async def createShelter(session: AsyncSession, payload: ShelterCreate) -> Shelter:
@@ -26,17 +26,9 @@ async def nearbyShelters(session: AsyncSession, latitude: float, longitude: floa
 def suitabilityReasons(shelter: Shelter, mobilityRequired: bool) -> tuple[bool, list[str]]:
     if shelter.status == 'CLOSED':
         return False, ['SHELTER_CLOSED']
-    if shelter.status == 'FULL':
-        return False, ['SHELTER_FULL']
-    if shelter.capacity is not None and shelter.currentOccupancy is not None and shelter.currentOccupancy >= shelter.capacity:
-        return False, ['SHELTER_CAPACITY_EXHAUSTED']
     if mobilityRequired and shelter.wheelchairAccessible is False:
         return False, ['WHEELCHAIR_INACCESSIBLE']
     reasons = ['SHELTER_OPEN'] if shelter.status == 'OPEN' else ['SHELTER_STATUS_UNKNOWN']
-    if shelter.capacity is not None and shelter.currentOccupancy is not None:
-        reasons.append('SHELTER_CAPACITY_AVAILABLE')
-    elif shelter.capacity is None or shelter.currentOccupancy is None:
-        reasons.append('CAPACITY_UNKNOWN')
     if mobilityRequired:
         reasons.append('WHEELCHAIR_ACCESSIBLE' if shelter.wheelchairAccessible else 'ACCESSIBILITY_UNKNOWN')
     return True, reasons

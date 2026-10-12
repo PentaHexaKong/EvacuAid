@@ -17,21 +17,13 @@ def priorityKey(region):
         return (value is None, -(value or 0))
     return (SIGNAL_ORDER[region.signalLevel], not region.authoritativeCriticalHazard,
             descending(region.estimatedExposedPopulation), descending(region.activeAssistanceCount),
-            descending(region.shelterPressure), region.evidenceFreshness == 'FRESH', region.code)
+            region.evidenceFreshness == 'FRESH', region.code)
 
 
 def exposureEstimate(population, fraction):
     if population is None or fraction is None:
         return None, 'UNKNOWN'
     return round(population * min(1, max(0, fraction))), 'AREA_WEIGHTED_ESTIMATE'
-
-
-def capacityStatus(status, capacity, occupancy):
-    if capacity is None or occupancy is None:
-        return 'UNKNOWN'
-    if status != 'OPEN' or occupancy >= capacity:
-        return 'FULL'
-    return 'NEAR_CAPACITY' if occupancy >= capacity * .9 else 'AVAILABLE'
 
 
 def classifyEvidence(item, now):
@@ -165,13 +157,19 @@ async def refreshSnapshots(session):
     shelters = {}
     for row in shelterRows:
         fresh = row['verified_at'] is not None and now - timedelta(hours=24) <= row['verified_at'] <= now
-        summary = ShelterSummary(id=row['id'], name=row['name'], geometry=row['geojson'], status=row['status'],
-            capacity=row['capacity'], currentOccupancy=row['current_occupancy'] if fresh else None,
-            capacityStatus=capacityStatus(row['status'],row['capacity'],row['current_occupancy']) if fresh else 'UNKNOWN',
+        summary = ShelterSummary(id=row['id'], name=row['name'], geometry=row['geojson'], status=row['status'] if fresh and row['status'] != 'FULL' else 'UNKNOWN',
+            capacity=row['capacity'], wheelchairAccessible=row['wheelchair_accessible'],
             source=row['source'], verifiedAt=row['verified_at'], dataMode='REFERENCE')
         shelters.setdefault(row['region_id'], []).append(summary)
     geoRows = (await session.execute(text('SELECT id, ST_AsGeoJSON(geometry)::json AS geometry, ST_AsGeoJSON(centroid)::json AS centroid FROM command_regions'))).mappings().all()
     geo = {r['id']: r for r in geoRows}
+    routeRows = (await session.execute(text('''SELECT (payload->>'regionId')::uuid AS region_id,
+      count(*) FILTER (WHERE status='PUBLISHED' AND result->>'routeStatus'='READY'
+        AND (result->>'evaluatedAt')::timestamptz > CAST(:now AS timestamptz) - interval '5 minutes') AS feasible,
+      count(*) FILTER (WHERE status='DRAFT' AND result->>'routeStatus'='UNAVAILABLE'
+        AND result->'selectionReasonCodes' ? 'NO_FEASIBLE_ROUTE') AS unavailable
+      FROM operational_routes GROUP BY payload->>'regionId' '''), {'now': now})).mappings().all()
+    routeCounts = {r['region_id']: r for r in routeRows}
     byId = {r.id: r for r in regions}
     for region in regions:
         simulation = region.dataMode == 'SIMULATION'
@@ -188,10 +186,7 @@ async def refreshSnapshots(session):
             unknownSafetyCount=users.get(region.id, {}).get('unknown',0),
             **{key: reported.get(category,0) for key,category in [('mobilityNeedCount','MOBILITY_LIMITATION'),('visualNeedCount','VISUAL_IMPAIRMENT'),('hearingNeedCount','HEARING_IMPAIRMENT'),('elderlyNeedCount','ELDERLY'),('otherNeedCount','OTHER')]})
         regionShelters = shelters.get(region.id, [])
-        occupancy = [s.currentOccupancy for s in regionShelters if s.currentOccupancy is not None]
         capacities = [s.capacity for s in regionShelters]
-        pressures = [s.currentOccupancy/s.capacity for s in regionShelters if s.currentOccupancy is not None and s.capacity]
-        available = sum(s.capacityStatus in {'AVAILABLE','NEAR_CAPACITY'} and s.status == 'OPEN' for s in regionShelters)
         lineage = []
         parent = byId.get(region.parentId)
         while parent:
@@ -205,14 +200,13 @@ async def refreshSnapshots(session):
             hazardTypes=sorted({item.hazardType.value for item,_,_ in regionEvidence if item.active(now)}),
             authoritativeCriticalHazard=critical, estimatedExposedPopulation=estimate, exposureFraction=fraction,
             exposureEstimationMethod=method, activeAssistanceCount=aggregate.activeAssistanceCount,
-            availableShelterCount=None if simulation or any(s.status == 'OPEN' and s.capacityStatus == 'UNKNOWN' for s in regionShelters) else available,
-            shelterPressure=max(pressures) if pressures else None,
+            recordedShelterCount=None if simulation else len(regionShelters),
             evidenceFreshness='FRESH' if regionEvidence and all(f in {'FRESH','REFERENCE'} for _,f,_ in regionEvidence) else 'UNKNOWN',
             updatedAt=now, snapshotExpiresAt=expiry, snapshotStale=False, hierarchy=lineage,
             registeredUserCount=None if simulation else userCount, assistance=aggregate,
             totalShelterCapacity=sum(capacities) if capacities and all(c is not None for c in capacities) else None,
-            knownShelterOccupancy=sum(occupancy) if occupancy else None,
-            unknownShelterOccupancyCount=None if simulation else sum(s.currentOccupancy is None for s in regionShelters),
+            feasibleRouteCount=None if simulation else routeCounts.get(region.id, {}).get('feasible', 0),
+            noFeasibleRouteCount=None if simulation else routeCounts.get(region.id, {}).get('unavailable', 0),
             shelters=regionShelters,
             hazards=[HazardSummary(hazardType=item.hazardType.value,source=item.source,authority=item.authority.value,
                 evidenceType=item.evidenceType.value,provenanceClass=provenance,geometry=item.geometry,severity=item.severity,
@@ -222,8 +216,8 @@ async def refreshSnapshots(session):
                 'exposure': 'Union of current official polygon warnings/exclusions, geodesic area ratio; assumes uniformly distributed population.',
                 'assistance': 'Existing assistance_requests; requests updated in last 24h, grouped by requester recent profile location.',
                 'accessibility': 'Distinct reported categories per user from user_accessibility and recent request support_needs; categories overlap, not demographic prevalence.',
-                'shelters': 'Existing shelter records; occupancy/status unknown when verification older than 24h.',
-                'responders': 'UNKNOWN: no authoritative responder inventory.', 'routing': 'UNKNOWN: no persisted regional route projection.'},
+                'shelters': 'Reference capacity and accessibility only; no live occupancy tracking. Operational status unknown when verification older than 24h.',
+                'responders': 'UNKNOWN: no authoritative responder inventory.', 'routing': 'Persisted Route Setter routes. Feasible counts are unexpired publications; no-feasible counts exclude provider failures.'},
             limitations=['Missing evidence is UNKNOWN, never NORMAL.', 'Population exposure excludes baseline susceptibility and point observations.',
                 'Registered users means recently located profiles, not all registrations or regional population.',
                 'Safety counts refer to request statuses, not an independent citizen check-in feed.',

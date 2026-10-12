@@ -32,8 +32,7 @@ class RegionSummary(PublicModel):
     exposureFraction: float | None = None
     exposureEstimationMethod: Literal['AREA_WEIGHTED_ESTIMATE', 'EXACT_GRID_OVERLAY', 'UNKNOWN'] = 'UNKNOWN'
     activeAssistanceCount: int | None = None
-    availableShelterCount: int | None = None
-    shelterPressure: float | None = None
+    recordedShelterCount: int | None = None
     evidenceFreshness: str = 'UNKNOWN'
     updatedAt: datetime | None = None
     snapshotExpiresAt: datetime | None = None
@@ -61,8 +60,7 @@ class ShelterSummary(PublicModel):
     geometry: dict
     status: str
     capacity: int | None
-    currentOccupancy: int | None
-    capacityStatus: Literal['AVAILABLE', 'NEAR_CAPACITY', 'FULL', 'UNKNOWN']
+    wheelchairAccessible: bool | None = None
     source: str
     verifiedAt: datetime | None
     dataMode: str
@@ -89,8 +87,6 @@ class RegionDetail(RegionSummary):
     registeredUserCount: int | None = None
     assistance: AssistanceAggregate = Field(default_factory=AssistanceAggregate)
     totalShelterCapacity: int | None = None
-    knownShelterOccupancy: int | None = None
-    unknownShelterOccupancyCount: int | None = None
     availableResponderCount: int | None = None
     assignedResponderCount: int | None = None
     feasibleRouteCount: int | None = None

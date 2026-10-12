@@ -8,4 +8,6 @@ data/
 !VPS_DEPLOYMENT.md
 !OFFLINE_NAVIGATION.md
 !OFFLINE_FEASIBILITY.md
+!FIELD_OPERATIONS.md
 .secrets/
+.playwright-cli/

@@ -4,7 +4,7 @@ import { coordinateRoute } from '@/features/offline/routing';
 
 export type Coordinate = [number, number];
 export type Origin = { latitude: number; longitude: number; accuracyM: number | null; observedAt: string };
-export type Shelter = { entranceLatitude?: number | null; entranceLongitude?: number | null; entranceNote?: string | null; id: string; name: string; latitude: number; longitude: number; status: string; wheelchairAccessible: boolean | null; capacity: number | null; currentOccupancy: number | null; source: string | null; distanceM: number };
+export type Shelter = { entranceLatitude?: number | null; entranceLongitude?: number | null; entranceNote?: string | null; id: string; name: string; latitude: number; longitude: number; status: string; wheelchairAccessible: boolean | null; capacity: number | null; source: string | null; distanceM: number };
 export type HazardStatus = 'NO_KNOWN_HAZARD' | 'POTENTIALLY_EXPOSED' | 'EXPOSED' | 'UNKNOWN';
 export type AccessibilityStatus = 'COMPATIBLE' | 'POTENTIALLY_INCOMPATIBLE' | 'UNKNOWN';
 export type NavigationResponse = {

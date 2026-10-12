@@ -200,7 +200,7 @@ export async function loadPackage(installed: InstalledPackage) {
     streets: await json(installed.directory + 'map/streets.geojson'),
     boundary: await json(installed.directory + 'map/boundary.geojson'),
     coverage: await json(installed.directory + 'map/coverage.geojson'),
-    shelters: await json(installed.directory + 'shelters/shelters.json'),
+    shelters: (await json(installed.directory + 'shelters/shelters.json')).map(({ currentOccupancy: _historicalOccupancy, ...shelter }: { currentOccupancy?: number; status: string }) => ({ ...shelter, status: shelter.status === 'FULL' ? 'UNKNOWN' : shelter.status })),
     hazards: await json(installed.directory + 'hazards/evidence.json'),
     cachedRoutes: await json(installed.directory + 'cached-routes/routes.json'),
   };

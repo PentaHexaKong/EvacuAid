@@ -191,6 +191,7 @@ export function ProfileScreen() {
     <View>
       <SettingsRow first Icon={IconDatabase} label={t('dataSources')} onPress={() => Alert.alert(t('dataSources'), t('dataSourcesBody'))} />
       <SettingsRow Icon={IconDatabase} label={t('offlineTitle')} onPress={() => router.push('/offline-regions')} />
+      <SettingsRow Icon={IconMapPin} label={t('opsTitle')} onPress={() => router.push('/field-operations')} />
       <SettingsRow Icon={IconLogout} label={t(session.guest ? 'guestLeave' : 'authSignOut')} destructive={!session.guest} onPress={confirmSignOut} />
       {!session.guest && session.account && <SettingsRow Icon={IconTrash} label={t('deleteAccount')} destructive onPress={() => router.push('/profile/delete-account')} />}
     </View>

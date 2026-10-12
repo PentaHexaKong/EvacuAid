@@ -28,7 +28,6 @@ class SafeHouseCreate(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     status: ShelterStatus = ShelterStatus.UNKNOWN
     capacity: int | None = Field(default=None, ge=0, le=1000000, strict=True)
-    currentOccupancy: int | None = Field(default=None, ge=0, le=1000000, strict=True)
     wheelchairAccessible: bool | None = None
     verifiedNow: bool = False
 
@@ -53,13 +52,6 @@ class SafeHouseCreate(BaseModel):
         if not value.strip():
             raise ValueError('Safe-house name is required')
         return value.strip()
-
-    @model_validator(mode='after')
-    def capacityConsistent(self):
-        if self.capacity is not None and self.currentOccupancy is not None and self.currentOccupancy > self.capacity:
-            raise ValueError('Occupancy cannot exceed capacity')
-        return self
-
 
 @router.get('', response_model=list[ShelterResponse])
 async def listSafeHouses(limit: int = Query(200, ge=1, le=1000), offset: int = Query(0, ge=0), session: AsyncSession = Depends(get_session)):

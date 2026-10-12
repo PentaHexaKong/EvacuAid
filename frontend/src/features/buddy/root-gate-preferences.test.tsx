@@ -2,6 +2,8 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RootLayout from '@/app/_layout';
+jest.mock('@/screens/field-operations', () => ({ FieldOperationsScreen: () => null }));
+jest.mock('@/features/operations/sync', () => ({ OperationsSync: () => null }));
 import { apiRequest } from '@/features/profile/api';
 import { ensureForeground, ensureNotifications } from '@/features/location/permissions';
 import { PREFERENCES_KEY } from '@/features/preferences/storage';
