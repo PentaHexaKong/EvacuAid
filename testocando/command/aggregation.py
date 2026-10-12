@@ -232,7 +232,9 @@ async def refreshSnapshots(session):
                 'SIMULATION regions exclude all live citizen, hazard, and shelter data.' if simulation else 'Simulation evidence and shelters excluded.'])
         payload = detail.model_dump(mode='json',exclude={'geometry','centroid'})
         snapshots.append({'region_id':region.id,'payload':payload,'updated_at':now,'expires_at':expiry})
-    statement = insert(RegionalOperationalSnapshot).values(snapshots)
-    await session.execute(statement.on_conflict_do_update(index_elements=['region_id'],set_={
-        'payload':statement.excluded.payload,'updated_at':statement.excluded.updated_at,'expires_at':statement.excluded.expires_at}))
+    # Batches keep each statement under asyncpg's 32,767 bind-parameter limit (4 per region); same transaction.
+    for start in range(0, len(snapshots), 1000):
+        statement = insert(RegionalOperationalSnapshot).values(snapshots[start:start+1000])
+        await session.execute(statement.on_conflict_do_update(index_elements=['region_id'],set_={
+            'payload':statement.excluded.payload,'updated_at':statement.excluded.updated_at,'expires_at':statement.excluded.expires_at}))
     return len(regions)

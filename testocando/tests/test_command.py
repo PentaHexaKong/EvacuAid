@@ -175,7 +175,8 @@ async def testSnapshotsExcludeRegionAndHazardGeometry(commandSession):
 
 
 @pytest.mark.asyncio
-async def testHazardEndpointsClipGeometryAndKeepPoints(commandSession):
+async def testHazardEndpointsClipGeometryAndKeepPoints(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     from shapely.geometry import shape
     await importRegions(commandSession,regionDocument())
     polygon=hazard(geometry={'type':'Polygon','coordinates':[[[-.01,-.01],[.01,-.01],[.01,.03],[-.01,.03],[-.01,-.01]]]})
@@ -188,7 +189,7 @@ async def testHazardEndpointsClipGeometryAndKeepPoints(commandSession):
         yield commandSession
     app.dependency_overrides[get_session]=override
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
             detail=await client.get('/v1/command/regions/'+regionId)
             hazards=await client.get('/v1/command/regions/'+regionId+'/hazards')
             assert detail.status_code==hazards.status_code==200
@@ -204,7 +205,8 @@ async def testHazardEndpointsClipGeometryAndKeepPoints(commandSession):
 
 
 @pytest.mark.asyncio
-async def testListSimplifiesDenseBoundaryAndDetailKeepsResolution(commandSession):
+async def testListSimplifiesDenseBoundaryAndDetailKeepsResolution(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     from math import cos, pi, sin
     document=regionDocument()
     ring=[[.01+.009*cos(2*pi*i/360),.01+.009*sin(2*pi*i/360)] for i in range(360)]
@@ -216,7 +218,7 @@ async def testListSimplifiesDenseBoundaryAndDetailKeepsResolution(commandSession
         yield commandSession
     app.dependency_overrides[get_session]=override
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
             response=await client.get('/v1/command/regions?administrativeLevel=VILLAGE')
             assert response.status_code==200
             summary=response.json()[0]

@@ -81,7 +81,8 @@ async def detailFor(session,regionId,hazardGeometry=False):
             .where(tuple_(HazardRecord.source,HazardRecord.sourceId).in_([(h.source,h.sourceId) for h in detail.hazards])))).all()
         geometries = {(source,sourceId):json.loads(geometry) for source,sourceId,geometry in rows}
         for hazard in detail.hazards:
-            hazard.geometry = geometries.get((hazard.source,hazard.sourceId))
+            # Snapshots written before geometry left the payload have no sourceId but still carry their shape.
+            hazard.geometry = geometries.get((hazard.source,hazard.sourceId),hazard.geometry)
     return detail
 
 
