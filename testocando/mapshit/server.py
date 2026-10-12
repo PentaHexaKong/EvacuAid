@@ -22,6 +22,11 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=Path(__file__).parent, **kwargs)
 
+    def end_headers(self):
+        if not self.path.startswith(('/api/', '/health', '/route')):
+            self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
     def forward(self, targetUrl: str, body: bytes | None = None):
         headers = forwardHeaders(targetUrl)
         request = Request(targetUrl, data=body, headers=headers, method=self.command)
