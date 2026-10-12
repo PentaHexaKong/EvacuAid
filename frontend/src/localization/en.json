@@ -604,5 +604,9 @@
   "authRegisterDescription": "An account keeps your profile, alerts and Buddy connections when you change phones.",
   "guestLeave": "Sign in or create account",
   "guestProfileNote": "You are using a guest profile on this phone. Create an account to keep it on another phone.",
-  "offlineShort": "Offline maps"
+  "offlineShort": "Offline maps",
+  "devSimulationTitle": "Prototype control",
+  "devSimulationBody": "Development builds only. Creates a dummy official warning around your saved location.",
+  "devSimulateEarthquake": "Simulate red earthquake warning",
+  "devSimulationClear": "Clear simulated warnings"
 }

@@ -604,5 +604,9 @@
   "authRegisterDescription": "Akun menyimpan profil, peringatan, dan koneksi Buddy Anda saat berganti ponsel.",
   "guestLeave": "Masuk atau buat akun",
   "guestProfileNote": "Anda memakai profil tamu di ponsel ini. Buat akun agar profil bisa dipakai di ponsel lain.",
-  "offlineShort": "Peta offline"
+  "offlineShort": "Peta offline",
+  "devSimulationTitle": "Kontrol prototipe",
+  "devSimulationBody": "Hanya di build pengembangan. Membuat peringatan resmi contoh di sekitar lokasi tersimpanmu.",
+  "devSimulateEarthquake": "Simulasikan peringatan gempa merah",
+  "devSimulationClear": "Hapus peringatan simulasi"
 }

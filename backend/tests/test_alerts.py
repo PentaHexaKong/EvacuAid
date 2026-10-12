@@ -16,11 +16,13 @@ from app.db.models.hazard import HazardRecord
 from app.db.models.buddySession import BuddyInbox, BuddyOutbox, BuddyPushToken
 from app.db.session import get_session
 from app.routers.alerts import router
+from app.routers.alerts_dev import router as devRouter
 from app.routers.buddy import router as buddy
 from app.routers.sessions import router as sessions
 from app.models.hazard import HazardEvidence
 from app.repositories import hazardRepository
 from app.services import alertService, buddyRequestService, buddyWorker
+from app.services import alertSimulation
 
 
 def api(db):
@@ -500,3 +502,40 @@ async def test_alert_escalation_delivers_once_per_level(dbSession, monkeypatch):
     assert len(deliveries) == 2
     for model in (BuddyInbox, BuddyOutbox):
         assert (await dbSession.execute(select(func.count()).select_from(model))).scalar_one() == 2
+
+
+@pytest.mark.asyncio
+async def test_simulated_warning_escalates_resets_answers_and_clears(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, inside = await guest(client, dbSession)
+        _, outside = await guest(client, dbSession, latitude=-6.3)
+        await alertSimulation.apply(dbSession, 'waspada', center=(-6.2, 106.8), radiusKm=2)
+        alert = (await client.get('/v1/alerts', headers=inside)).json()['items'][0]
+        assert alert['level'] == 'waspada' and alert['source'] == 'DEMO_SIMULATION'
+        assert (await client.get('/v1/alerts', headers=outside)).json()['items'] == []
+        assert (await client.post(f"/v1/alerts/{alert['id']}/response", json={'response': 'SAFE'}, headers=inside)).status_code == 200
+        await alertSimulation.apply(dbSession, 'awas', center=(-6.2, 106.8), radiusKm=2)
+        escalated = (await client.get('/v1/alerts', headers=inside)).json()['items']
+        assert [(item['id'], item['level'], item['myResponse']) for item in escalated] == [(alert['id'], 'awas', None)]
+        assert await alertSimulation.clear(dbSession) == 1
+        assert (await client.get('/v1/alerts', headers=inside)).json()['items'] == []
+
+
+@pytest.mark.asyncio
+async def test_dev_simulate_route_defaults_to_red_earthquake_at_the_phone(dbSession):
+    app = api(dbSession)
+    app.include_router(devRouter)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        _, headers = await guest(client, dbSession, latitude=-6.25, longitude=106.9)
+        _, missing = await guest(client, dbSession, latitude=None, longitude=None)
+        assert (await client.post('/v1/alerts/dev/simulate', json={}, headers=missing)).status_code == 409
+        created = await client.post('/v1/alerts/dev/simulate', json={}, headers=headers)
+        assert created.status_code == 201, created.text
+        assert created.json()['level'] == 'awas' and created.json()['hazardType'] == 'EARTHQUAKE'
+        listed = (await client.get('/v1/alerts', headers=headers)).json()['items']
+        assert [item['id'] for item in listed] == [created.json()['id']]
+        again = await client.post('/v1/alerts/dev/simulate', json={}, headers=headers)
+        assert again.json()['id'] != created.json()['id']
+        assert [item['id'] for item in (await client.get('/v1/alerts', headers=headers)).json()['items']] == [again.json()['id']]
+        assert (await client.delete('/v1/alerts/dev/simulate', headers=headers)).status_code == 204
+        assert (await client.get('/v1/alerts', headers=headers)).json()['items'] == []

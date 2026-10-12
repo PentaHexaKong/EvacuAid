@@ -17,6 +17,8 @@ const mockRouter = { push: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() 
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useRouter: () => mockRouter, useLocalSearchParams: () => ({ id: 'rain' }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params: Record<string, string | number> = {}) => { const copy = jest.requireActual('../localization/id.json'); const resolved = key === 'alertsSpokenCount' ? Number(params.count) === 1 ? 'alertsSpokenCount_one' : 'alertsSpokenCount_other' : key; return Object.entries(params).reduce((text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)), copy[resolved] ?? resolved); }, i18n: { language: 'id' } }) }));
 
+jest.mock('@/features/alerts/dev-simulation', () => ({ AlertSimulation: () => null }));
+
 beforeEach(() => jest.clearAllMocks());
 
 test.each([false, true])('each alert exposes its level and opens the matching route (sheet=%s)', sheet => {

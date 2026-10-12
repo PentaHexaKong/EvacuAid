@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 from sqlalchemy import select
 
@@ -17,18 +18,30 @@ SHELTERS = [
     ('Titik Kumpul Contoh F', -6.2050, 106.7750, 'UNKNOWN', None, None, None),
 ]
 
+# `python -m scripts.seed_demo_shelters LAT LON` shifts the same six points to be centred on LAT LON ("Dekat" names).
+# ponytail: plain degree offsets, fine at city scale; rerunning at the same spot skips, elsewhere adds a new set.
+ANCHOR = (-6.2, 106.8)
+
 
 async def main() -> None:
+    dLat = dLon = 0.0
+    prefix = 'Contoh'
+    if len(sys.argv) == 3:
+        dLat, dLon = float(sys.argv[1]) - ANCHOR[0], float(sys.argv[2]) - ANCHOR[1]
+        prefix = 'Dekat'
     async with SessionLocal() as session:
         for name, latitude, longitude, status, wheelchairAccessible, capacity, currentOccupancy in SHELTERS:
-            if (await session.execute(select(Shelter.id).where(Shelter.name == name))).first() is not None:
+            isNameA, isNameB = name.endswith('Contoh A'), name.endswith('Contoh B')
+            name = name.replace('Contoh', prefix)
+            latitude, longitude = round(latitude + dLat, 6), round(longitude + dLon, 6)
+            if (await session.execute(select(Shelter.id).where(Shelter.name == name, Shelter.latitude == latitude, Shelter.longitude == longitude))).first() is not None:
                 print(f'skip {name}')
                 continue
             entrance = {}
-            if name == 'Titik Kumpul Contoh A':
-                entrance = dict(entranceLatitude=-6.20095, entranceLongitude=106.8020, entranceNote='North gate, ramp on the left')
-            elif name == 'Titik Kumpul Contoh B':
-                entrance = dict(entranceLatitude=-6.1950, entranceLongitude=106.81505, entranceNote='East gate, entrance straight ahead')
+            if isNameA:
+                entrance = dict(entranceLatitude=round(-6.20095 + dLat, 6), entranceLongitude=round(106.8020 + dLon, 6), entranceNote='North gate, ramp on the left')
+            elif isNameB:
+                entrance = dict(entranceLatitude=round(-6.1950 + dLat, 6), entranceLongitude=round(106.81505 + dLon, 6), entranceNote='East gate, entrance straight ahead')
             await shelterService.createShelter(session, ShelterCreate(name=name, latitude=latitude, longitude=longitude, shelterType='GATHERING_POINT', status=status, wheelchairAccessible=wheelchairAccessible, capacity=capacity, currentOccupancy=currentOccupancy, source='DEMO_FIXTURE', **entrance))
             print(f'created {name}')
     await engine.dispose()

@@ -10,6 +10,7 @@ import { AlertRow, EmptyContent, LevelChip, SectionTitle } from '@/components/co
 import { alertsSpokenSummary, topAlert, compareAlerts, formatAlertTime, levelLabels, mapAlert } from '@/features/alerts/alerts';
 import { findAlert, useAlerts } from '@/features/alerts/use-alerts';
 import { AlertLocationButton } from '@/features/alerts/location-button';
+import { AlertSimulation } from '@/features/alerts/dev-simulation';
 import { ListenButton } from '@/components/listen-button';
 import { useAccess } from '@/features/access/use-access';
 import { SpeakButton } from '@/components/speak-button';
@@ -69,6 +70,7 @@ export function AlertsScreen({ sheet = false }: { sheet?: boolean }) {
     {alerts.status === 'error' && <><AppText>{t('alertUnavailable')}</AppText><ActionButton variant="secondary" label={t('tryAgain')} onPress={() => void alerts.reload()} /></>}
     {alerts.stale && <AppText variant="small">{t('alertStale', { time: formatAlertTime(new Date(alerts.updatedAt!).toISOString()) })}</AppText>}
     {items.length ? <Group>{items.map(alert => <AlertRow key={alert.id} alert={alert} onPress={() => router.push({ pathname: sheet ? '/alerts/[id]' : '/alert/[id]', params: { id: alert.id } })} />)}</Group> : alerts.status === 'ready' ? <EmptyContent message="alertsEmpty" /> : null}
+    {__DEV__ && !sheet && <AlertSimulation reload={alerts.reload} />}
   </View></Page>;
 }
 

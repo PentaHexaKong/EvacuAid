@@ -16,3 +16,7 @@ export async function fetchAlerts(token: string): Promise<AlertsOutcome> {
     throw cause;
   }
 }
+
+// Development builds only: the backend serves these when PILOT_DEV_SIMULATION=1.
+export const simulateAlert = (token: string, body: { level: AlertItem['level']; hazard: string }) => apiRequest<AlertItem>('/v1/alerts/dev/simulate', token, { method: 'POST', body: JSON.stringify(body) });
+export const clearSimulatedAlerts = (token: string) => apiRequest<void>('/v1/alerts/dev/simulate', token, { method: 'DELETE' });

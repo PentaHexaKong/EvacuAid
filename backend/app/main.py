@@ -74,6 +74,8 @@ if os.getenv('PILOT_DEV_SIMULATION') == '1':
     app.include_router(buddy_dev_router, prefix='/v1/buddy')
     # Old app builds call /v1/buddy-pilot; remove once they are retired.
     app.include_router(buddy_dev_router, prefix='/v1/buddy-pilot', include_in_schema=False)
+    from app.routers.alerts_dev import router as alerts_dev_router
+    app.include_router(alerts_dev_router)
 
 
 @app.get("/")
