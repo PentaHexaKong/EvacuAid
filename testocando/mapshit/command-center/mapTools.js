@@ -2,16 +2,18 @@ const $ = id => document.getElementById(id)
 const storageKey = 'evacuaid-command-mocks-v1'
 
 export function setupMapTools({ map, api, refresh }) {
-  const mockLayer = L.layerGroup()
+  const mockLayer = L.layerGroup().addTo(map)
   const realHouses = L.layerGroup().addTo(map)
   let items = []
+  let disasters = []
   let placement = null
   let draft = null
   let saving = false
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    if (Array.isArray(stored)) items = stored.filter(item => ['hazard', 'safeHouse'].includes(item.kind) && typeof item.name === 'string' && typeof item.id === 'string' && Number.isFinite(item.latitude) && Math.abs(item.latitude) <= 90 && Number.isFinite(item.longitude) && Math.abs(item.longitude) <= 180 && (item.kind !== 'hazard' || Number.isFinite(item.radius) && item.radius >= 50 && item.radius <= 50000)).slice(0, 200)
+    if (Array.isArray(stored)) items = stored.filter(item => item.kind === 'safeHouse' && typeof item.name === 'string' && typeof item.id === 'string' && Number.isFinite(item.latitude) && Math.abs(item.latitude) <= 90 && Number.isFinite(item.longitude) && Math.abs(item.longitude) <= 180).slice(0, 200)
   } catch { $('map-action-status').textContent = 'Saved mock items could not be loaded. You can start a new mock scenario.' }
+  persist()
   function persist() {
     try { localStorage.setItem(storageKey, JSON.stringify(items)) }
     catch { $('map-action-status').textContent = 'Browser storage unavailable. Mock items remain available for this tab only.' }
@@ -24,11 +26,12 @@ export function setupMapTools({ map, api, refresh }) {
   function renderMocks() {
     mockLayer.clearLayers()
     $('mock-items').replaceChildren()
-    for (const item of items) {
+    for (const item of [...disasters, ...items]) {
+      if (item.kind === 'safeHouse' && !$('mock-mode').checked) continue
       const point = [item.latitude, item.longitude]
-      const text = 'MOCK · ' + item.name + (item.kind === 'hazard' ? ' · ' + item.hazardType + ' · ' + item.severity : ' · Safe house')
+      const text = (item.kind === 'hazard' ? 'SIMULATION · ' : 'MOCK · ') + item.name + (item.kind === 'hazard' ? ' · ' + item.hazardType + ' · ' + item.severity : ' · Safe house')
       const layer = item.kind === 'hazard'
-        ? L.circle(point, { radius: item.radius, color: '#9d4ac1', dashArray: '6 4', fillOpacity: .18 })
+        ? L.circle(point, { radius: item.radiusM, color: '#9d4ac1', dashArray: '6 4', fillOpacity: .18 })
         : L.circleMarker(point, { radius: 9, color: '#9d4ac1', fillColor: '#fff', fillOpacity: 1, weight: 3 })
       layer.bindTooltip(label(text)).addTo(mockLayer)
       const row = document.createElement('div')
@@ -39,11 +42,21 @@ export function setupMapTools({ map, api, refresh }) {
       const remove = document.createElement('button')
       remove.textContent = 'Remove'
       remove.setAttribute('aria-label', 'Remove ' + item.name)
-      remove.onclick = () => { items = items.filter(value => value.id !== item.id); persist(); renderMocks() }
+      remove.onclick = async () => {
+        remove.disabled = true
+        try {
+          if (item.kind === 'hazard') await api('mock-disasters/' + item.id, { method: 'DELETE' })
+          else { items = items.filter(value => value.id !== item.id); persist() }
+          await loadMocks()
+          await refresh({ fitView: false })
+        } catch (error) { $('map-action-status').textContent = error.message; remove.disabled = false }
+      }
       row.append(focus, remove)
       $('mock-items').append(row)
     }
-    if (!items.length) $('mock-items').append(label('No mock items. Choose Add mock disaster or Add safe house, then click the map.'))
+    if (!items.length && !disasters.length) $('mock-items').append(label('No mock items. Choose Add mock disaster or Add safe house, then click the map.'))
+    // Active test warnings stay listed outside mock mode; the empty hint only matters while placing mocks.
+    $('mock-items').hidden = !$('mock-mode').checked && !disasters.length
   }
   function cancelPlacement() {
     placement = null
@@ -61,17 +74,22 @@ export function setupMapTools({ map, api, refresh }) {
     cancelPlacement()
     const mock = $('mock-mode').checked
     $('mock-banner').hidden = !mock
-    $('mock-items').hidden = !mock
     $('reset-mocks').hidden = !mock
     $('add-disaster').disabled = !mock
     $('add-safe-house').textContent = mock ? 'Add mock safe house' : 'Add safe house'
-    mock ? mockLayer.addTo(map) : map.removeLayer(mockLayer)
     renderMocks()
   }
   $('add-disaster').onclick = () => { if ($('mock-mode').checked) begin('hazard') }
   $('add-safe-house').onclick = () => begin('safeHouse')
   $('cancel-map-placement').onclick = cancelPlacement
-  $('reset-mocks').onclick = () => { items = []; persist(); renderMocks(); cancelPlacement() }
+  $('reset-mocks').onclick = async () => {
+    try {
+      await api('mock-disasters', { method: 'DELETE' })
+      items = []; persist(); cancelPlacement()
+      await loadMocks()
+      await refresh({ fitView: false })
+    } catch (error) { $('map-action-status').textContent = error.message }
+  }
   map.on('click', event => {
     if (!placement || saving) return
     const point = event.latlng.wrap()
@@ -84,7 +102,7 @@ export function setupMapTools({ map, api, refresh }) {
     $('safe-house-fields').hidden = disaster
     $('mock-radius').disabled = !disaster
     $('placement-title').textContent = disaster ? 'Add mock disaster' : draft.mock ? 'Add mock safe house' : 'Add safe house'
-    $('placement-environment').textContent = draft.mock ? 'MOCK · browser only' : 'Operational · saves to backend'
+    $('placement-environment').textContent = disaster ? 'SIMULATION · sends a test alert to phones in the area' : draft.mock ? 'MOCK · browser only' : 'Operational · saves to backend'
     $('placement-coordinates').textContent = 'Location: ' + draft.latitude.toFixed(6) + ', ' + draft.longitude.toFixed(6)
     $('placement-dialog').showModal()
     $('placement-name').focus()
@@ -103,14 +121,20 @@ export function setupMapTools({ map, api, refresh }) {
       const name = $('placement-name').value.trim()
       if (!name) throw new Error('Enter a name.')
       const item = { id: draft.id, kind: draft.kind, name, latitude: draft.latitude, longitude: draft.longitude }
-      if (draft.kind === 'hazard') Object.assign(item, { radius: Number($('mock-radius').value), hazardType: $('mock-hazard').value, severity: $('mock-severity').value })
+      if (draft.kind === 'hazard') Object.assign(item, { radiusM: Number($('mock-radius').value), hazardType: $('mock-hazard').value, severity: $('mock-severity').value })
       else {
         const optionalNumber = id => $(id).value === '' ? null : Number($(id).value)
         Object.assign(item, { address: $('safe-address').value.trim() || null, status: $('safe-status').value, capacity: optionalNumber('safe-capacity'), wheelchairAccessible: $('safe-access').value === '' ? null : $('safe-access').value === 'true', verifiedNow: $('safe-verified').checked })
       }
-      if (draft.mock) {
+      if (draft.kind === 'hazard') {
+        const { kind, ...payload } = item
+        await api('mock-disasters', { method: 'POST', body: JSON.stringify(payload) })
+        await loadMocks()
+        await refresh({ fitView: false })
+        $('map-action-status').textContent = name + ' placed. Phones inside the area get a test alert within a minute.'
+      } else if (draft.mock) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')
-        items.push(item); persist(); renderMocks()
+        items.push(item); persist(); await loadMocks()
         map.setView([item.latitude, item.longitude], Math.max(map.getZoom(), 13))
         $('map-action-status').textContent = 'MOCK · ' + name + ' saved in this browser. Live backend unchanged.'
       } else {
@@ -124,7 +148,13 @@ export function setupMapTools({ map, api, refresh }) {
     } catch (error) { $('placement-error').textContent = error.message }
     finally { saving = false; $('save-placement').disabled = false; $('save-placement').textContent = 'Save'; $('cancel-placement').disabled = false }
   }
+  async function loadMocks() {
+    disasters = (await api('mock-disasters')).map(item => ({ ...item, kind: 'hazard' }))
+    renderMocks()
+  }
+  loadMocks().catch(error => { $('map-action-status').textContent = error.message })
   async function loadReal() {
+    await loadMocks()
     const houses = []
     for (let offset = 0; ; offset += 200) {
       const batch = await api('safe-houses?limit=200&offset=' + offset)

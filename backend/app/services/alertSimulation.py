@@ -2,7 +2,7 @@ import math
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from shapely.geometry import box, mapping
+from shapely.geometry import Polygon, box, mapping
 from sqlalchemy import delete, select
 
 from app.db.models.alert import AlertDelivery, AlertResponse
@@ -42,6 +42,30 @@ async def apply(session, level, hazard='FLOOD', center=None, radiusKm=3.0, hours
     await resetAnswers(session, [alertKey(row)])
     await session.commit()
     return row, (latitude, longitude)
+
+
+async def place(session, *, sourceId, level, hazard, latitude, longitude, radiusM, area, hours=2.0, metadata=None):
+    angularRadius = radiusM / 6371000.0
+    lat = math.radians(latitude)
+    lon = math.radians(longitude)
+    points = []
+    for index in range(64):
+        bearing = 2 * math.pi * index / 64
+        pointLat = math.asin(math.sin(lat) * math.cos(angularRadius) + math.cos(lat) * math.sin(angularRadius) * math.cos(bearing))
+        pointLon = lon + math.atan2(math.sin(bearing) * math.sin(angularRadius) * math.cos(lat), math.cos(angularRadius) - math.sin(lat) * math.sin(pointLat))
+        points.append((math.degrees(pointLon), math.degrees(pointLat)))
+    points.append(points[0])
+    now = datetime.now(timezone.utc)
+    item = HazardEvidence(sourceId=sourceId, hazardType=HazardType(hazard), source=SOURCE, authority=Authority.OFFICIAL,
+        evidenceType=EvidenceType.ACTIVE_WARNING, geometry=mapping(Polygon(points)), severity=SEVERITY[level], confidence=1.0,
+        observedAt=now, validFrom=now - timedelta(minutes=1), validUntil=now + timedelta(hours=hours),
+        metadata={'officialStatus': level.upper(), 'area': area, 'sourceUrl': 'https://evacuaid.invalid/simulation',
+            'attribution': 'EvacuAid simulation, not an official warning', **(metadata or {})})
+    await hazardRepository.saveEvidence(session, [item])
+    await session.flush()
+    row = (await session.execute(select(HazardRecord).where(HazardRecord.source == SOURCE, HazardRecord.sourceId == sourceId).execution_options(populate_existing=True))).scalar_one()
+    await resetAnswers(session, [alertKey(row)])
+    return row
 
 
 async def clear(session):

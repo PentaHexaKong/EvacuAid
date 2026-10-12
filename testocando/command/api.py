@@ -34,6 +34,7 @@ def readProjection(region, payload, geometry, centroid):
     if detail.snapshotExpiresAt is None or detail.snapshotExpiresAt <= now:
         detail.snapshotStale = True
         detail.signalLevel = 'UNKNOWN'
+        detail.simulation = None
         detail.authoritativeCriticalHazard = False
         detail.evidenceFreshness = 'STALE'
         detail.estimatedExposedPopulation = None
@@ -105,11 +106,13 @@ async def listRegions(administrativeLevel: AdministrativeLevel | None = None,par
     if signalLevel:
         query=query.where(effective==signalLevel)
     ranking=case({'CRITICAL':0,'ELEVATED':1,'WATCH':2,'UNKNOWN':3,'NORMAL':4},value=effective,else_=3)
+    simulationLevel=case((current,payload['simulation']['signalLevel'].astext),else_=None)
+    simulationRanking=case({'CRITICAL':0,'ELEVATED':1,'WATCH':2},value=simulationLevel,else_=3)
     critical=func.coalesce(case((current,payload['authoritativeCriticalHazard'].astext.cast(Boolean)),else_=False),False)
     exposed=case((current,payload['estimatedExposedPopulation'].astext.cast(Integer)),else_=None)
     assistance=case((current,payload['activeAssistanceCount'].astext.cast(Integer)),else_=None)
     fresh=func.coalesce(case((current,payload['evidenceFreshness'].astext=='FRESH'),else_=False),False)
-    rows=(await session.execute(query.order_by(ranking,critical.desc().nullslast(),exposed.desc().nullslast(),
+    rows=(await session.execute(query.order_by(simulationRanking,ranking,critical.desc().nullslast(),exposed.desc().nullslast(),
         assistance.desc().nullslast(),fresh,Region.code).limit(limit).offset(offset))).all()
     details=[projectRow(row) for row in rows]
     return [RegionSummary.model_validate({key:value for key,value in d.model_dump().items() if key in RegionSummary.model_fields}) for d in details]

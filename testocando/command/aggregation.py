@@ -7,7 +7,7 @@ from sqlalchemy.orm import defer
 
 from app.models.hazard import Authority, EvidenceType, HazardEvidence, HazardType
 from command.models import Region, RegionalOperationalSnapshot
-from command.schemas import AssistanceAggregate, HazardSummary, RegionDetail, ShelterSummary
+from command.schemas import AssistanceAggregate, HazardSummary, RegionDetail, ShelterSummary, SimulationOverlay
 
 SIGNAL_ORDER = {'CRITICAL': 0, 'ELEVATED': 1, 'WATCH': 2, 'UNKNOWN': 3, 'NORMAL': 4}
 ACTIVE_STATUSES = {'REQUESTED', 'NOTIFIED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'EVACUATING', 'WAITING', 'FALLBACK_REQUIRED', 'MATCHED', 'MEETING', 'ACTIVE'}
@@ -126,16 +126,22 @@ async def refreshSnapshots(session):
       evidence_type, severity, confidence, observed_at, valid_from, valid_until, metadata
       FROM hazard_evidence WHERE id = ANY(:ids)'''), {'ids': evidenceIds})).mappings().all() if evidenceIds else []
     classified = {}
+    mocks = {}
     for row in evidenceRows:
         item = HazardEvidence.model_construct(sourceId=row['source_id'], source=row['source'], hazardType=HazardType(row['hazard_type']),
             authority=Authority(row['authority']), evidenceType=EvidenceType(row['evidence_type']), geometry=None,
             severity=row['severity'], confidence=row['confidence'], observedAt=row['observed_at'],
             validFrom=row['valid_from'], validUntil=row['valid_until'], metadata=row['metadata'] or {})
         provenance, freshness = classifyEvidence(item, now)
+        if item.metadata.get('commandMock') is True and item.active(now) and item.metadata.get('severity') in {'WATCH', 'ELEVATED', 'CRITICAL'}:
+            mocks[row['id']] = item
         if provenance != 'SIMULATION':
             classified[row['id']] = (item, freshness, provenance)
     evidence = {}
+    regionMocks = {}
     for row in hazardRows:
+        if row['evidence_id'] in mocks:
+            regionMocks.setdefault(row['region_id'], []).append(mocks[row['evidence_id']])
         if row['evidence_id'] in classified:
             evidence.setdefault(row['region_id'], []).append(classified[row['evidence_id']])
     # Union prevents overlapping active warning polygons from counting twice.
@@ -199,11 +205,14 @@ async def refreshSnapshots(session):
         while parent:
             lineage.insert(0, {'id': str(parent.id), 'name': parent.name, 'administrativeLevel': parent.administrativeLevel})
             parent = byId.get(parent.parentId)
+        overlays = regionMocks.get(region.id, [])
+        overlay = SimulationOverlay(signalLevel=min((item.metadata['severity'] for item in overlays), key=SIGNAL_ORDER.get),
+            hazardTypes=sorted({item.hazardType.value for item in overlays}), names=sorted({item.metadata['name'] for item in overlays})) if overlays else None
         expiry = min([now + timedelta(minutes=5)] + [item.validUntil for item,_,_ in regionEvidence if item.active(now) and item.validUntil])
         detail = RegionDetail(id=region.id, code=region.code, name=region.name, administrativeLevel=region.administrativeLevel,
             parentRegionId=region.parentId, geometry={}, centroid={},
             population=region.population, populationReferenceYear=region.populationReferenceYear, populationSource=region.populationSource,
-            boundarySource=region.boundarySource, dataMode=region.dataMode, signalLevel=signal,
+            boundarySource=region.boundarySource, dataMode=region.dataMode, signalLevel=signal, simulation=overlay,
             hazardTypes=sorted({item.hazardType.value for item,_,_ in regionEvidence if item.active(now)}),
             authoritativeCriticalHazard=critical, estimatedExposedPopulation=estimate, exposureFraction=fraction,
             exposureEstimationMethod=method, activeAssistanceCount=aggregate.activeAssistanceCount,

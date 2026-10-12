@@ -12,6 +12,12 @@ class PublicModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+class SimulationOverlay(PublicModel):
+    signalLevel: SignalLevel
+    hazardTypes: list[str]
+    names: list[str]
+
+
 class RegionSummary(PublicModel):
     id: UUID
     code: str
@@ -26,6 +32,7 @@ class RegionSummary(PublicModel):
     boundarySource: str
     dataMode: Literal['REFERENCE', 'SIMULATION']
     signalLevel: SignalLevel = 'UNKNOWN'
+    simulation: SimulationOverlay | None = None
     hazardTypes: list[str] = Field(default_factory=list)
     authoritativeCriticalHazard: bool = False
     estimatedExposedPopulation: int | None = None

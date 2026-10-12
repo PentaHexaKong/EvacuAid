@@ -42,7 +42,7 @@ async function api(path, options = {}) {
     const error = await response.json().catch(() => ({}))
     throw new Error(typeof error.detail === 'string' ? error.detail : error.detail?.message || 'Unable to save or load command data (HTTP ' + response.status + ').')
   }
-  return response.json()
+  return response.status === 204 ? null : response.json()
 }
 async function allRegions(params) {
   const rows = []
@@ -77,13 +77,16 @@ function renderRegions() {
   $('priorities').replaceChildren()
   $('region-count').textContent = state.regions.length + ' REGIONS'
   for (const region of state.regions) {
-    const layer = L.geoJSON(region.geometry, { style: { color: colors[region.signalLevel], weight: 1.5, fillColor: colors[region.signalLevel], fillOpacity: .3 } })
-    layer.bindTooltip(element('span', '', region.name + ' · ' + region.signalLevel))
+    const level = region.simulation ? region.simulation.signalLevel : region.signalLevel
+    const layer = L.geoJSON(region.geometry, { style: { color: colors[level], weight: 1.5, fillColor: colors[level], fillOpacity: .3, dashArray: region.simulation ? '6 4' : null } })
+    layer.bindTooltip(element('span', '', (region.simulation ? 'SIMULATION · ' : '') + region.name + ' · ' + level))
     layer.on('click', () => { if (!mapTools.isPlacing()) selectRegion(region.id) })
     layer.addTo(layers.regions)
     const row = element('button', 'priority-row' + (state.selected === region.id ? ' selected' : ''))
     const top = element('div', 'row-top')
-    top.append(element('strong', '', region.name), badge(region.signalLevel, region.signalLevel))
+    top.append(element('strong', '', region.name))
+    if (region.simulation) top.append(badge('SIMULATION · ' + region.simulation.signalLevel, region.simulation.signalLevel))
+    top.append(badge(region.signalLevel, region.signalLevel))
     row.append(top, element('p', '', 'Est. exposed ' + number(region.estimatedExposedPopulation) + ' · Assistance ' + number(region.activeAssistanceCount)), element('small', '', (region.dataMode === 'SIMULATION' ? 'SIMULATION · ' : '') + (region.snapshotStale ? 'Projection unavailable / stale' : 'Updated ' + time(region.updatedAt))))
     row.addEventListener('click', () => selectRegion(region.id))
     $('priorities').append(row)
@@ -97,7 +100,7 @@ function clearSelection() {
   $('selected-name').textContent = 'Choose a region'
   $('selected-signal').textContent = 'UNKNOWN'
   $('hierarchy').textContent = 'Select a polygon or a priority region.'
-  for (const id of ['region-metrics', 'population-note', 'hazard-list', 'shelter-summary', 'shelter-list', 'needs', 'sources']) $(id).replaceChildren()
+  for (const id of ['simulation-note', 'region-metrics', 'population-note', 'hazard-list', 'shelter-summary', 'shelter-list', 'needs', 'sources']) $(id).replaceChildren()
   $('routing').textContent = 'Responder inventory and regional routing status: UNKNOWN.'
 }
 async function selectRegion(id) {
@@ -110,6 +113,7 @@ async function selectRegion(id) {
     $('selected-name').textContent = detail.name
     $('hierarchy').textContent = detail.hierarchy.map((r) => r.name).join(' / ') || detail.administrativeLevel
     $('selected-signal').replaceWith(Object.assign(badge(detail.signalLevel, detail.signalLevel), { id: 'selected-signal' }))
+    $('simulation-note').textContent = detail.simulation ? 'Simulation: ' + detail.simulation.signalLevel + ' ' + detail.simulation.hazardTypes.join(', ') + ' · ' + detail.simulation.names.join(', ') + '. Official signal unchanged.' : ''
     $('region-metrics').replaceChildren()
     for (const [label, value] of [['Reference population', detail.population], ['Estimated exposed', detail.estimatedExposedPopulation], ['Active assistance', detail.assistance.activeAssistanceCount], ['Evacuating requests', detail.assistance.evacuatingCount], ['Safe request statuses', detail.assistance.safeCheckInCount], ['Unknown safety', detail.assistance.unknownSafetyCount]]) metric($('region-metrics'), label, value)
     $('population-note').textContent = (detail.dataMode === 'SIMULATION' ? 'SIMULATION / DEMO DATA. ' : '') + 'Population: ' + (detail.populationSource || 'UNKNOWN source') + ' / ' + (detail.populationReferenceYear || 'UNKNOWN year') + '. Exposure method: ' + detail.exposureEstimationMethod + '. Area-weighted estimates assume uniformly distributed population. No exact affected-person count. Projection: ' + time(detail.updatedAt) + (detail.snapshotStale ? ' · STALE' : '') + '. ' + detail.assistance.scope
