@@ -9,12 +9,21 @@ BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000').rstrip('/')
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://localhost:8002').rstrip('/')
 
 
+def forwardHeaders(targetUrl):
+    headers = {'Content-Type': 'application/json'}
+    commandUrl = f'{BACKEND_URL}/v1/command'
+    commandKey = os.getenv('COMMAND_API_KEY')
+    if commandKey and (targetUrl == commandUrl or targetUrl.startswith(commandUrl + '/') or targetUrl.startswith(commandUrl + '?')):
+        headers['X-Command-Key'] = commandKey
+    return headers
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=Path(__file__).parent, **kwargs)
 
     def forward(self, targetUrl: str, body: bytes | None = None):
-        headers = {'Content-Type': 'application/json'}
+        headers = forwardHeaders(targetUrl)
         request = Request(targetUrl, data=body, headers=headers, method=self.command)
         try:
             timeout = 120 if self.path.startswith('/api/command/') and self.command == 'POST' else 15

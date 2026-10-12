@@ -4,6 +4,7 @@ services:
       context: ./testocando/mapshit
     environment:
       BACKEND_URL: http://backend:8000
+      COMMAND_API_KEY: ${COMMAND_API_KEY:-}
       VALHALLA_URL: http://valhalla:8002
       DASHBOARD_HOME: 'true'
     ports:
@@ -27,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-evacuaid}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-evacuaid}
       REDIS_URL: redis://redis:6379/0
+      COMMAND_API_KEY: ${COMMAND_API_KEY:-}
       VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
       ALERT_PUSH_ENABLED: ${ALERT_PUSH_ENABLED:-true}
       PYTHONPATH: /app:/app/testocando

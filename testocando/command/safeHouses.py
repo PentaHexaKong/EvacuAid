@@ -11,9 +11,10 @@ from app.db.models import Shelter
 from app.db.session import get_session
 from app.models.shelter import ShelterStatus, ShelterResponse
 from app.services.shelterService import shelterResponse
+from command.access import requireCommandKey
 from command.aggregation import refreshSnapshots
 
-router = APIRouter(prefix='/v1/command/safe-houses', tags=['Command center'])
+router = APIRouter(prefix='/v1/command/safe-houses', tags=['Command center'], dependencies=[Depends(requireCommandKey)])
 
 
 class SafeHouseCreate(BaseModel):
