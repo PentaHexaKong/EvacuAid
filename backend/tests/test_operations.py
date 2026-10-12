@@ -16,7 +16,8 @@ from app.models.navigation import NavigationPreviewResponse, NavigationRoute
 
 
 @pytest_asyncio.fixture
-async def client(dbSession):
+async def client(dbSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     # Remove only this suite's own committed region fixtures, including leftovers
     # after interruption. dbSession already enforces a dedicated _test database.
     await dbSession.execute(text("DELETE FROM command_regions WHERE name='Test province' AND boundary_source='TEST'"))
@@ -28,7 +29,7 @@ async def client(dbSession):
     async def actor(): return user
     app.dependency_overrides[get_session]=database
     app.dependency_overrides[current_user]=actor
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as result:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as result:
         result.actor=user; result.application=app
         yield result
     await dbSession.execute(text("DELETE FROM command_regions WHERE name='Test province' AND boundary_source='TEST'"))
@@ -186,3 +187,11 @@ async def test_evidence_revision_during_calculation_rejects_stale_publication(cl
     assert response.status_code==409 and 'Evidence changed' in response.text
     await dbSession.rollback()
     assert (await dbSession.execute(select(OperationalRoute))).scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_command_operations_require_the_dashboard_key(client):
+    for method,path in [('get','/v1/command/operations/reports'),('get','/v1/command/operations/check-ins'),('get','/v1/command/operations/assistance'),('get','/v1/command/operations/routes')]:
+        assert (await getattr(client,method)(path,headers={'X-Command-Key':'wrong'})).status_code==401
+    # Citizen routes still use the signed-in user, not the dashboard key.
+    assert (await client.get('/v1/field-reports/mine',headers={'X-Command-Key':'wrong'})).status_code==200

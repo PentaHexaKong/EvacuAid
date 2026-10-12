@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
+
+from app.commandAccess import requireCommandKey
 from sqlalchemy import select, func, text
 from app.auth import current_user
 from app.db.session import get_session
@@ -29,18 +31,18 @@ async def check_in(payload: CheckInCreate, actor=Depends(current_user), session=
     return {'id': row.id, **row.payload, 'receivedAt': row.createdAt}
 
 
-@router.get('/v1/command/operations/reports')
+@router.get('/v1/command/operations/reports', dependencies=[Depends(requireCommandKey)])
 async def reports(session=Depends(get_session), limit: int=Query(50, ge=1, le=200), offset: int=Query(0, ge=0)):
     rows = (await session.execute(select(FieldReport).order_by(FieldReport.updatedAt.desc(), FieldReport.id).limit(limit).offset(offset))).scalars()
     return [service.report_response(row) for row in rows]
 
 
-@router.patch('/v1/command/operations/reports/{report_id}')
+@router.patch('/v1/command/operations/reports/{report_id}', dependencies=[Depends(requireCommandKey)])
 async def review(report_id: UUID, payload: Review, session=Depends(get_session)):
     return await service.review_report(session, report_id, payload)
 
 
-@router.get('/v1/command/operations/check-ins')
+@router.get('/v1/command/operations/check-ins', dependencies=[Depends(requireCommandKey)])
 async def check_ins(session=Depends(get_session)):
     # Latest observation per citizen, including delayed offline uploads; reception time is not observation time.
     rows = (await session.execute(text('''WITH latest AS (
@@ -53,7 +55,7 @@ async def check_ins(session=Depends(get_session)):
     return {'scope': 'Self-reported check-ins observed within 24 hours; not all affected people or independently verified safety.', 'regions': rows}
 
 
-@router.get('/v1/command/operations/assistance')
+@router.get('/v1/command/operations/assistance', dependencies=[Depends(requireCommandKey)])
 async def assistance(session=Depends(get_session), limit: int=Query(50, ge=1, le=200), offset: int=Query(0, ge=0)):
     rows = (await session.execute(select(AssistanceRequest, GovernmentCase).outerjoin(GovernmentCase, GovernmentCase.requestId==AssistanceRequest.id)
         .order_by(AssistanceRequest.updatedAt.desc(), AssistanceRequest.id).limit(limit).offset(offset))).all()
@@ -73,7 +75,7 @@ async def my_assistance(actor=Depends(current_user), session=Depends(get_session
              'assignedRoute':assigned.get(case.payload.get('assignedRouteId')) if case else None} for request,case in rows]
 
 
-@router.patch('/v1/command/operations/assistance/{request_id}')
+@router.patch('/v1/command/operations/assistance/{request_id}', dependencies=[Depends(requireCommandKey)])
 async def case_update(request_id: UUID, payload: CaseUpdate, session=Depends(get_session)):
     await session.execute(select(func.pg_advisory_xact_lock(172512)))
     await session.execute(select(func.pg_advisory_xact_lock(request_id.int & ((1 << 63)-1))))
@@ -96,18 +98,18 @@ async def case_update(request_id: UUID, payload: CaseUpdate, session=Depends(get
     return {'requestId': row.requestId, **row.payload, 'updatedAt': row.updatedAt}
 
 
-@router.post('/v1/command/operations/routes', status_code=201)
+@router.post('/v1/command/operations/routes', status_code=201, dependencies=[Depends(requireCommandKey)])
 async def set_route(payload: RouteSet, session=Depends(get_session)):
     return await service.save_route(session, payload)
 
 
-@router.get('/v1/command/operations/routes')
+@router.get('/v1/command/operations/routes', dependencies=[Depends(requireCommandKey)])
 async def routes(session=Depends(get_session), limit: int=Query(50, ge=1, le=200), offset: int=Query(0, ge=0)):
     rows = (await session.execute(select(OperationalRoute).order_by(OperationalRoute.updatedAt.desc(), OperationalRoute.id).limit(limit).offset(offset))).scalars()
     return [service.route_response(row) for row in rows]
 
 
-@router.post('/v1/command/operations/routes/{route_id}/publish')
+@router.post('/v1/command/operations/routes/{route_id}/publish', dependencies=[Depends(requireCommandKey)])
 async def publish(route_id: UUID, session=Depends(get_session)):
     row = await session.get(OperationalRoute, route_id)
     if row is None:
@@ -115,7 +117,7 @@ async def publish(route_id: UUID, session=Depends(get_session)):
     return await service.save_route(session, RouteSet(id=route_id, **row.payload), publish=True)
 
 
-@router.post('/v1/command/operations/routes/{route_id}/withdraw')
+@router.post('/v1/command/operations/routes/{route_id}/withdraw', dependencies=[Depends(requireCommandKey)])
 async def withdraw(route_id: UUID, session=Depends(get_session)):
     await session.execute(select(func.pg_advisory_xact_lock(172512)))
     row = await session.get(OperationalRoute, route_id, with_for_update=True)
