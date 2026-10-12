@@ -29,7 +29,8 @@ export function setupMapTools({ map, api, refresh }) {
     for (const item of [...disasters, ...items]) {
       if (item.kind === 'safeHouse' && !$('mock-mode').checked) continue
       const point = [item.latitude, item.longitude]
-      const text = (item.kind === 'hazard' ? 'SIMULATION · ' : 'MOCK · ') + item.name + (item.kind === 'hazard' ? ' · ' + item.hazardType + ' · ' + item.severity : ' · Safe house')
+      const word = value => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
+      const text = (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) : ' · Safe house')
       const layer = item.kind === 'hazard'
         ? L.circle(point, { radius: item.radiusM, color: '#9d4ac1', dashArray: '6 4', fillOpacity: .18 })
         : L.circleMarker(point, { radius: 9, color: '#9d4ac1', fillColor: '#fff', fillOpacity: 1, weight: 3 })
@@ -102,7 +103,8 @@ export function setupMapTools({ map, api, refresh }) {
     $('safe-house-fields').hidden = disaster
     $('mock-radius').disabled = !disaster
     $('placement-title').textContent = disaster ? 'Add mock disaster' : draft.mock ? 'Add mock safe house' : 'Add safe house'
-    $('placement-environment').textContent = disaster ? 'SIMULATION · sends a test alert to phones in the area' : draft.mock ? 'MOCK · browser only' : 'Operational · saves to backend'
+    $('placement-environment').textContent = disaster ? 'Simulation · sends a test alert to phones in the area' : draft.mock ? 'Mock · this browser only' : 'Operational · saves to backend'
+    $('placement-environment').className = 'badge' + (disaster || draft.mock ? ' is-simulation' : '')
     $('placement-coordinates').textContent = 'Location: ' + draft.latitude.toFixed(6) + ', ' + draft.longitude.toFixed(6)
     $('placement-dialog').showModal()
     $('placement-name').focus()
@@ -136,7 +138,7 @@ export function setupMapTools({ map, api, refresh }) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')
         items.push(item); persist(); await loadMocks()
         map.setView([item.latitude, item.longitude], Math.max(map.getZoom(), 13))
-        $('map-action-status').textContent = 'MOCK · ' + name + ' saved in this browser. Live backend unchanged.'
+        $('map-action-status').textContent = name + ' saved in this browser only. Live data unchanged.'
       } else {
         const { kind, ...payload } = item
         await api('safe-houses', { method: 'POST', body: JSON.stringify(payload) })
