@@ -123,7 +123,7 @@ function renderKpis() {
 function renderRegions() {
   layers.regions.clearLayers()
   $('priorities').replaceChildren()
-  $('region-count').textContent = state.regions.length + ' regions'
+  $('region-count').textContent = state.regions.length + (state.regions.length === 1 ? ' region' : ' regions')
   let selectedLayer = null
   for (const region of state.regions) {
     const level = region.simulation ? region.simulation.signalLevel : region.signalLevel
@@ -207,14 +207,12 @@ async function selectRegion(id) {
     evidenceRow($('sources'), 'Administrative boundary', sourceName(detail.boundarySource), detail.dataMode)
     evidenceRow($('sources'), 'Reference population', sourceName(detail.populationSource) + ' / ' + (detail.populationReferenceYear || 'Unknown'), detail.dataMode)
     const hazardGroups = new Map()
-    const freshnessOrder = ['REFERENCE', 'FRESH', 'STALE', 'EXPIRED', 'UNKNOWN']
     for (const hazard of detail.hazards) {
-      const key = JSON.stringify([hazard.hazardType, hazard.source, hazard.evidenceType, hazard.provenanceClass])
+      // Freshness and validity are part of the key so a fresh warning never hides behind an expired one.
+      const key = JSON.stringify([hazard.hazardType, hazard.source, hazard.evidenceType, hazard.provenanceClass, hazard.freshness, hazard.expiresAt])
       const group = hazardGroups.get(key)
-      if (group) {
-        group.count++
-        if (freshnessOrder.indexOf(hazard.freshness || 'UNKNOWN') > freshnessOrder.indexOf(group.freshness || 'UNKNOWN')) group.freshness = hazard.freshness
-      } else hazardGroups.set(key, { ...hazard, count: 1 })
+      if (group) group.count++
+      else hazardGroups.set(key, { ...hazard, count: 1 })
     }
     for (const hazard of hazardGroups.values()) {
       const kind = { BASELINE_HAZARD: 'susceptibility', ACTIVE_WARNING: 'warning', CRITICAL_HAZARD: 'critical hazard', OBSERVATION: 'observation', CONFIRMED_CLOSURE: 'closure' }[hazard.evidenceType] || readable(hazard.evidenceType).toLowerCase()
@@ -250,7 +248,8 @@ async function refresh({ fitView = true } = {}) {
     renderRegions(); renderKpis()
     await mapTools.loadReal()
     if (generation !== state.generation) return
-    const centroids = rows.filter(region => region.centroid?.type === 'Point' && region.centroid.coordinates?.length >= 2).map(region => [region.centroid.coordinates[1], region.centroid.coordinates[0]])
+    const located = rows.filter(region => region.centroid?.type === 'Point' && region.centroid.coordinates?.length >= 2)
+    const centroids = located.map(region => [region.centroid.coordinates[1], region.centroid.coordinates[0]])
     if (fitView && centroids.length) {
       const median = (values) => {
         const sorted = values.slice().sort((a, b) => a - b)
@@ -260,9 +259,11 @@ async function refresh({ fitView = true } = {}) {
       const latitude = median(centroids.map(([lat]) => lat))
       const longitude = median(centroids.map(([, lng]) => lng))
       // ponytail: Outlying islands are left out of the initial frame on purpose.
-      const mainland = centroids.filter(([lat, lng]) => Math.abs(lat - latitude) <= 0.25 && Math.abs(lng - longitude) <= 0.25)
+      const mainland = located.filter(region => Math.abs(region.centroid.coordinates[1] - latitude) <= 0.25 && Math.abs(region.centroid.coordinates[0] - longitude) <= 0.25)
+      // Centroids choose which regions count; their polygons set the frame, so one large region still fits.
+      const bounds = (mainland.length >= 3 ? mainland : located).reduce((all, region) => all.extend(L.geoJSON(region.geometry).getBounds()), L.latLngBounds([]))
       map.invalidateSize() // the container reaches its CSS height after Leaflet first measured it
-      map.fitBounds(L.latLngBounds(mainland.length >= 3 ? mainland : centroids), { padding: [24, 24], maxZoom: 13 })
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 13 })
     }
     else if (fitView && !rows.length) map.setView([-2, 118], 5)
     const demo = $('dataMode').value === 'SIMULATION'
