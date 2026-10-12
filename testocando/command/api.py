@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models.hazard import HazardType
+from command.access import requireCommandKey
 from command.models import Region, RegionalOperationalSnapshot
 from command.schemas import AdministrativeLevel, AssistanceAggregate, HazardSummary, RegionDetail, RegionSummary, ShelterSummary, SignalLevel
 
-router = APIRouter(prefix='/v1/command',tags=['Command center'])
+router = APIRouter(prefix='/v1/command',tags=['Command center'],dependencies=[Depends(requireCommandKey)])
 
 
 def readProjection(region, payload, geometry, centroid):

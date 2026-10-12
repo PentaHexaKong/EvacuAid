@@ -277,13 +277,14 @@ async def test_registration_and_refresh_rate_limits(client, action, count, body)
 
 
 @pytest.mark.asyncio
-async def test_public_health_reference_and_dashboard_exception(dbSession, client):
+async def test_public_health_reference_and_dashboard_exception(dbSession, client, monkeypatch):
     from app.main import app
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as public:
         assert (await public.get('/')).status_code == 200
         preflight = await public.options('/v1/auth/login', headers={'Origin':'https://untrusted.example','Access-Control-Request-Method':'POST'})
         assert 'access-control-allow-origin' not in preflight.headers
-    # Combined command API is intentionally public, including for GOVERNMENT.
+    # The command API answers only the dashboard proxy's X-Command-Key; a user token, even GOVERNMENT, is not enough.
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     from command.api import router as command_router
     gov = await account(client,'government@example.com')
     user = await dbSession.get(User,uuid.UUID(gov['user']['id']))
@@ -296,9 +297,10 @@ async def test_public_health_reference_and_dashboard_exception(dbSession, client
     command_app.dependency_overrides[get_session] = database
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=command_app),base_url='http://test') as public:
         for credential in ({},headers(gov)):
-            response = await public.get('/v1/command/regions',headers=credential)
-            assert response.status_code == 200
-            assert 'password_hash' not in response.text and 'government@example.com' not in response.text
+            assert (await public.get('/v1/command/regions',headers=credential)).status_code == 401
+        response = await public.get('/v1/command/regions',headers={'X-Command-Key':'test-command-key'})
+        assert response.status_code == 200
+        assert 'password_hash' not in response.text and 'government@example.com' not in response.text
 
 
 @pytest.mark.asyncio

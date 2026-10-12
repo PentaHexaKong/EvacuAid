@@ -28,6 +28,9 @@ def shelterPayload(**values):
     return ShelterCreate(name='SYNTHETIC_TEST_ENTRANCE', latitude=0, longitude=0.01, shelterType='TEST', status='OPEN', source='SYNTHETIC_TEST', **values)
 
 
+COMMAND_KEY = {'X-Command-Key': 'test-command-key'}
+
+
 def createApi(db, dashboard=False):
     api = FastAPI()
     api.include_router(sheltersRouter)
@@ -77,19 +80,21 @@ async def testCreateAndNearbyIncludeEntrance(dbSession, entrance):
     {'entranceNote': 'North gate\nRamp'},
     {'entranceNote': 'North gate\rRamp'},
 ])
-async def testInvalidEntranceReturns422(dbSession, path, invalid):
+async def testInvalidEntranceReturns422(dbSession, path, invalid, monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY', 'test-command-key')
     payload = shelterPayload().model_dump(mode='json')
     if path.endswith('safe-houses'):
         payload = {'id': '00000000-0000-4000-8000-000000000007', 'name': 'SYNTHETIC_TEST_ENTRANCE', 'latitude': 0, 'longitude': 0.01}
     payload.update(invalid)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=createApi(dbSession, dashboard=path.endswith('safe-houses'))), base_url='http://test') as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=createApi(dbSession, dashboard=path.endswith('safe-houses'))), base_url='http://test', headers=COMMAND_KEY) as client:
         assert (await client.post(path, json=payload)).status_code == 422
 
 
 @pytest.mark.asyncio
-async def testDashboardPassesEntranceThrough(dbSession):
+async def testDashboardPassesEntranceThrough(dbSession, monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY', 'test-command-key')
     payload = {'id': '00000000-0000-4000-8000-000000000007', 'name': 'SYNTHETIC_TEST_ENTRANCE', 'latitude': 0, 'longitude': 0.01, **ENTRANCE}
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=createApi(dbSession, dashboard=True)), base_url='http://test') as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=createApi(dbSession, dashboard=True)), base_url='http://test', headers=COMMAND_KEY) as client:
         response = await client.post('/v1/command/safe-houses', json=payload)
         assert response.status_code == 201
         for key, value in ENTRANCE.items():

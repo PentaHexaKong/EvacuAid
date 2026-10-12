@@ -266,6 +266,7 @@ cat > .env <<EOF
 POSTGRES_USER=evacuaid
 POSTGRES_DB=evacuaid
 POSTGRES_PASSWORD=$(openssl rand -hex 32)
+COMMAND_API_KEY=$(openssl rand -hex 32)
 VALHALLA_URL=http://valhalla:8002
 ALERT_PUSH_ENABLED=true
 EOF
@@ -276,6 +277,8 @@ sed -i "s/^AUTH_JWT_SECRET=.*/AUTH_JWT_SECRET=$(openssl rand -hex 32)/" backend/
 ~~~
 
 These commands generate new secrets without printing them.
+
+COMMAND_API_KEY is required for the dashboard to load data. Generate it with `openssl rand -hex 32` and keep it in the root .env used by Compose.
 
 Edit the backend configuration:
 

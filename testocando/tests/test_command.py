@@ -236,7 +236,8 @@ async def testSimulationExcludesLiveData(commandSession):
 
 
 @pytest.mark.asyncio
-async def testAPIOpensWithoutTokenFiltersAndNoPII(commandSession):
+async def testAPIRequiresKeyFiltersAndNoPII(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     await importRegions(commandSession,regionDocument())
     user=User(name='API PRIVATE CITIZEN',phone='API PRIVATE PHONE',location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=datetime.now(timezone.utc))
     commandSession.add(user); await commandSession.flush()
@@ -248,8 +249,8 @@ async def testAPIOpensWithoutTokenFiltersAndNoPII(commandSession):
     app.dependency_overrides[get_session]=override
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
-            assert (await client.get('/v1/command/regions')).status_code==200
-            headers={}
+            headers={'X-Command-Key':'test-command-key'}
+            assert (await client.get('/v1/command/regions',headers=headers)).status_code==200
             response=await client.get('/v1/command/regions?administrativeLevel=VILLAGE&signalLevel=UNKNOWN',headers=headers)
             assert response.status_code==200
             assert response.headers['cache-control']=='no-store'
@@ -267,6 +268,46 @@ async def testAPIOpensWithoutTokenFiltersAndNoPII(commandSession):
             assert (await client.get('/v1/command/regions?administrativeLevel=BAD',headers=headers)).status_code==422
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def testCommandKeyIsRequired(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+            for headers in [{},{'X-Command-Key':'wrong-key'}]:
+                response=await client.get('/v1/command/regions',headers=headers)
+                assert response.status_code==401
+                assert response.json()['detail']=='Command API key required'
+            response=await client.post('/v1/command/safe-houses',json={'id':str(uuid.uuid4()),'name':'Government safe house','latitude':.005,'longitude':.005})
+            assert response.status_code==401
+            assert response.json()['detail']=='Command API key required'
+            monkeypatch.delenv('COMMAND_API_KEY',raising=False)
+            response=await client.get('/v1/command/regions',headers={'X-Command-Key':'test-command-key'})
+            assert response.status_code==503
+            assert response.json()['detail']=='Command API is not configured'
+            monkeypatch.setenv('COMMAND_API_KEY','')
+            assert (await client.get('/v1/command/regions',headers={'X-Command-Key':'test-command-key'})).status_code==503
+    finally:
+        app.dependency_overrides.clear()
+
+
+def testForwardHeadersOnlyIncludeCommandKeyForCommandURLs(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    spec=importlib.util.spec_from_file_location('commandProxy',Path(__file__).parents[1]/'mapshit'/'server.py')
+    server=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(server)
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    for path in ['/v1/command','/v1/command?limit=1','/v1/command/regions']:
+        assert server.forwardHeaders(server.BACKEND_URL+path)=={'Content-Type':'application/json','X-Command-Key':'test-command-key'}
+    for targetUrl in [server.BACKEND_URL+path for path in ['/v1/external-data/status','/health','/v1/navigation/context','/v1/command-other']]+[server.VALHALLA_URL+'/route','http://other-backend/v1/command/regions']:
+        assert server.forwardHeaders(targetUrl)=={'Content-Type':'application/json'}
+    monkeypatch.delenv('COMMAND_API_KEY',raising=False)
+    assert server.forwardHeaders(server.BACKEND_URL+'/v1/command/regions')=={'Content-Type':'application/json'}
 
 
 @pytest.mark.asyncio
@@ -337,13 +378,14 @@ async def testStaleShelterAndMissingLocationsStayUnknown(commandSession):
 
 
 @pytest.mark.asyncio
-async def testSafeHouseCreatePersistsRefreshesAndRetries(commandSession):
+async def testSafeHouseCreatePersistsRefreshesAndRetries(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     await importRegions(commandSession,regionDocument())
     async def override():
         yield commandSession
     app.dependency_overrides[get_session]=override
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
             payload={'id':str(uuid.uuid4()),'name':' Government safe house ','latitude':.005,'longitude':.005,
                 'status':'OPEN','capacity':50,'verifiedNow':True}
             response=await client.post('/v1/command/safe-houses',json=payload)
@@ -371,13 +413,14 @@ async def testSafeHouseCreatePersistsRefreshesAndRetries(commandSession):
 
 
 @pytest.mark.asyncio
-async def testUnverifiedSafeHouseRemainsUnknown(commandSession):
+async def testUnverifiedSafeHouseRemainsUnknown(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     await importRegions(commandSession,regionDocument())
     async def override():
         yield commandSession
     app.dependency_overrides[get_session]=override
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test') as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
             response=await client.post('/v1/command/safe-houses',json={'id':str(uuid.uuid4()),'name':'Unverified place','latitude':.005,'longitude':.005,'status':'OPEN','capacity':20})
             assert response.status_code==201
             result=await snapshot(commandSession)
