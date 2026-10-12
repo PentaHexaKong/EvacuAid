@@ -478,6 +478,8 @@
   "alertHazardLandslide": "Tanah longsor",
   "alertHazardWeather": "Cuaca ekstrem",
   "alertHazardOther": "Bahaya",
+  "alertSimulationTag": "Simulasi",
+  "alertSimulationNotice": "Ini simulasi, bukan peringatan resmi.",
   "alertAreaYours": "Areamu",
   "alertUntil": "Sampai {{time}}",
   "alertBody": "Peringatan resmi {{hazard}} di {{area}}. Tingkat: {{level}}.",

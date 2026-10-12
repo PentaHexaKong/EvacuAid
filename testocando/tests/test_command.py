@@ -555,6 +555,7 @@ async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch
     from geoalchemy2.shape import to_shape
     from app.services import alertService, alertSimulation
     monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')
     document=regionDocument()
     other=copy.deepcopy(document['features'][-1])
     other['properties'].update(code='REFERENCE-2-other',name='Other village')
@@ -608,6 +609,12 @@ async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch
                 dLon=math.radians(longitude-payload['longitude'])
                 distance=6371000*2*math.asin(math.sqrt(math.sin(dLat/2)**2+math.cos(lat1)*math.cos(lat2)*math.sin(dLon/2)**2))
                 assert abs(distance-payload['radiusM'])<payload['radiusM']*.01
+            expiresAt=datetime.now(timezone.utc)+timedelta(seconds=30)
+            row.validUntil=expiresAt
+            await commandSession.flush()
+            await refreshSnapshots(commandSession)
+            snapshot=(await client.get('/v1/command/regions/'+village['id'])).json()
+            assert datetime.fromisoformat(snapshot['snapshotExpiresAt'].replace('Z','+00:00'))<=expiresAt
             replay=await client.post(url,json={**payload,'name':'Updated drill','radiusM':350})
             assert replay.status_code==201
             assert len((await client.get(url)).json())==1
@@ -630,6 +637,7 @@ async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch
 @pytest.mark.asyncio
 async def testMockDisasterValidationAndKey(commandSession,monkeypatch):
     monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')
     async def override():
         yield commandSession
     app.dependency_overrides[get_session]=override
@@ -639,9 +647,15 @@ async def testMockDisasterValidationAndKey(commandSession,monkeypatch):
             payload={'id':str(uuid.uuid4()),'name':'Drill','hazardType':'FLOOD','latitude':.005,'longitude':.005,'radiusM':300,'severity':'CRITICAL'}
             for method,path in [('POST',url),('GET',url),('DELETE',url),('DELETE',url+'/'+payload['id'])]:
                 assert (await client.request(method,path,json=payload if method=='POST' else None)).status_code==401
-            for invalid in [{'radiusM':49},{'name':'  '},{'radiusM':300.5},{'radiusM':True},{'radiusM':50001},{'latitude':91},{'longitude':181},{'extra':True}]:
+            for invalid in [{'radiusM':49},{'name':'  '},{'radiusM':300.5},{'radiusM':True},{'radiusM':50001},{'latitude':91},{'longitude':181},{'latitude':0,'longitude':179.999,'radiusM':300},{'latitude':89.999,'longitude':0,'radiusM':300},{'extra':True}]:
                 response=await client.post(url,json={**payload,**invalid},headers={'X-Command-Key':'test-command-key'})
                 assert response.status_code==422, response.text
+            monkeypatch.delenv('COMMAND_MOCK_ALERTS_ENABLED',raising=False)
+            response=await client.post(url,json=payload,headers={'X-Command-Key':'test-command-key'})
+            assert response.status_code==403
+            assert response.json()=={'detail':'Mock disasters are disabled on this server. Set COMMAND_MOCK_ALERTS_ENABLED=1 to allow test alerts.'}
+            assert (await client.get(url,headers={'X-Command-Key':'test-command-key'})).status_code==200
+            assert (await client.delete(url,headers={'X-Command-Key':'test-command-key'})).status_code==204
     finally:
         app.dependency_overrides.clear()
 

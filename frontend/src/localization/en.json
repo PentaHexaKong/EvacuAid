@@ -478,6 +478,8 @@
   "alertHazardLandslide": "Landslide",
   "alertHazardWeather": "Extreme weather",
   "alertHazardOther": "Hazard",
+  "alertSimulationTag": "Simulation",
+  "alertSimulationNotice": "This is a simulation, not an official warning.",
   "alertAreaYours": "Your area",
   "alertUntil": "Until {{time}}",
   "alertBody": "Official warning for {{hazard}} in {{area}}. Level: {{level}}.",

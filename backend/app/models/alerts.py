@@ -17,6 +17,7 @@ class AlertItem(BaseModel):
     level: Literal['waspada', 'siaga', 'awas']
     hazardType: str
     source: str
+    simulation: bool = False
     area: str | None
     issuedAt: datetime | None
     validUntil: datetime | None

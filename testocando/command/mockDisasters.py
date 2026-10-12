@@ -1,9 +1,11 @@
+import os
 from datetime import datetime, timezone
+from math import cos, radians
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,14 @@ class MockDisasterCreate(BaseModel):
     def cleanName(cls, value):
         return value.strip() if isinstance(value, str) else value
 
+    @model_validator(mode='after')
+    def validateCircle(self):
+        degLat = self.radiusM / 111320
+        degLon = degLat / max(cos(radians(self.latitude)), 1e-6)
+        if abs(self.latitude) + degLat >= 90 or abs(self.longitude) + degLon >= 180:
+            raise ValueError('Mock disaster circle must not cross the antimeridian or a pole.')
+        return self
+
 
 class MockDisasterResponse(MockDisasterCreate):
     expiresAt: datetime
@@ -52,6 +62,8 @@ def mockResponse(row):
 
 @router.post('', response_model=MockDisasterResponse, status_code=201)
 async def addMockDisaster(payload: MockDisasterCreate, session: AsyncSession = Depends(get_session)):
+    if os.environ.get('COMMAND_MOCK_ALERTS_ENABLED') != '1':
+        raise HTTPException(403, 'Mock disasters are disabled on this server. Set COMMAND_MOCK_ALERTS_ENABLED=1 to allow test alerts.')
     await session.execute(select(func.pg_advisory_xact_lock(173401, 1)))
     row = await alertSimulation.place(session, sourceId='command-mock-' + str(payload.id),
         level={'WATCH': 'waspada', 'ELEVATED': 'siaga', 'CRITICAL': 'awas'}[payload.severity],

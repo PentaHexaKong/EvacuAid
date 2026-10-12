@@ -23,6 +23,11 @@ test('mapper falls back for unknown hazard, null area and null times', () => {
   expect(view).toMatchObject({ title: 'alertHazardOther', area: 'Your area', issued: null, window: null });
   expect(view.body).toBe('Official warning for hazard in your area. Level: Alert.');
   expect(view.steps).toEqual(['alertStepSiaga1', 'alertStepSiaga2', 'alertStepSiaga3']);
+  expect(view.simulation).toBe(false);
+  const simulation = mapAlert({ ...alertItems[0], simulation: true }, t);
+  expect(simulation.simulation).toBe(true);
+  expect(simulation.area.startsWith(en.alertSimulationTag + ' · ')).toBe(true);
+  expect(simulation.body.startsWith(en.alertSimulationNotice + ' ')).toBe(true);
 });
 test('mapper renders source, coordinates, WIB issue and expiry', () => {
   expect(mapAlert(alertItems[0], t, Date.parse('2026-09-16T16:59:00Z'))).toMatchObject({ title: 'alertHazardWeather', issued: '17 Sep 2026 · 08:30 WIB', window: 'Until 17 Sep 2026 · 11:30 WIB', coordinate: { latitude: -6.2665, longitude: 106.809 } });

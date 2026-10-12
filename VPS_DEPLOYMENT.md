@@ -279,6 +279,7 @@ sed -i "s/^AUTH_JWT_SECRET=.*/AUTH_JWT_SECRET=$(openssl rand -hex 32)/" backend/
 These commands generate new secrets without printing them.
 
 COMMAND_API_KEY is required for the dashboard to load data. Generate it with `openssl rand -hex 32` and keep it in the root .env used by Compose.
+COMMAND_MOCK_ALERTS_ENABLED sends real test alerts to phones in the drawn area; set it to 1 only for a demo.
 
 Edit the backend configuration:
 

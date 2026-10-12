@@ -208,7 +208,7 @@ async def refreshSnapshots(session):
         overlays = regionMocks.get(region.id, [])
         overlay = SimulationOverlay(signalLevel=min((item.metadata['severity'] for item in overlays), key=SIGNAL_ORDER.get),
             hazardTypes=sorted({item.hazardType.value for item in overlays}), names=sorted({item.metadata['name'] for item in overlays})) if overlays else None
-        expiry = min([now + timedelta(minutes=5)] + [item.validUntil for item,_,_ in regionEvidence if item.active(now) and item.validUntil])
+        expiry = min([now + timedelta(minutes=5)] + [item.validUntil for item,_,_ in regionEvidence if item.active(now) and item.validUntil] + [item.validUntil for item in overlays if item.validUntil])
         detail = RegionDetail(id=region.id, code=region.code, name=region.name, administrativeLevel=region.administrativeLevel,
             parentRegionId=region.parentId, geometry={}, centroid={},
             population=region.population, populationReferenceYear=region.populationReferenceYear, populationSource=region.populationSource,
