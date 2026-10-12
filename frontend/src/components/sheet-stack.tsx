@@ -23,6 +23,6 @@ function SheetLayout(props: LayoutProps) {
 
 export function SheetStack({ profile = false }: { profile?: boolean }) {
   const { t } = useTranslation();
-  return <SheetHeaderContext.Provider value={true}><Stack screenLayout={SheetLayout} screenOptions={({ route }) => ({ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, scrollEdgeEffects: { top: 'soft' }, title: t(route.name === 'name' ? 'editName' : 'alertDetailTitle'), headerTitle: route.name === 'index' ? t(profile ? 'profileTitle' : 'alertsTitle') : '', headerTitleAlign: 'center', headerTitleStyle: { fontWeight: '600' }, headerShadowVisible: false, headerTintColor: colors.ink, headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } })}>
+  return <SheetHeaderContext.Provider value={true}><Stack screenLayout={SheetLayout} screenOptions={({ route }) => ({ headerTransparent: true, headerStyle: { backgroundColor: 'transparent' }, scrollEdgeEffects: { top: 'soft' }, title: t(route.name === 'name' ? 'editName' : route.name === 'delete-account' ? 'deleteAccount' : 'alertDetailTitle'), headerTitle: route.name === 'index' ? t(profile ? 'profileTitle' : 'alertsTitle') : '', headerTitleAlign: 'center', headerTitleStyle: { fontWeight: '600' }, headerShadowVisible: false, headerTintColor: colors.ink, headerBackButtonDisplayMode: 'minimal', contentStyle: { backgroundColor: colors.canvas } })}>
   </Stack></SheetHeaderContext.Provider>;
 }

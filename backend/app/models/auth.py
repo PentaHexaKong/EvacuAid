@@ -29,6 +29,10 @@ class Login(AuthModel):
     _email = field_validator('email')(normalize_email)
 
 
+class DeleteAccount(AuthModel):
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
 class Register(Login):
     password: SecretStr = Field(min_length=12, max_length=128)
     name: str | None = Field(default=None, max_length=60)

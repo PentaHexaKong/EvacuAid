@@ -299,3 +299,29 @@ async def test_public_health_reference_and_dashboard_exception(dbSession, client
             response = await public.get('/v1/command/regions',headers=credential)
             assert response.status_code == 200
             assert 'password_hash' not in response.text and 'government@example.com' not in response.text
+
+
+@pytest.mark.asyncio
+async def test_delete_account_needs_password_and_removes_everything(client, dbSession):
+    tokens = await account(client, 'leaving@example.com')
+    user_id = uuid.UUID(tokens['user']['id'])
+    wrong = await client.request('DELETE', '/v1/auth/me', headers=headers(tokens), json={'password':'not-the-password'})
+    assert wrong.status_code == 403 and await dbSession.get(User, user_id) is not None
+    assert (await client.request('DELETE', '/v1/auth/me', json={'password':PASSWORD})).status_code in (401, 403)
+    assert (await client.request('DELETE', '/v1/auth/me', headers=headers(tokens), json={'password':PASSWORD})).status_code == 204
+    dbSession.expire_all()
+    assert await dbSession.get(User, user_id) is None
+    assert await dbSession.scalar(select(func.count()).select_from(RefreshToken).where(RefreshToken.user_id == user_id)) == 0
+    assert (await client.get('/v1/auth/me', headers=headers(tokens))).status_code == 401
+    assert (await client.post('/v1/auth/login', json={'email':'leaving@example.com', 'password':PASSWORD})).status_code == 401
+    assert (await client.post('/v1/auth/refresh', json={'refresh_token':tokens['refresh_token']})).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_last_administrator_cannot_delete_account(client, dbSession):
+    tokens = await account(client, 'boss@example.com')
+    user = await dbSession.get(User, uuid.UUID(tokens['user']['id']))
+    user.role = 'ADMIN'
+    await dbSession.commit()
+    response = await client.request('DELETE', '/v1/auth/me', headers=headers(tokens), json={'password':PASSWORD})
+    assert response.status_code == 409 and await dbSession.get(User, user.id) is not None

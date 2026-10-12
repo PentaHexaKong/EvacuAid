@@ -161,3 +161,22 @@ async def logout(session, raw):
         await lock_family(session, token.family_id)
         await revoke_family(session, token.family_id)
         await session.commit()
+
+
+async def delete_account(session, user, password):
+    try:
+        await password_work(hasher.verify, user.password_hash, password)
+    except VerificationError:
+        raise HTTPException(403, 'Incorrect password') from None
+    from app.services import buddyRequestService
+    if user.role == 'ADMIN':
+        # Same lock as role changes, so two admins cannot delete themselves at once.
+        await session.execute(text('SELECT pg_advisory_xact_lock(734191102)'))
+        other = (await session.execute(select(User.id).where(User.role == 'ADMIN', User.id != user.id).limit(1))).scalar_one_or_none()
+        if other is None:
+            raise HTTPException(409, 'Cannot delete the last administrator')
+    await buddyRequestService.lock_users(session, [user.id])
+    if await buddyRequestService.occupied(session, user.id):
+        raise HTTPException(409, 'Finish or cancel active assistance before deleting your account')
+    await session.delete(user)  # every table keyed to users cascades, refresh tokens included
+    await session.commit()

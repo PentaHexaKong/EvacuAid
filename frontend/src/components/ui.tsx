@@ -48,11 +48,12 @@ export function SectionHeading({ number, title, subtitle }: { number: string; ti
 }
 
 
-type ButtonVariant = 'primary' | 'gradient' | 'secondary' | 'light' | 'ghostLight';
+type ButtonVariant = 'primary' | 'gradient' | 'secondary' | 'light' | 'ghostLight' | 'destructive';
 
 function buttonPalette(variant: ButtonVariant, pressed: boolean, focused: boolean) {
   if (variant === 'light') return { background: pressed ? colors.selected : colors.surface, text: colors.primary, spinner: colors.primary, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
   if (variant === 'ghostLight') return { background: pressed ? 'rgba(255,255,255,0.16)' : 'transparent', text: colors.surface, spinner: colors.surface, border: focused ? colors.surface : 'rgba(255,255,255,0.6)', borderWidth: 1.5 };
+  if (variant === 'destructive') return { background: pressed ? colors.ink : colors.critical, text: colors.surface, spinner: colors.surface, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
   if (variant === 'secondary') return { background: pressed ? colors.selected : 'transparent', text: colors.primary, spinner: colors.primary, border: focused ? colors.ink : colors.borderStrong, borderWidth: 1.5 };
   return { background: pressed ? colors.ink : colors.primary, text: colors.surface, spinner: colors.surface, border: focused ? colors.ink : 'transparent', borderWidth: 2 };
 }

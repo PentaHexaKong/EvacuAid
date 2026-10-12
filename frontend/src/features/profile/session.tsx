@@ -13,9 +13,10 @@ type SessionContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string, upgradeGuest?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 };
 const Context = createContext<SessionContextValue>({ token:null,user:null,account:null,guest:false,status:'idle',error:null,errorKind:null,
-  ensureGuest:async()=>{},continueAsGuest:async()=>{},login:async()=>{},register:async()=>{},signOut:async()=>{} });
+  ensureGuest:async()=>{},continueAsGuest:async()=>{},login:async()=>{},register:async()=>{},signOut:async()=>{},deleteAccount:async()=>{} });
 // Keep the existing hook name so feature callers all share the authenticated session.
 export const useGuestSession = () => useContext(Context);
 export const useAuthSession = useGuestSession;
@@ -50,6 +51,7 @@ export function GuestSessionProvider({ children }: { children: ReactNode }) {
   return <Context.Provider value={{ token:value?.access_token ?? null,user,account:value?.user ?? null,guest:!!value && authSession.isGuest(),status,error,errorKind,
     ensureGuest,continueAsGuest:()=>run(authSession.startGuest,true),login:(email,password)=>run(()=>authSession.authenticate('login',email,password),true),
     register:(email,password,name,upgrade)=>run(()=>authSession.authenticate('register',email,password,name,upgrade),true),
-    signOut:async()=>{ await authSession.signOut();setValue(null);setUser(null);setStatus('signed-out');setError(null); }
+    signOut:async()=>{ await authSession.signOut();setValue(null);setUser(null);setStatus('signed-out');setError(null); },
+    deleteAccount:async(password)=>{ await authSession.deleteAccount(password);setValue(null);setUser(null);setStatus('signed-out');setError(null); }
   }}>{children}</Context.Provider>;
 }

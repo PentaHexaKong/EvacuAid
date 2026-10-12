@@ -22,6 +22,7 @@ import IconRefresh from '@tabler/icons-react-native/IconRefresh';
 import IconSelector from '@tabler/icons-react-native/IconSelector';
 import IconTextCaption from '@tabler/icons-react-native/IconTextCaption';
 import IconTextSize from '@tabler/icons-react-native/IconTextSize';
+import IconTrash from '@tabler/icons-react-native/IconTrash';
 import IconLogout from '@tabler/icons-react-native/IconLogout';
 import IconUser from '@tabler/icons-react-native/IconUser';
 import IconUsers from '@tabler/icons-react-native/IconUsers';
@@ -191,6 +192,7 @@ export function ProfileScreen() {
       <SettingsRow first Icon={IconDatabase} label={t('dataSources')} onPress={() => Alert.alert(t('dataSources'), t('dataSourcesBody'))} />
       <SettingsRow Icon={IconDatabase} label={t('offlineTitle')} onPress={() => router.push('/offline-regions')} />
       <SettingsRow Icon={IconLogout} label={t(session.guest ? 'guestLeave' : 'authSignOut')} destructive={!session.guest} onPress={confirmSignOut} />
+      {!session.guest && session.account && <SettingsRow Icon={IconTrash} label={t('deleteAccount')} destructive onPress={() => router.push('/profile/delete-account')} />}
     </View>
     {preferencesError && <View style={{ gap: 8, marginTop: 16 }}><AppText accessibilityRole="alert" style={{ color: colors.critical }}>{t('preferencesSyncError')}</AppText><ActionButton variant="secondary" label={t('retry')} onPress={() => void retryPreferences()} /></View>}
     <View style={{ gap: 4, marginTop: 28 }}>

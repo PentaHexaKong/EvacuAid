@@ -1,12 +1,24 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiRequest, type ApiError } from './api';
+import { PREFERENCES_KEY } from '@/features/preferences/storage';
 
 export const AUTH_KEY = 'evacuaid.auth-session.v1';
 export const GUEST_TOKEN_KEY = 'evacuaid.guest-token.v1';
 export type AuthUser = { id: string; email: string | null; name: string | null; role: 'CITIZEN' | 'RESPONDER' | 'GOVERNMENT' | 'ADMIN' };
 export type AuthTokens = { access_token: string; refresh_token: string; expires_in: number; refresh_expires_in: number; user: AuthUser };
 type Saved = { refreshToken: string; userId: string };
+
+// A new person on this phone sees setup again; "completed" is stored per device, not per account. Other device preferences stay.
+async function forgetPreviousPerson(restartSetup = true) {
+  await AsyncStorage.multiRemove(['evacuaid.profile.v1','evacuaid.onboarding-needs.v1']);
+  if (!restartSetup) return;
+  const saved = await AsyncStorage.getItem(PREFERENCES_KEY);
+  if (saved === null) return;
+  let kept: Record<string, unknown> = {};
+  try { kept = JSON.parse(saved) ?? {}; } catch {}
+  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify({ ...kept, completed: false }));
+}
 
 const signedOut = () => Object.assign(new Error('Please sign in again.'), { status: 401, kind: 'http' } satisfies Partial<ApiError>);
 
@@ -119,7 +131,7 @@ export function createAuthSession() {
     if (version !== generation) throw signedOut();
     const created = await apiRequest<{ access_token: string; user: { id: string; name: string | null } }>('/v1/guest-sessions', undefined, { method: 'POST' });
     try {
-      await AsyncStorage.multiRemove(['evacuaid.profile.v1','evacuaid.onboarding-needs.v1']);
+      await forgetPreviousPerson();
       await storage(() => SecureStore.setItemAsync(GUEST_TOKEN_KEY, created.access_token, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }));
     } catch (cause) {
       await apiRequest<void>('/v1/guest-sessions/current', undefined, { method: 'DELETE', headers: { Authorization: `Bearer ${created.access_token}` } }).catch(() => {});
@@ -138,7 +150,7 @@ export function createAuthSession() {
     const value = await apiRequest<AuthTokens>('/v1/auth/'+mode, guest ?? undefined,
       { method: 'POST', body: JSON.stringify({ email: email.trim(), password, ...(mode === 'register' && name?.trim() ? { name: name.trim() } : {}) }) });
     if (!upgradeGuest) {
-      try { await AsyncStorage.multiRemove(['evacuaid.profile.v1','evacuaid.onboarding-needs.v1']); }
+      try { await forgetPreviousPerson(mode === 'register'); }
       catch (cause) { await revoke(value.refresh_token).catch(()=>{}); throw cause; }
     }
     knownTokens.clear();
@@ -157,13 +169,21 @@ export function createAuthSession() {
       if (current) await revoke(current.refresh_token).catch(() => {});
     }
   };
+  const deleteAccount = async (password: string) => {
+    if (!tokens || guest) throw signedOut();
+    // /v1/auth/* skips the API client's token renewal, so renew here before the one request that needs a live token.
+    const token = await current(tokens.access_token);
+    await apiRequest<void>('/v1/auth/me', token, { method: 'DELETE', body: JSON.stringify({ password }) });
+    await signOut();
+    await forgetPreviousPerson();
+  };
   const current = async (requested: string) => {
     if (!tokens || !knownTokens.has(requested)) throw signedOut();
     if (expiresAt <= Date.now() + 30000) await refresh();
     if (!tokens) throw signedOut();
     return tokens.access_token;
   };
-  return { restore, authenticate, startGuest, signOut, refresh, current,
+  return { restore, authenticate, startGuest, signOut, deleteAccount, refresh, current,
     get: () => tokens,
     isGuest: () => guest,
     // True once for a guest this device just created, so its preferences can start from the choices made before it existed.

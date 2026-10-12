@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.auth import bearer, current_user, require_roles
 from app.db.models import User
 from app.db.session import get_session
-from app.models.auth import Register, Login, Refresh, Tokens, AuthUser, RoleUpdate
+from app.models.auth import Register, Login, Refresh, Tokens, AuthUser, RoleUpdate, DeleteAccount
 from app.services import authService, authRateLimit
 
 
@@ -72,6 +72,15 @@ async def me(actor: User = Depends(current_user)):
     if actor.email is None:
         raise authService.unauthorized()
     return AuthUser(id=actor.id, email=actor.email, name=actor.name, role=actor.role)
+
+
+@router.delete('/me', status_code=204)
+async def delete_me(payload: DeleteAccount, request: Request, actor: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session)):
+    if actor.email is None:
+        raise authService.unauthorized()
+    await limited(session, request, 'delete', actor.email)
+    await authService.delete_account(session, actor, payload.password.get_secret_value())
 
 
 @router.patch('/users/{userId}/role')

@@ -10,8 +10,8 @@ from app.db.models.auth import AuthRateLimit
 
 async def enforce(session, action, ip, email=None):
     now = datetime.now(timezone.utc)
-    limits = [(ip, {'register':10, 'login':20, 'refresh':60, 'logout':60}[action])]
-    if email and action == 'login':
+    limits = [(ip, {'register':10, 'login':20, 'refresh':60, 'logout':60, 'delete':20}[action])]
+    if email and action in ('login', 'delete'):
         limits.append(('email:'+email, 5))
     blocked = None
     for identity, maximum in limits:

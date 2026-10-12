@@ -1,5 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { PREFERENCES_KEY } from '@/features/preferences/storage';
 import { apiRequest, type UserProfile } from './api';
 import { GuestSessionProvider, useAuthSession } from './session';
 import { authSession, AUTH_KEY, createAuthSession, GUEST_TOKEN_KEY, type AuthTokens } from './auth-session';
@@ -114,4 +116,38 @@ test('only a newly created guest is marked fresh, once',async()=>{
  jest.mocked(apiRequest).mockResolvedValueOnce({access_token:'guest-secret',user:{id:'guest-1',name:null}});
  await manager.startGuest();
  expect(manager.takeFreshGuest('other')).toBe(false);expect(manager.takeFreshGuest('guest-1')).toBe(true);expect(manager.takeFreshGuest('guest-1')).toBe(false);
+});
+const memoryStorage=()=>{ const data=new Map<string,string>();
+ jest.mocked(AsyncStorage.getItem).mockImplementation(async k=>data.get(k)??null);
+ jest.mocked(AsyncStorage.setItem).mockImplementation(async(k,v)=>{data.set(k,v);});
+ jest.mocked(AsyncStorage.removeItem).mockImplementation(async k=>{data.delete(k);});
+ jest.mocked(AsyncStorage.multiRemove).mockImplementation(async ks=>{ks.forEach(k=>data.delete(k));}); };
+test.each(['register','guest'])('a new %s on a finished device starts setup again, keeping device preferences',async(kind)=>{
+ const manager=createAuthSession();memoryStorage();
+ await AsyncStorage.setItem(PREFERENCES_KEY,JSON.stringify({completed:true,largerText:true}));
+ jest.mocked(apiRequest).mockResolvedValueOnce(kind==='guest'?{access_token:'g',user:{id:'guest-1',name:null}}:pair());
+ if (kind==='guest') await manager.startGuest(); else await manager.authenticate('register','new@example.com','a-long-password');
+ expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!)).toEqual({completed:false,largerText:true});
+});
+test('login keeps setup done',async()=>{
+ const manager=createAuthSession();memoryStorage();await AsyncStorage.setItem(PREFERENCES_KEY,JSON.stringify({completed:true}));
+ jest.mocked(apiRequest).mockResolvedValueOnce(pair());await manager.authenticate('login','citizen@example.com','a-long-password');
+ expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!).completed).toBe(true);
+});
+test('deleting an account sends the password, signs out and restarts setup for the next person',async()=>{
+ const manager=createAuthSession();memoryStorage();
+ await AsyncStorage.setItem(PREFERENCES_KEY,JSON.stringify({completed:true}));
+ jest.mocked(apiRequest).mockResolvedValueOnce(pair());await manager.authenticate('login','citizen@example.com','a-long-password');
+ jest.mocked(apiRequest).mockClear();jest.mocked(apiRequest).mockResolvedValue(undefined);
+ await manager.deleteAccount('a-long-password');
+ expect(apiRequest).toHaveBeenNthCalledWith(1,'/v1/auth/me','access-1',{method:'DELETE',body:JSON.stringify({password:'a-long-password'})});
+ expect(manager.get()).toBeNull();
+ expect(JSON.parse((await AsyncStorage.getItem(PREFERENCES_KEY))!).completed).toBe(false);
+});
+test('a wrong password keeps the account signed in',async()=>{
+ const manager=createAuthSession();memoryStorage();
+ jest.mocked(apiRequest).mockResolvedValueOnce(pair());await manager.authenticate('login','citizen@example.com','a-long-password');
+ jest.mocked(apiRequest).mockRejectedValueOnce(Object.assign(new Error('Incorrect password'),{status:403}));
+ await expect(manager.deleteAccount('nope')).rejects.toMatchObject({status:403});
+ expect(manager.get()?.user.id).toBe('user-1');
 });
