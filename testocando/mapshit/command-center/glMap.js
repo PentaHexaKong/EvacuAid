@@ -13,6 +13,10 @@ function withoutMap(element, note) {
   return { map: inert, group: () => inert, setCursor() {} }
 }
 
+// Standard tuned for a dashboard: severity fills must carry the colour, so the basemap stays quiet,
+// shops, transit icons and 3D buildings are hidden, and place and road names stay for orientation.
+const calmBasemap = { theme: 'monochrome', showPointOfInterestLabels: false, showTransitLabels: false, show3dObjects: false }
+
 export function createMap({ container, token, style }) {
   const element = document.getElementById(container)
   if (!token) return withoutMap(element, 'Map unavailable · set MAPBOX_TOKEN')
@@ -20,7 +24,7 @@ export function createMap({ container, token, style }) {
   let map
   try {
     map = new mapboxgl.Map({
-      container, style: 'mapbox://styles/' + style,
+      container, style: 'mapbox://styles/' + style, ...(style === 'mapbox/standard' ? { config: { basemap: calmBasemap } } : {}),
       center: [118, -2], zoom: 4, cooperativeGestures: true, dragRotate: false, pitchWithRotate: false, touchPitch: false,
     })
   } catch (error) {
