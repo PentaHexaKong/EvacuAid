@@ -222,7 +222,7 @@ export function setupOperations({ map, group, api, routeLayer, isPlacing }) {
         const result=route.result
         const el=row(route.name,route.status,route.stale,route.usable)
         el.dataset.opsKey='route:'+route.id
-        meta(el,[result.shelterName||'Shelter',label(result.routeStatus),timed('expires ',route.expiresAt),'Safety not verified'])
+        meta(el,[result.shelterName||'Shelter',label(result.routeStatus),(result.selectionReasonCodes||[]).map(label).join(', '),timed('expires ',route.expiresAt),'Safety not verified'])
         const line=actions(el)
         if(result.route?.geometry) {
           line.append(button('Show evaluated geometry',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.resize(); routeLayer.add(result.route.geometry,{color:route.usable?colors['route-usable']:colors['route-unusable'],weight:3,dashed:!route.usable}); routeLayer.setVisible(true); const bounds=boundsOf(result.route.geometry); if(bounds) map.fitBounds(bounds,{padding:48}); return null }))
