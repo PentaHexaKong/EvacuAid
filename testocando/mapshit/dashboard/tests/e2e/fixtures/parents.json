@@ -1,0 +1,59 @@
+[
+  {
+    "id": "parent-a",
+    "code": "01",
+    "name": "PARENT DISTRICT",
+    "administrativeLevel": "DISTRICT",
+    "parentRegionId": "parent-a",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            106.8,
+            -6.2
+          ],
+          [
+            106.81,
+            -6.2
+          ],
+          [
+            106.81,
+            -6.21
+          ],
+          [
+            106.8,
+            -6.2
+          ]
+        ]
+      ]
+    },
+    "centroid": {
+      "type": "Point",
+      "coordinates": [
+        106.805,
+        -6.205
+      ]
+    },
+    "population": 10000,
+    "populationReferenceYear": 2025,
+    "populationSource": "BPS",
+    "boundarySource": "BIG",
+    "dataMode": "REFERENCE",
+    "signalLevel": "CRITICAL",
+    "simulation": null,
+    "hazardTypes": [
+      "FLOOD"
+    ],
+    "authoritativeCriticalHazard": true,
+    "estimatedExposedPopulation": 1000,
+    "exposureFraction": 0.1,
+    "exposureEstimationMethod": "AREA_WEIGHTED_ESTIMATE",
+    "activeAssistanceCount": 6,
+    "recordedShelterCount": 2,
+    "evidenceFreshness": "FRESH",
+    "updatedAt": "2026-10-13T01:00:00Z",
+    "snapshotExpiresAt": "2026-10-13T02:00:00Z",
+    "snapshotStale": false
+  }
+]

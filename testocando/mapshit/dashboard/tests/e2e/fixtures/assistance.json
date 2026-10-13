@@ -1,0 +1,24 @@
+[
+  {
+    "requestId": "case-1",
+    "status": "NEEDS_ASSISTANCE",
+    "supportNeeds": [
+      "MOBILITY"
+    ],
+    "requestedAt": "2026-10-13T01:00:00Z",
+    "observedAt": "2026-10-13T01:00:00Z",
+    "stale": false,
+    "government": null,
+    "caseUpdatedAt": null
+  },
+  {
+    "requestId": "case-2",
+    "status": "NEEDS_ASSISTANCE",
+    "supportNeeds": [],
+    "requestedAt": "2026-10-12T01:00:00Z",
+    "observedAt": "2026-10-12T01:00:00Z",
+    "stale": true,
+    "government": null,
+    "caseUpdatedAt": null
+  }
+]
