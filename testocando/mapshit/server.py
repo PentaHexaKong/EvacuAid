@@ -18,6 +18,13 @@ def forwardHeaders(targetUrl):
     return headers
 
 
+def mapConfig():
+    token = os.getenv('MAPBOX_TOKEN', '').strip()
+    # The browser gets public tokens only; a secret sk. token must never reach a page.
+    config = {'mapboxToken': token if token.startswith('pk.') else None, 'mapboxStyle': os.getenv('MAPBOX_STYLE', 'mapbox/light-v11')}
+    return 'window.EVACUAID_MAP = ' + json.dumps(config) + '\n'
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=Path(__file__).parent, **kwargs)
@@ -64,6 +71,14 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path.startswith('/api/command/'):
             self.forward(f'{BACKEND_URL}/v1/command{self.path.removeprefix("/api/command")}')
+            return
+        if self.path == '/command-center/config.js':
+            payload = mapConfig().encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/javascript')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
             return
         if self.path in ('/command-center', '/command-center/') or (self.path == '/' and os.getenv('DASHBOARD_HOME') == 'true'):
             self.path = '/command-center/index.html'
