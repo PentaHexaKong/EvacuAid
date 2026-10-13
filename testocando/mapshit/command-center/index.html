@@ -64,21 +64,21 @@
     </section>
     </section>
     <section class="view" data-view="operations" aria-labelledby="operations-title" hidden>
-    <h1 class="page-title" id="operations-title">Field operations</h1>
+    <h1 class="page-title" id="operations-title">Field reports</h1>
     <section class="panel operations" aria-label="Field operations">
-      <div class="panel-heading"><div><h2>Field operations &amp; Route Setter</h2><p id="operations-message" role="status">Loading operational records</p></div><button id="operations-refresh">Refresh operations</button></div>
+      <div class="panel-heading"><div><p id="operations-message" role="status">Loading operational records</p></div><button id="operations-refresh">Refresh operations</button></div>
       <div id="operations-content">
-        <h3 id="ops-checkins">Evacuation check-ins</h3><div id="evacuation-check-ins"></div>
-        <h3 id="ops-reports">Field report review</h3><p>Unverified reports support awareness. Only an explicitly confirmed barrier becomes a hard routing exclusion. Locations describe public incidents; exclude citizen personal details.</p><div id="field-report-list"></div><div class="pager"><button id="reports-previous">Previous reports</button><button id="reports-next">Next reports</button></div>
-        <h3 id="ops-assistance">Assistance case management</h3><p>Anonymous case identifiers and reported needs. Government completion records dispatch work; it never asserts citizen safety or completes a Buddy session.</p><div id="assistance-case-list"></div><div class="pager"><button id="cases-previous">Previous cases</button><button id="cases-next">Next cases</button></div>
-        <h3 id="ops-routes">Route Setter</h3><p>Select a reference region on the map to load its recorded shelters. Routes are evaluated against known evidence, expire after five minutes, and require revalidation to publish. No overall safety certification.</p>
+        <section class="ops-section" data-ops-section="check-ins" hidden><h3 id="ops-checkins" class="sr-only">Evacuation check-ins</h3><p id="ops-checkins-scope"></p><div id="evacuation-check-ins"></div></section>
+        <section class="ops-section" data-ops-section="reports"><h3 id="ops-reports" class="sr-only">Field report review</h3><p>Unverified reports support awareness. Only an explicitly confirmed barrier becomes a hard routing exclusion. Locations describe public incidents; exclude citizen personal details.</p><div id="field-report-list"></div><div class="pager"><button id="reports-previous">Previous reports</button><button id="reports-next">Next reports</button></div>
+        </section><section class="ops-section" data-ops-section="assistance" hidden><h3 id="ops-assistance" class="sr-only">Assistance case management</h3><p>Anonymous case identifiers and reported needs. Government completion records dispatch work; it never asserts citizen safety or completes a Buddy session.</p><div id="assistance-case-list"></div><div class="pager"><button id="cases-previous">Previous cases</button><button id="cases-next">Next cases</button></div>
+        </section><section class="ops-section" data-ops-section="routes" hidden><h3 id="ops-routes" class="sr-only">Route Setter</h3><p>Select a reference region on the map to load its recorded shelters. Routes are evaluated against known evidence, expire after five minutes, and require revalidation to publish. No overall safety certification.</p>
         <form id="route-form"><input id="route-id" type="hidden"><input id="route-region-id" type="hidden"><p>Region: <strong id="route-region-label">Select a region</strong></p>
           <label>Route name<input id="route-name" required minlength="3" maxlength="120"></label>
           <div class="form-grid"><label>Assembly-point latitude<input id="route-origin-lat" type="number" step="any" min="-90" max="90" required></label><label>Assembly-point longitude<input id="route-origin-lon" type="number" step="any" min="-180" max="180" required></label><label>Recorded shelter<select id="route-shelter-id" required><option value="">Select a region first</option></select></label></div>
           <label class="check-label"><input id="route-step-free" type="checkbox">Require step-free routing (unknown accessibility remains unknown)</label>
           <div class="pager"><button id="route-pick-origin" type="button">Pick assembly point on map</button><button id="route-new" type="button">New route</button><button id="route-calculate" class="primary">Calculate and save draft</button></div><p id="route-feedback" role="status"></p>
         </form>
-        <div id="operational-route-list"></div><div class="pager"><button id="routes-previous">Previous routes</button><button id="routes-next">Next routes</button></div>
+        <div id="operational-route-list"></div><div class="pager"><button id="routes-previous">Previous routes</button><button id="routes-next">Next routes</button></div></section>
       </div>
     </section>
     </section>
@@ -98,6 +98,17 @@
     <div id="disaster-fields" class="form-grid"><label>Disaster type<select id="mock-hazard"><option value="FLOOD">Flood</option><option value="EARTHQUAKE">Earthquake</option><option value="TSUNAMI">Tsunami</option><option value="WILDFIRE">Wildfire</option><option value="LANDSLIDE">Landslide</option><option value="EXTREME_WEATHER">Extreme weather</option></select></label><label>Radius (metres)<input id="mock-radius" type="number" min="50" max="50000" value="1000" required></label><label>Mock severity<select id="mock-severity"><option value="WATCH">Watch</option><option selected>ELEVATED</option><option value="CRITICAL">Critical</option></select></label></div>
     <div id="safe-house-fields"><label>Address<input id="safe-address" maxlength="500"></label><div class="form-grid"><label>Status<select id="safe-status"><option value="UNKNOWN">Unknown</option><option value="OPEN">Open</option><option value="CLOSED">Closed</option></select></label><label>Capacity<input id="safe-capacity" type="number" min="0" max="1000000" placeholder="Unknown"></label><label>Wheelchair access<select id="safe-access"><option value="">Unknown</option><option value="true">Yes</option><option value="false">No</option></select></label></div><label class="check-label"><input id="safe-verified" type="checkbox">Reference details verified now</label><p>Saving a location does not certify hazard safety or evacuation access.</p></div>
     <p id="placement-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancel-placement">Cancel</button><button id="save-placement" class="primary" type="submit">Save</button></div>
+  </form></dialog>
+  <dialog id="ops-dialog" aria-labelledby="ops-dialog-title" aria-describedby="ops-dialog-context"><form id="ops-dialog-form">
+    <h2 id="ops-dialog-title"></h2><p id="ops-dialog-context"></p>
+    <label>Note (public operational text; leave out personal information)<textarea id="ops-note" required minlength="5" maxlength="500" rows="4" aria-describedby="ops-note-count"></textarea></label>
+    <p id="ops-note-count" aria-live="polite">0/500</p>
+    <fieldset id="ops-barrier" hidden>
+      <label class="check-label"><input id="ops-hard-barrier" type="checkbox">Responders verified this is a hard evacuation barrier (published routes will be invalidated)</label>
+      <div id="ops-barrier-fields" class="form-grid" hidden><label>Barrier radius (m)<input id="ops-radius" type="number" min="5" max="2000" value="30" required disabled></label><label>Valid for (hours)<input id="ops-hours" type="number" min="0.5" max="24" step="0.5" value="2" required disabled></label></div>
+    </fieldset>
+    <label id="ops-route-field" hidden>Published route<select id="ops-route-select" disabled></select></label>
+    <p id="ops-dialog-error" role="alert"></p><div class="dialog-actions"><button type="button" id="ops-dialog-cancel">Cancel</button><button id="ops-dialog-submit" class="primary" type="submit"></button></div>
   </form></dialog>
   <script src="/command-center/vendor/leaflet/leaflet.js"></script>
   <script type="module" src="/command-center/shell.js"></script>
