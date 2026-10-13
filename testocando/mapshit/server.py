@@ -125,4 +125,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    ThreadingHTTPServer.request_queue_size = max(ThreadingHTTPServer.request_queue_size, 64)
     ThreadingHTTPServer((os.getenv('HOST', '127.0.0.1'), int(os.getenv('PORT', '8080'))), Handler).serve_forever()
