@@ -80,13 +80,13 @@ export default function Page() {
     return () => { clearInterval(interval); }
   }, [busy, refresh])
   useEffect(() => {
-    if (!map || evaluated || regions.isPending || frameScope.current === scope) return
+    if (!map || regions.isPending || frameScope.current === scope) return
     frameScope.current = scope
     const geometry: Geometry = { type: 'GeometryCollection', geometries: (geo.mainland.length >= 3 ? geo.mainland : geo.located).map(r => r.geometry) }
     const bounds = boundsOf(geometry)
     if (bounds) map.fit(bounds)
     else if (!rows.length) map.fit([[95, -11], [141, 6]])
-  }, [map, scope, geo, rows.length, regions.isPending, evaluated])
+  }, [map, scope, geo, rows.length, regions.isPending])
   const select = useCallback((id: string) => {
     setSelection({ scope, id, updatedAt: regions.dataUpdatedAt })
     const bounds = boundsOf(rows.find(r => r.id === id)?.geometry)
@@ -118,11 +118,16 @@ export default function Page() {
     map.setLayer('route', { type: 'FeatureCollection', features: mergeRouteFeatures(routes.data ?? [], evaluated, dataMode) })
     map.setVisible('route', visible.routes)
   }, [map, rows, selected, parent, level, geo, detail, visible, routes.data, dataMode, evaluated])
+  // Fit an evaluated route once per evaluation; the regional framing for this scope is then
+  // treated as done, so a later filter change reframes the regions as it does in legacy.
+  const fittedEvaluated = useRef<typeof evaluated>(null)
   useEffect(() => {
-    if (!evaluated || dataMode !== 'REFERENCE') return
+    if (!map || !evaluated || dataMode !== 'REFERENCE' || fittedEvaluated.current === evaluated) return
+    fittedEvaluated.current = evaluated
+    frameScope.current = scope
     const bounds = boundsOf(evaluated.geometry)
-    if (map && bounds) map.fit(bounds)
-  }, [map, evaluated, dataMode])
+    if (bounds) map.fit(bounds)
+  }, [map, evaluated, dataMode, scope])
   // Legacy cleared the report marker whenever SIMULATION was selected (operations.js:150).
   useEffect(() => { if (map && dataMode === 'SIMULATION') map.setLayer('report', { type: 'FeatureCollection', features: [] }) }, [map, dataMode])
   const errors = [regions.error, parents.error, region.error, routes.error].filter(Boolean)

@@ -126,3 +126,21 @@ test('show evaluated geometry never refetches operations after their mount cache
   await page.clock.fastForward(1000)
   expect(requests).toEqual([])
 })
+
+test('invalid route fields and a missing shelter never POST', async ({ page }) => {
+  let posts = 0
+  await page.route('**/api/command/operations/routes', route => { if (route.request().method() === 'POST') posts++; return route.fulfill({ json: route.request().method() === 'POST' ? routes[0] : routes }) })
+  await page.goto('./#/operations/routes')
+  await page.getByRole('button', { name: 'Edit / recalculate' }).click()
+  const submit = page.getByRole('button', { name: 'Calculate and save draft' })
+  const name = page.getByRole('textbox', { name: 'Route name', exact: true })
+  const latitude = page.getByRole('spinbutton', { name: 'Assembly-point latitude' })
+  await name.fill('ab'); await submit.click()
+  await latitude.fill('91'); await name.fill('Valid route'); await submit.click()
+  await page.getByRole('button', { name: 'New route' }).click()
+  await name.fill('Valid route'); await latitude.fill('-6.25')
+  await page.getByRole('spinbutton', { name: 'Assembly-point longitude' }).fill('106.85')
+  await submit.click()
+  await page.waitForTimeout(300)
+  expect(posts).toBe(0)
+})
