@@ -37,13 +37,22 @@ new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer()) // si
 // The toolbar wraps to more rows in mock mode or on narrower screens; the status line and region card sit below it.
 new ResizeObserver(([entry]) => document.querySelector('.map-hero').style.setProperty('--toolbar-h', entry.target.offsetHeight + 'px')).observe(document.querySelector('.map-toolbar'))
 window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.invalidateSize(); if (pendingBounds) frameMap(pendingBounds) }) })
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
-map.createPane('labels')
-map.getPane('labels').style.zIndex = 450
-map.getPane('labels').style.pointerEvents = 'none'
-const labelTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { pane: 'labels', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
-// ponytail: a short flyToBounds leaves earlier-zoom label tiles behind, scaled up and blurred over the map; drop them once the move settles (private Leaflet 1.9 API)
-map.on('moveend', () => setTimeout(() => labelTiles._pruneTiles(), 300))
+const { mapboxToken, mapboxStyle } = window.EVACUAID_MAP || {}
+if (mapboxToken) {
+  // Mapbox raster tiles carry their own labels, so there is no separate label layer.
+  L.tileLayer('https://api.mapbox.com/styles/v1/' + mapboxStyle + '/tiles/512/{z}/{x}/{y}@2x?access_token=' + mapboxToken, {
+    tileSize: 512, zoomOffset: -1, maxZoom: 19,
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> <a href="https://www.mapbox.com/map-feedback/" target="_blank" rel="noopener"><strong>Improve this map</strong></a>'
+  }).addTo(map)
+} else {
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
+  map.createPane('labels')
+  map.getPane('labels').style.zIndex = 450
+  map.getPane('labels').style.pointerEvents = 'none'
+  const labelTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { pane: 'labels', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
+  // ponytail: a short flyToBounds leaves earlier-zoom label tiles behind, scaled up and blurred over the map; drop them once the move settles (private Leaflet 1.9 API)
+  map.on('moveend', () => setTimeout(() => labelTiles._pruneTiles(), 300))
+}
 const layers = Object.fromEntries(['regions', 'active', 'baseline', 'community', 'satellite', 'shelters', 'routes'].map((name) => [name, L.layerGroup()]))
 for (const name of ['regions', 'active', 'shelters']) layers[name].addTo(map)
 

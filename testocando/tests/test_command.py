@@ -382,6 +382,22 @@ def testForwardHeadersOnlyIncludeCommandKeyForCommandURLs(monkeypatch):
     assert server.forwardHeaders(server.BACKEND_URL+'/v1/command/regions')=={'Content-Type':'application/json'}
 
 
+def testMapConfigOnlyExposesPublicMapboxTokens(monkeypatch):
+    import importlib.util, json
+    from pathlib import Path
+    spec=importlib.util.spec_from_file_location('commandProxy',Path(__file__).parents[1]/'mapshit'/'server.py')
+    server=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(server)
+    config=lambda: json.loads(server.mapConfig().removeprefix('window.EVACUAID_MAP = '))
+    monkeypatch.setenv('MAPBOX_TOKEN','pk.public-token')
+    assert config()=={'mapboxToken':'pk.public-token','mapboxStyle':'mapbox/light-v11'}
+    monkeypatch.setenv('MAPBOX_TOKEN','sk.secret-token')
+    assert config()['mapboxToken'] is None and 'sk.' not in server.mapConfig()
+    monkeypatch.delenv('MAPBOX_TOKEN')
+    monkeypatch.setenv('MAPBOX_STYLE','evacuaid/custom-style')
+    assert config()=={'mapboxToken':None,'mapboxStyle':'evacuaid/custom-style'}
+
+
 @pytest.mark.asyncio
 async def testExpiredSnapshotMasksOperationalValues(commandSession):
     await importRegions(commandSession,regionDocument())

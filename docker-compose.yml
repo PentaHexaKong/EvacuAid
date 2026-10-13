@@ -7,6 +7,8 @@ services:
       COMMAND_API_KEY: ${COMMAND_API_KEY:-}
       VALHALLA_URL: http://valhalla:8002
       DASHBOARD_HOME: 'true'
+      MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
+      MAPBOX_STYLE: ${MAPBOX_STYLE:-mapbox/light-v11}
     ports:
       - "8080:8080"
     restart: unless-stopped

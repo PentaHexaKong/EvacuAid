@@ -280,6 +280,7 @@ These commands generate new secrets without printing them.
 
 COMMAND_API_KEY is required for the dashboard to load data. Generate it with `openssl rand -hex 32` and keep it in the root .env used by Compose.
 COMMAND_MOCK_ALERTS_ENABLED sends real test alerts to phones in the drawn area; set it to 1 only for a demo.
+MAPBOX_TOKEN is optional. With a public `pk.` token in the root .env, the dashboard map uses Mapbox tiles; without one, it falls back to Esri tiles. The token is visible in the dashboard page, so restrict it to the dashboard's domain in your Mapbox account. MAPBOX_STYLE picks the style (default `mapbox/light-v11`).
 
 Edit the backend configuration:
 
