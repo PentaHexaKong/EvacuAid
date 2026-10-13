@@ -110,7 +110,7 @@ export function setupMapTools({ map, api, refresh }) {
     $('safe-house-fields').hidden = disaster
     $('mock-radius').disabled = !disaster
     $('placement-title').textContent = disaster ? 'Add mock disaster' : draft.mock ? 'Add mock safe house' : 'Add safe house'
-    $('placement-environment').textContent = disaster ? 'Simulation · sends a test alert to phones in the area' : draft.mock ? 'Mock · this browser only' : 'Operational · saves to backend'
+    $('placement-environment').textContent = disaster ? 'Simulation · Watch appears in the app; Elevated and Critical can send test push notifications' : draft.mock ? 'Mock · this browser only' : 'Operational · saves to backend'
     $('placement-environment').className = 'badge' + (disaster || draft.mock ? ' is-simulation' : '')
     $('placement-coordinates').textContent = 'Location: ' + draft.latitude.toFixed(6) + ', ' + draft.longitude.toFixed(6)
     $('placement-dialog').showModal()
@@ -140,9 +140,11 @@ export function setupMapTools({ map, api, refresh }) {
         const { usersInArea } = await api('mock-disasters', { method: 'POST', body: JSON.stringify(payload) })
         await loadMocks()
         await refresh({ fitView: false })
-        $('map-action-status').textContent = name + ' placed. ' + (usersInArea === undefined ? 'Phones inside the area get a test alert within a minute.'
-          : usersInArea === null ? 'Fewer than 5 EvacuAid users are in the area, so the exact count is hidden. They get a test alert within a minute.'
-          : usersInArea.toLocaleString('en-US') + ' EvacuAid users in the area get a test alert within a minute.')
+        $('map-action-status').textContent = name + ' placed. ' + (usersInArea === undefined ? ''
+          : usersInArea === null ? 'Fewer than 5 recently located EvacuAid users are in the area, so the exact count is hidden. '
+          : usersInArea.toLocaleString('en-US') + ' recently located EvacuAid users are in the area. ')
+          + (item.severity === 'WATCH' ? 'Watch warnings appear in the app without a push notification.'
+            : 'Test push notifications depend on alert delivery being enabled and a registered device. Delivery is not confirmed here.')
       } else if (draft.mock) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')
         items.push(item); persist(); await loadMocks()
