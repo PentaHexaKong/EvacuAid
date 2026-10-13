@@ -390,7 +390,7 @@ def testMapConfigOnlyExposesPublicMapboxTokens(monkeypatch):
     spec.loader.exec_module(server)
     config=lambda: json.loads(server.mapConfig().removeprefix('window.EVACUAID_MAP = '))
     monkeypatch.setenv('MAPBOX_TOKEN','pk.public-token')
-    assert config()=={'mapboxToken':'pk.public-token','mapboxStyle':'mapbox/light-v11'}
+    assert config()=={'mapboxToken':'pk.public-token','mapboxStyle':'mapbox/standard'}
     monkeypatch.setenv('MAPBOX_TOKEN','sk.secret-token')
     assert config()['mapboxToken'] is None and 'sk.' not in server.mapConfig()
     monkeypatch.delenv('MAPBOX_TOKEN')

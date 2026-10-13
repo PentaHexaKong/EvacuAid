@@ -8,7 +8,7 @@ services:
       VALHALLA_URL: http://valhalla:8002
       DASHBOARD_HOME: 'true'
       MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
-      MAPBOX_STYLE: ${MAPBOX_STYLE:-mapbox/light-v11}
+      MAPBOX_STYLE: ${MAPBOX_STYLE:-mapbox/standard}
     ports:
       - "8080:8080"
     restart: unless-stopped

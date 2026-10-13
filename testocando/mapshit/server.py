@@ -21,7 +21,7 @@ def forwardHeaders(targetUrl):
 def mapConfig():
     token = os.getenv('MAPBOX_TOKEN', '').strip()
     # The browser gets public tokens only; a secret sk. token must never reach a page.
-    config = {'mapboxToken': token if token.startswith('pk.') else None, 'mapboxStyle': os.getenv('MAPBOX_STYLE', 'mapbox/light-v11')}
+    config = {'mapboxToken': token if token.startswith('pk.') else None, 'mapboxStyle': os.getenv('MAPBOX_STYLE', 'mapbox/standard')}
     return 'window.EVACUAID_MAP = ' + json.dumps(config) + '\n'
 
 

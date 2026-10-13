@@ -12,14 +12,15 @@ function ago(iso) {
     if (Math.abs(seconds) >= size || unit === 'second') return relativeTime.format(Math.round(seconds / size), unit)
   }
 }
-export function setupOperations({ map, api, routeLayer, isPlacing }) {
+import { boundsOf } from './glMap.js'
+export function setupOperations({ map, group, api, routeLayer, isPlacing }) {
   const $ = id => document.getElementById(id)
   const node = (tag, text) => { const el=document.createElement(tag); el.textContent=text; return el }
   const option = (text, value) => { const el=node('option',text); el.value=value; return el }
   const styles = getComputedStyle(document.documentElement)
   const colors = Object.fromEntries(['critical-stroke','normal-stroke','route-usable','route-unusable'].map(name => [name,styles.getPropertyValue('--'+name).trim()]))
   let reportOffset=0, caseOffset=0, routeOffset=0, armed=false, refreshing=false
-  const reportLayer=L.layerGroup()
+  const reportLayer=group('reports',{visible:false})
   const dialog = $('ops-dialog')
   function askOps({title, context, minNote, barrier, routes, submitLabel}) {
     const trigger = document.activeElement
@@ -89,7 +90,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
       el.setAttribute('aria-disabled','true')
       try {
         const confirmation=await action()
-        if (confirmation === null) return
+        if (confirmation === null) return // cancelled, or a view-only action that must not refresh away what it drew
         const returnFocus=document.activeElement === el
         const key=el.closest('.ops-row')?.dataset.opsKey
         await refresh()
@@ -146,7 +147,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
   }
   async function refresh() {
     if (refreshing || dialog.open) return
-    if ($('dataMode').value === 'SIMULATION') { $('operations-content').hidden=true; $('operations-message').textContent='SIMULATION: live cases and route publishing are hidden.'; routeLayer.clearLayers(); reportLayer.clearLayers(); return }
+    if ($('dataMode').value === 'SIMULATION') { $('operations-content').hidden=true; $('operations-message').textContent='SIMULATION: live cases and route publishing are hidden.'; routeLayer.clear(); reportLayer.clear(); return }
     $('operations-content').hidden=false
     refreshing=true
     try {
@@ -157,9 +158,9 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
       // Re-rendering replaces every row; keep what the operator had expanded.
       const openMenus=new Set([...document.querySelectorAll('.ops-row .row-more[open]')].map(d=>d.closest('.ops-row').dataset.opsKey))
       const olderOpen=Boolean(document.querySelector('.ops-older[open]'))
-      if ($('dataMode').value === 'SIMULATION') { $('operations-content').hidden=true; $('operations-message').textContent='SIMULATION: live cases and route publishing are hidden.'; routeLayer.clearLayers(); reportLayer.clearLayers(); return }
+      if ($('dataMode').value === 'SIMULATION') { $('operations-content').hidden=true; $('operations-message').textContent='SIMULATION: live cases and route publishing are hidden.'; routeLayer.clear(); reportLayer.clear(); return }
       $('operations-message').replaceChildren(document.createTextNode('Connected · last received '),time(new Date().toISOString()),document.createTextNode('. Observations may be delayed. No live shelter occupancy is tracked.'))
-      reportLayer.clearLayers()
+      reportLayer.clear()
       const reportRows=reports.map(report=>{
         const el=row(label(report.kind),report.status,report.stale)
         el.dataset.opsKey='report:'+report.id
@@ -173,7 +174,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
           await api('operations/reports/'+report.id,{method:'PATCH',body:JSON.stringify({status,note,expectedUpdatedAt:report.updatedAt,barrier,radiusM,validUntil})})
           return 'Report '+{CONFIRMED:'confirmed',REJECTED:'rejected',RESOLVED:'resolved'}[status]+'.'
         }
-        actions(el).append(button('Confirm',saveReport('CONFIRMED'),true),button('Show on map',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.invalidateSize(); map.setView([report.latitude,report.longitude],16); L.circleMarker([report.latitude,report.longitude],{radius:8,color:report.status==='CONFIRMED'?colors['critical-stroke']:colors['normal-stroke']}).bindTooltip(node('span',label(report.kind)+' · '+label(report.status))).addTo(reportLayer); reportLayer.addTo(map) }))
+        actions(el).append(button('Confirm',saveReport('CONFIRMED'),true),button('Show on map',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.resize(); map.jumpTo({center:[report.longitude,report.latitude],zoom:15}); reportLayer.add({type:'Point',coordinates:[report.longitude,report.latitude]},{radius:8,weight:3,color:report.status==='CONFIRMED'?colors['critical-stroke']:colors['normal-stroke']},{tooltip:label(report.kind)+' · '+label(report.status)}); reportLayer.setVisible(true); return null }))
         more(el).append(button('Reject',saveReport('REJECTED')),button('Mark resolved',saveReport('RESOLVED')))
         return el
       })
@@ -216,7 +217,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
         const el=row(group.regionId,group.status)
         const latest=node('span',group.count+' people · latest '); latest.append(time(group.lastObservedAt)); meta(el,[latest]); return el
       }),'No check-ins in the last 24 hours.')
-      routeLayer.clearLayers()
+      routeLayer.clear()
       const routeRows=routes.map(route=>{
         const result=route.result
         const el=row(route.name,route.status,route.stale,route.usable)
@@ -224,8 +225,8 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
         meta(el,[result.shelterName||'Shelter',label(result.routeStatus),timed('expires ',route.expiresAt),'Safety not verified'])
         const line=actions(el)
         if(result.route?.geometry) {
-          line.append(button('Show evaluated geometry',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.invalidateSize(); const layer=L.geoJSON(result.route.geometry,{style:{color:route.usable?colors['route-usable']:colors['route-unusable'],dashArray:route.usable?null:'5 5'}}).addTo(routeLayer); routeLayer.addTo(map); map.fitBounds(layer.getBounds()) }))
-          if(route.usable) { const tooltip=node('span',route.name+' · expires '); tooltip.append(time(route.expiresAt),document.createTextNode(' · safety not verified')); L.geoJSON(result.route.geometry,{style:{color:colors['route-usable']}}).bindTooltip(tooltip).addTo(routeLayer) }
+          line.append(button('Show evaluated geometry',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.resize(); routeLayer.add(result.route.geometry,{color:route.usable?colors['route-usable']:colors['route-unusable'],weight:3,dashed:!route.usable}); routeLayer.setVisible(true); const bounds=boundsOf(result.route.geometry); if(bounds) map.fitBounds(bounds,{padding:48}); return null }))
+          if(route.usable) { const tooltip=node('span',route.name+' · expires '); tooltip.append(time(route.expiresAt),document.createTextNode(' · safety not verified')); routeLayer.add(result.route.geometry,{color:colors['route-usable'],weight:3},{tooltip}) }
         }
         line.append(button('Edit / recalculate',async()=>{ setRegion(await api('regions/'+route.regionId)); $('route-id').value=route.id; $('route-name').value=route.name; $('route-shelter-id').value=route.shelterId; $('route-origin-lat').value=route.originLatitude; $('route-origin-lon').value=route.originLongitude; $('route-step-free').checked=route.mobilityRequired; $('route-form').scrollIntoView({behavior:'smooth'}) }),
           button('Revalidate and publish',async()=>{ if($('mock-mode').checked) throw new Error('Disable mock mode before publishing operational routes'); await api('operations/routes/'+route.id+'/publish',{method:'POST'}); return 'Route published.' }),
@@ -247,7 +248,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
     $(prefix+'-next').onclick=()=>{set(get()+50);void refresh()}
   }
   $('route-pick-origin').onclick=()=>{location.hash = '#overview';armed=true;$('route-feedback').textContent='Click a public evacuation assembly point on the map.'}
-  map.on('click',event=>{ if(!armed || isPlacing()) return; armed=false; $('route-origin-lat').value=event.latlng.lat; $('route-origin-lon').value=event.latlng.lng;$('route-feedback').textContent='Origin selected. Choose a recorded shelter and calculate.' })
+  map.on('click',event=>{ if(!armed || isPlacing()) return; armed=false; $('route-origin-lat').value=event.lngLat.lat; $('route-origin-lon').value=event.lngLat.lng;$('route-feedback').textContent='Origin selected. Choose a recorded shelter and calculate.' })
   $('route-new').onclick=()=>{ const regionId=$('route-region-id').value; $('route-form').reset(); $('route-region-id').value=regionId; $('route-id').value=''; armed=false }
   $('route-form').onsubmit=async event=>{
     event.preventDefault(); $('route-calculate').disabled=true
@@ -277,5 +278,5 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
     for(const shelter of detail.shelters) $('route-shelter-id').append(option(shelter.name+' · reference capacity '+(shelter.capacity??'unknown')+' · step-free '+(shelter.wheelchairAccessible??'unknown'),shelter.id))
     if(detail.shelters.some(shelter=>shelter.id===selected)) $('route-shelter-id').value=selected
   }
-  return { refresh, setRegion }
+  return { refresh, setRegion, isPicking: () => armed }
 }

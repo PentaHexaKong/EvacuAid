@@ -1,5 +1,6 @@
 import { setupMapTools } from './mapTools.js'
 import { setupOperations } from './operations.js'
+import { createMap, boundsOf } from './glMap.js'
 const $ = (id) => document.getElementById(id)
 const tokens = getComputedStyle(document.documentElement)
 const levels = ['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN']
@@ -22,39 +23,23 @@ const sourceName = value => ({ INARISK: 'InaRISK (BNPB)', BMKG_CAP: 'BMKG', BMKG
 const provenanceName = value => ({ OFFICIAL_BASELINE: 'reference layer, not an active warning', OFFICIAL_ACTIVE: 'official active', COMMUNITY_OBSERVATION: 'community report', SATELLITE_OBSERVATION: 'satellite', SIMULATION: 'simulation' }[value] || readable(value))
 const number = (value) => value == null ? '—' : new Intl.NumberFormat('en-US').format(value)
 const time = (value) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Unknown'
-const state = { regions: [], selected: null, generation: 0, selectionGeneration: 0, offshore: new Set(), regionLayers: new Map(), priorityRegions: [], pendingSelection: null, cases: null }
-const map = L.map('map', { zoomSnap: 0.25, scrollWheelZoom: false, zoomControl: false }).setView([-2, 118], 5)
-L.control.zoom({ position: 'bottomright' }).addTo(map)
+const state = { regions: [], selected: null, generation: 0, selectionGeneration: 0, offshore: new Set(), regionBounds: new Map(), priorityRegions: [], pendingSelection: null, cases: null }
+const { mapboxToken, mapboxStyle } = window.EVACUAID_MAP || {}
+const { map, group, setCursor } = createMap({ container: 'map', token: mapboxToken, style: mapboxStyle })
 // A frame computed while the Overview view is hidden has no size, so it waits until the view shows.
 let pendingBounds = null
 function frameMap(bounds) {
   if (!map.getContainer().offsetWidth) { pendingBounds = bounds; return }
   pendingBounds = null
-  map.invalidateSize() // the container reaches its CSS height after Leaflet first measured it
-  map.fitBounds(bounds, { padding: [24, 24], maxZoom: 13 })
+  map.resize() // the container reaches its CSS height after the map first measured it
+  map.fitBounds(bounds, { padding: 24, maxZoom: 12, animate: false })
 }
-new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer()) // sidebar collapse, drawer and view changes all resize the map
+new ResizeObserver(() => map.resize()).observe(map.getContainer()) // sidebar collapse, drawer and view changes all resize the map
 // The toolbar wraps to more rows in mock mode or on narrower screens; the status line and region card sit below it.
 new ResizeObserver(([entry]) => document.querySelector('.map-hero').style.setProperty('--toolbar-h', entry.target.offsetHeight + 'px')).observe(document.querySelector('.map-toolbar'))
-window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.invalidateSize(); if (pendingBounds) frameMap(pendingBounds) }) })
-const { mapboxToken, mapboxStyle } = window.EVACUAID_MAP || {}
-if (mapboxToken) {
-  // Mapbox raster tiles carry their own labels, so there is no separate label layer.
-  L.tileLayer('https://api.mapbox.com/styles/v1/' + mapboxStyle + '/tiles/512/{z}/{x}/{y}@2x?access_token=' + mapboxToken, {
-    tileSize: 512, zoomOffset: -1, maxZoom: 19,
-    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> <a href="https://www.mapbox.com/map-feedback/" target="_blank" rel="noopener"><strong>Improve this map</strong></a>'
-  }).addTo(map)
-} else {
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
-  map.createPane('labels')
-  map.getPane('labels').style.zIndex = 450
-  map.getPane('labels').style.pointerEvents = 'none'
-  const labelTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { pane: 'labels', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
-  // ponytail: a short flyToBounds leaves earlier-zoom label tiles behind, scaled up and blurred over the map; drop them once the move settles (private Leaflet 1.9 API)
-  map.on('moveend', () => setTimeout(() => labelTiles._pruneTiles(), 300))
-}
-const layers = Object.fromEntries(['regions', 'active', 'baseline', 'community', 'satellite', 'shelters', 'routes'].map((name) => [name, L.layerGroup()]))
-for (const name of ['regions', 'active', 'shelters']) layers[name].addTo(map)
+window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.resize(); if (pendingBounds) frameMap(pendingBounds) }) })
+const optional = { visible: false }
+const layers = { regions: group('regions'), baseline: group('baseline', optional), active: group('active'), community: group('community', optional), satellite: group('satellite', optional), shelters: group('shelters'), routes: group('routes', optional) }
 
 function element(tag, className, text) {
   const result = document.createElement(tag)
@@ -83,16 +68,10 @@ function numeric(value) {
   return result
 }
 function mapControl(id, position) {
-  const control = L.control({ position })
-  control.onAdd = () => {
-    const node = $(id)
-    L.DomEvent.disableClickPropagation(node)
-    L.DomEvent.disableScrollPropagation(node)
-    return node
-  }
-  control.addTo(map)
+  const node = $(id)
+  map.addControl({ onAdd: () => { node.classList.add('mapboxgl-ctrl'); return node }, onRemove: () => node.remove() }, position)
 }
-mapControl('map-legend', 'bottomleft')
+mapControl('map-legend', 'bottom-left')
 const initialActionStatus = $('map-action-status').textContent
 const updateActionStatus = () => { $('map-action-status').hidden = $('map-action-status').textContent === initialActionStatus }
 new MutationObserver(updateActionStatus).observe($('map-action-status'), { childList: true, characterData: true, subtree: true })
@@ -172,8 +151,8 @@ function renderKpis() {
   }
 }
 function renderRegions() {
-  layers.regions.clearLayers()
-  state.regionLayers.clear()
+  layers.regions.clear()
+  state.regionBounds.clear()
   $('priorities').replaceChildren()
   state.priorityRegions = priorityLevels.flatMap(level => state.regions.filter(region => displayedLevel(region) === level))
   for (const level of [...levels, 'SIMULATION']) {
@@ -185,7 +164,6 @@ function renderRegions() {
   if (state.selected != null) $('priorities').setAttribute('aria-activedescendant', 'region-' + state.selected)
   else $('priorities').removeAttribute('aria-activedescendant')
   $('region-count').textContent = state.regions.length + (state.regions.length === 1 ? ' region' : ' regions')
-  let selectedLayer = null
   let previousLevel = null
   for (const region of state.priorityRegions) {
     const level = displayedLevel(region)
@@ -195,16 +173,11 @@ function renderRegions() {
       previousLevel = level
     }
     const selected = state.selected === region.id
-    const style = { color: selected || region.simulation ? accent : stroke[level], weight: selected ? 2.5 : region.simulation ? 2 : 1, opacity: .9, fillColor: fill[level], fillOpacity: region.simulation ? .5 : fillOpacity[level], dashArray: region.simulation ? '4 4' : null }
+    // The selected outline sorts above its neighbours so their borders never cut through it.
+    const style = { color: selected || region.simulation ? accent : stroke[level], weight: selected ? 2.5 : region.simulation ? 2 : 1, hoverWeight: selected ? 2.5 : 2, opacity: .9, fillColor: fill[level], fillOpacity: region.simulation ? .5 : fillOpacity[level], dashed: Boolean(region.simulation), sortKey: selected ? 1 : 0 }
     if (!state.offshore.has(region.id) || selected || $('parent').value || !['VILLAGE', 'DISTRICT'].includes($('level').value)) {
-      const layer = L.geoJSON(region.geometry, { style })
-      layer.on('mouseover', () => layer.setStyle({ weight: selected ? 2.5 : 2 }))
-      layer.on('mouseout', () => layer.setStyle(style))
-      layer.bindTooltip(element('span', '', (region.simulation ? 'Simulation · ' : '') + titleCase(region.name) + ' · ' + readable(level)))
-      layer.on('click', () => { if (!mapTools.isPlacing()) selectRegion(region.id) })
-      layer.addTo(layers.regions)
-      state.regionLayers.set(region.id, layer)
-      if (selected) selectedLayer = layer
+      layers.regions.add(region.geometry, style, { tooltip: (region.simulation ? 'Simulation · ' : '') + titleCase(region.name) + ' · ' + readable(level), onClick: () => { if (!mapTools.isPlacing() && !operations.isPicking()) selectRegion(region.id) } })
+      state.regionBounds.set(region.id, boundsOf(region.geometry))
     }
     const row = element('button', 'priority-row' + (state.selected === region.id ? ' selected' : ''))
     row.type = 'button'
@@ -226,7 +199,6 @@ function renderRegions() {
     row.addEventListener('click', () => { $('priorities').focus({ preventScroll: true }); selectRegion(region.id) })
     $('priorities').append(row)
   }
-  if (selectedLayer) selectedLayer.bringToFront()
   if (!state.regions.length) $('priorities').append(element('p', 'empty', 'No imported regions match these filters. Import administrative GeoJSON to begin.'))
 }
 function clearSelection() {
@@ -234,7 +206,7 @@ function clearSelection() {
   state.selected = null
   state.pendingSelection = null
   $('region-card').hidden = true
-  for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clearLayers()
+  for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clear()
   $('selected-name').textContent = 'Choose a region'
   $('selected-signal').textContent = 'Unknown'
   $('selected-signal').className = 'badge is-unknown'
@@ -302,11 +274,8 @@ async function selectRegion(id, { moveMap = true, scrollRow = false } = {}) {
     state.pendingSelection = null
     renderRegions()
     if (scrollRow) $('region-' + id).scrollIntoView({ block: 'nearest' })
-    const bounds = state.regionLayers.get(id)?.getBounds()
-    if (moveMap && bounds?.isValid()) {
-      if (reducedMotion.matches) map.fitBounds(bounds, { padding: [80, 80], maxZoom: 15, animate: false })
-      else map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 15, duration: .25 })
-    }
+    const bounds = state.regionBounds.get(id)
+    if (moveMap && bounds) map.fitBounds(bounds, { padding: 80, maxZoom: 14, duration: 500, animate: !reducedMotion.matches })
     $('selected-name').textContent = titleCase(detail.name)
     $('hierarchy').textContent = detail.hierarchy.map((r) => titleCase(r.name)).join(' / ') || readable(detail.administrativeLevel)
     $('selected-signal').replaceWith(Object.assign(badge(detail.signalLevel, detail.signalLevel), { id: 'selected-signal' }))
@@ -329,11 +298,11 @@ async function selectRegion(id, { moveMap = true, scrollRow = false } = {}) {
     $('shelter-list').replaceChildren()
     $('hazard-list').replaceChildren()
     $('sources').replaceChildren()
-    for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clearLayers()
+    for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clear()
     for (const shelter of detail.shelters) {
       const access = shelter.wheelchairAccessible === true ? 'step-free access reported' : shelter.wheelchairAccessible === false ? 'not reported step-free' : 'step-free access unknown'
       evidenceRow($('shelter-list'), shelter.name, 'Capacity ' + number(shelter.capacity) + ' · ' + access + ' · ' + sourceName(shelter.source) + ' · recorded ' + time(shelter.verifiedAt), shelter.status)
-      L.geoJSON(shelter.geometry, { pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: accent, fillColor: surface, fillOpacity: 1, weight: 2 }) }).bindPopup(element('span', '', shelter.name + ' · capacity ' + number(shelter.capacity))).addTo(layers.shelters)
+      layers.shelters.add(shelter.geometry, { radius: 6, color: accent, fillColor: surface, fillOpacity: 1, weight: 2 }, { tooltip: shelter.name + ' · capacity ' + number(shelter.capacity) })
     }
     if (!detail.shelters.length) $('shelter-list').append(element('p', 'empty', 'No shelter records for this region.'))
     operations.setRegion(detail)
@@ -358,7 +327,9 @@ async function selectRegion(id, { moveMap = true, scrollRow = false } = {}) {
       if (!hazard.active || !['FRESH', 'REFERENCE'].includes(hazard.freshness) || detail.snapshotStale) continue
       const baseline = hazard.provenanceClass === 'OFFICIAL_BASELINE'
       const target = baseline ? 'baseline' : hazard.provenanceClass === 'COMMUNITY_OBSERVATION' ? 'community' : hazard.provenanceClass === 'SATELLITE_OBSERVATION' ? 'satellite' : 'active'
-      L.geoJSON(hazard.geometry, { style: { color: baseline ? baselineStroke : stroke.CRITICAL, weight: 2, dashArray: baseline ? '5 5' : null, fillOpacity: baseline ? .06 : .17 }, pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: target === 'community' ? communityStroke : satelliteStroke, fillOpacity: .6 }) }).bindTooltip(element('span', '', sourceName(hazard.source) + ' · ' + provenanceName(hazard.provenanceClass))).addTo(layers[target])
+      const isPoint = ['Point', 'MultiPoint'].includes(hazard.geometry?.type)
+      const style = isPoint ? { radius: 6, weight: 3, color: target === 'community' ? communityStroke : satelliteStroke, fillOpacity: .6 } : { color: baseline ? baselineStroke : stroke.CRITICAL, weight: 2, dashed: baseline, fillOpacity: baseline ? .06 : .17 }
+      layers[target].add(hazard.geometry, style, { tooltip: sourceName(hazard.source) + ' · ' + provenanceName(hazard.provenanceClass) })
     }
     if (!detail.hazards.length) $('hazard-list').append(element('p', 'empty', 'Hazard evidence: Unknown. No intersecting normalized evidence in this projection.'))
     evidenceRow($('sources'), 'Reported profiles / assistance', readable(detail.metricProvenance.assistance), detail.dataMode)
@@ -403,10 +374,11 @@ async function refresh({ fitView = true } = {}) {
     if (generation !== state.generation) return
     if (fitView && centroids.length) {
       // Centroids choose which regions count; their polygons set the frame, so one large region still fits.
-      const bounds = (mainland.length >= 3 ? mainland : located).reduce((all, region) => all.extend(L.geoJSON(region.geometry).getBounds()), L.latLngBounds([]))
-      frameMap(bounds)
+      const bounds = new mapboxgl.LngLatBounds()
+      for (const region of mainland.length >= 3 ? mainland : located) { const regionBounds = boundsOf(region.geometry); if (regionBounds) bounds.extend(regionBounds) }
+      if (!bounds.isEmpty()) frameMap(bounds)
     }
-    else if (fitView && !rows.length) map.setView([-2, 118], 5)
+    else if (fitView && !rows.length) map.jumpTo({ center: [118, -2], zoom: 4 })
     const demo = $('dataMode').value === 'SIMULATION'
     const stale = rows.filter((r) => r.snapshotStale).length
     const explanation = (demo ? 'Simulation data. Synthetic administrative boundaries and population; not real operational statistics. ' : 'Operational data. ') + rows.length + ' regions in the current filter scope. ' + stale + ' unavailable/stale projections. Signal counts show known evidence only; numeric totals become Unknown when a contributing metric is missing. ' + (!rows.length ? 'Import administrative GeoJSON using the command importer.' : 'Hazard and shelter overlays load when a region is selected.')
@@ -432,12 +404,12 @@ async function updateParents() {
     for (const parent of parents) $('parent').append(new Option(titleCase(parent.name), parent.id))
   } catch (error) { notice(error.message, 'error') }
 }
-const mapTools = setupMapTools({ map, api, refresh })
-const operations = setupOperations({ map, api, routeLayer: layers.routes, isPlacing: () => mapTools.isPlacing() })
+const mapTools = setupMapTools({ map, group, setCursor, api, refresh })
+const operations = setupOperations({ map, group, api, routeLayer: layers.routes, isPlacing: () => mapTools.isPlacing() })
 $('refresh').onclick = refresh
 for (const id of ['dataMode', 'level']) $(id).onchange = async () => { await updateParents(); await refresh() }
 for (const id of ['parent', 'hazard', 'signal']) $(id).onchange = refresh
-$('layers').onchange = (event) => { const layer = layers[event.target.dataset.layer]; if (layer) event.target.checked ? layer.addTo(map) : map.removeLayer(layer) }
+$('layers').onchange = (event) => layers[event.target.dataset.layer]?.setVisible(event.target.checked)
 renderKpis()
 updateParents().then(refresh)
 setInterval(() => { if (!document.hidden && !mapTools.isPlacing() && !$('placement-dialog').open) refresh({ fitView: false }) }, 60000)

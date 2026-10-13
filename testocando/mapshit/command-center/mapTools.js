@@ -1,14 +1,15 @@
+import { circlePolygon } from './glMap.js'
 const $ = id => document.getElementById(id)
 const storageKey = 'evacuaid-command-mocks-v1'
 
-export function setupMapTools({ map, api, refresh }) {
+export function setupMapTools({ map, group, setCursor, api, refresh }) {
   const idleStatus = $('map-action-status').textContent
   const tokens = getComputedStyle(document.documentElement)
   const mockStroke = tokens.getPropertyValue('--mock-stroke').trim()
   const safeHouseStroke = tokens.getPropertyValue('--safe-house-stroke').trim()
   const surface = tokens.getPropertyValue('--surface').trim()
-  const mockLayer = L.layerGroup().addTo(map)
-  const realHouses = L.layerGroup().addTo(map)
+  const mockLayer = group('mocks')
+  const realHouses = group('safe-houses')
   let items = []
   let disasters = []
   let placement = null
@@ -28,25 +29,23 @@ export function setupMapTools({ map, api, refresh }) {
     span.textContent = text
     return span
   }
+  const zoomTo = (longitude, latitude) => map.easeTo({ center: [longitude, latitude], zoom: Math.max(map.getZoom(), 12) })
   // The server hides counts below 5 (null) so a small count can't reveal whether someone is at a point.
   const reach = count => count === undefined ? '' : count === null ? 'under 5 users in area' : count.toLocaleString('en-US') + ' users in area'
   function renderMocks() {
-    mockLayer.clearLayers()
+    mockLayer.clear()
     $('mock-items').replaceChildren()
     for (const item of [...disasters, ...items]) {
       if (item.kind === 'safeHouse' && !$('mock-mode').checked) continue
-      const point = [item.latitude, item.longitude]
       const word = value => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
       const text = (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) + (reach(item.usersInArea) && ' · ' + reach(item.usersInArea)) : ' · Safe house')
-      const layer = item.kind === 'hazard'
-        ? L.circle(point, { radius: item.radiusM, color: mockStroke, dashArray: '6 4', fillOpacity: .18 })
-        : L.circleMarker(point, { radius: 9, color: mockStroke, fillColor: surface, fillOpacity: 1, weight: 3 })
-      layer.bindTooltip(label(text)).addTo(mockLayer)
+      if (item.kind === 'hazard') mockLayer.add(circlePolygon(item.longitude, item.latitude, item.radiusM), { color: mockStroke, weight: 3, dashed: true, fillOpacity: .18 }, { tooltip: text })
+      else mockLayer.add({ type: 'Point', coordinates: [item.longitude, item.latitude] }, { radius: 9, color: mockStroke, fillColor: surface, fillOpacity: 1, weight: 3 }, { tooltip: text })
       const row = document.createElement('div')
       row.className = 'mock-item'
       const focus = document.createElement('button')
       focus.textContent = text
-      focus.onclick = () => map.setView(point, Math.max(map.getZoom(), 13))
+      focus.onclick = () => zoomTo(item.longitude, item.latitude)
       const remove = document.createElement('button')
       remove.textContent = 'Remove'
       remove.setAttribute('aria-label', 'Remove ' + item.name)
@@ -68,13 +67,13 @@ export function setupMapTools({ map, api, refresh }) {
   }
   function cancelPlacement() {
     placement = null
-    map.getContainer().style.cursor = ''
+    setCursor('')
     $('cancel-map-placement').hidden = true
     $('map-action-status').textContent = $('mock-mode').checked ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : idleStatus
   }
   function begin(kind) {
     placement = kind
-    map.getContainer().style.cursor = 'crosshair'
+    setCursor('crosshair')
     $('cancel-map-placement').hidden = false
     $('map-action-status').textContent = 'Click the map to place ' + (kind === 'hazard' ? 'a mock disaster.' : 'a safe house.')
   }
@@ -100,7 +99,7 @@ export function setupMapTools({ map, api, refresh }) {
   }
   map.on('click', event => {
     if (!placement || saving) return
-    const point = event.latlng.wrap()
+    const point = event.lngLat.wrap()
     draft = { id: crypto.randomUUID(), kind: placement, mock: $('mock-mode').checked, latitude: point.lat, longitude: point.lng }
     cancelPlacement()
     $('placement-form').reset()
@@ -148,7 +147,7 @@ export function setupMapTools({ map, api, refresh }) {
       } else if (draft.mock) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')
         items.push(item); persist(); await loadMocks()
-        map.setView([item.latitude, item.longitude], Math.max(map.getZoom(), 13))
+        zoomTo(item.longitude, item.latitude)
         $('map-action-status').textContent = name + ' saved in this browser only. Live data unchanged.'
       } else {
         const { kind, ...payload } = item
@@ -174,8 +173,8 @@ export function setupMapTools({ map, api, refresh }) {
       houses.push(...batch)
       if (batch.length < 200) break
     }
-    realHouses.clearLayers()
-    for (const house of houses) L.circleMarker([house.latitude, house.longitude], {radius:8,color:safeHouseStroke,fillColor:surface,fillOpacity:1,weight:3}).bindTooltip(label(house.name + ' · Safe house · ' + house.status)).addTo(realHouses)
+    realHouses.clear()
+    for (const house of houses) realHouses.add({ type: 'Point', coordinates: [house.longitude, house.latitude] }, { radius: 8, color: safeHouseStroke, fillColor: surface, fillOpacity: 1, weight: 3 }, { tooltip: house.name + ' · Safe house · ' + house.status })
   }
   return { isPlacing: () => !!placement || saving, loadReal }
 }
