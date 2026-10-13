@@ -383,6 +383,27 @@ def testForwardHeadersOnlyIncludeCommandKeyForCommandURLs(monkeypatch):
     assert server.forwardHeaders(server.BACKEND_URL+'/v1/command/regions')=={'Content-Type':'application/json'}
 
 
+def testDashboardAcceptsBrowserConnectionBurst(monkeypatch):
+    import runpy
+    import socket
+    from http.server import ThreadingHTTPServer
+    from pathlib import Path
+    monkeypatch.setenv('HOST','127.0.0.1')
+    monkeypatch.setenv('PORT','0')
+    monkeypatch.setattr(ThreadingHTTPServer,'request_queue_size',5)
+    def acceptBurst(server):
+        connections=[]
+        try:
+            for _ in range(12):
+                connections.append(socket.create_connection(server.server_address,timeout=.3))
+        finally:
+            for connection in connections:
+                connection.close()
+            server.server_close()
+    monkeypatch.setattr(ThreadingHTTPServer,'serve_forever',acceptBurst)
+    runpy.run_path(str(Path(__file__).parents[1]/'mapshit'/'server.py'),run_name='__main__')
+
+
 def testMapConfigOnlyExposesPublicMapboxTokens(monkeypatch):
     import importlib.util, json
     from pathlib import Path
@@ -391,7 +412,7 @@ def testMapConfigOnlyExposesPublicMapboxTokens(monkeypatch):
     spec.loader.exec_module(server)
     config=lambda: json.loads(server.mapConfig().removeprefix('window.EVACUAID_MAP = '))
     monkeypatch.setenv('MAPBOX_TOKEN','pk.public-token')
-    assert config()=={'mapboxToken':'pk.public-token','mapboxStyle':'mapbox/light-v11'}
+    assert config()=={'mapboxToken':'pk.public-token','mapboxStyle':'mapbox/standard'}
     monkeypatch.setenv('MAPBOX_TOKEN','sk.secret-token')
     assert config()['mapboxToken'] is None and 'sk.' not in server.mapConfig()
     monkeypatch.delenv('MAPBOX_TOKEN')

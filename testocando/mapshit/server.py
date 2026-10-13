@@ -21,7 +21,7 @@ def forwardHeaders(targetUrl):
 def mapConfig():
     token = os.getenv('MAPBOX_TOKEN', '').strip()
     # The browser gets public tokens only; a secret sk. token must never reach a page.
-    config = {'mapboxToken': token if token.startswith('pk.') else None, 'mapboxStyle': os.getenv('MAPBOX_STYLE', 'mapbox/light-v11')}
+    config = {'mapboxToken': token if token.startswith('pk.') else None, 'mapboxStyle': os.getenv('MAPBOX_STYLE', 'mapbox/standard')}
     return 'window.EVACUAID_MAP = ' + json.dumps(config) + '\n'
 
 
@@ -125,4 +125,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    ThreadingHTTPServer.request_queue_size = max(ThreadingHTTPServer.request_queue_size, 64)
     ThreadingHTTPServer((os.getenv('HOST', '127.0.0.1'), int(os.getenv('PORT', '8080'))), Handler).serve_forever()

@@ -35,10 +35,10 @@ body{overflow:hidden;margin:0;background:var(--canvas);color:var(--ink);font-siz
 [hidden]{display:none!important}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 button,input,select{font:inherit;color:var(--ink)}
-button:where(:not(.priority-row):not(.leaflet-control button)){height:36px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--border-strong);background:var(--surface);font-size:14px;font-weight:600;cursor:pointer;transition:background-color var(--fast) var(--ease),border-color var(--fast) var(--ease),transform 160ms var(--ease-out)}
+button:where(:not(.priority-row):not(.mapboxgl-ctrl button)){height:36px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--border-strong);background:var(--surface);font-size:14px;font-weight:600;cursor:pointer;transition:background-color var(--fast) var(--ease),border-color var(--fast) var(--ease),transform 160ms var(--ease-out)}
 
-button:where(:not(.priority-row):not(.leaflet-control button)):active{background:var(--accent-100)}
-button.primary:not(:disabled):not(.leaflet-control button){background:var(--accent-600);color:white;border:0}
+button:where(:not(.priority-row):not(.mapboxgl-ctrl button)):active{background:var(--accent-100)}
+button.primary:not(:disabled):not(.mapboxgl-ctrl button){background:var(--accent-600);color:white;border:0}
 
 button:disabled{opacity:.45;cursor:not-allowed!important}
 button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent-500);outline-offset:2px}
@@ -65,7 +65,7 @@ h2{font-size:16px;line-height:22px;font-weight:600;margin:0}p{margin:0;color:var
 .kpi{padding:16px 20px;min-width:0}.kpi+.kpi{border-left:1px solid var(--border)}
 .kpi strong{display:block;font-size:28px;line-height:32px;font-weight:600;letter-spacing:-.02em;margin-top:6px}
 .kpi small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:16px;font-weight:500;color:var(--quiet);margin-top:4px}
-strong,.badge,#placement-coordinates,.priority-row p,.footnote,.leaflet-container{font-variant-numeric:tabular-nums}.unknown{color:var(--quiet)}
+strong,.badge,#placement-coordinates,.priority-row p,.footnote,.mapboxgl-map{font-variant-numeric:tabular-nums}.unknown{color:var(--quiet)}
 .overview-lower{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;margin-top:16px;align-items:start}
 .overview-details{display:flex;flex-direction:column;gap:16px}
 .panel{min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
@@ -82,7 +82,7 @@ strong,.badge,#placement-coordinates,.priority-row p,.footnote,.leaflet-containe
 .map-filters,.map-tools{display:contents}.map-filters select{height:36px;width:168px}#level{width:184px}.toolbar-spacer{flex:1}
 .map-action-status{position:absolute;top:calc(20px + var(--toolbar-h,48px));left:12px;z-index:500;padding:6px 10px;font-size:13px;line-height:18px;background:var(--surface);box-shadow:var(--shadow-sidebar);border-radius:var(--radius-md);max-width:calc(100% - 24px)}@media(min-width:760px){.map-hero:has(.region-card:not([hidden])) .map-action-status{max-width:calc(100% - 348px)}}#mock-banner{margin:12px 16px}
 #map{height:max(520px,68dvh);background:var(--chip)}
-.leaflet-container,.leaflet-container a.leaflet-popup-close-button{font-family:'Inter',system-ui,-apple-system,sans-serif}.leaflet-container{font-size:12px;line-height:16px}.leaflet-control-attribution{font-size:12px!important}.leaflet-bar,.leaflet-control{box-shadow:none}
+.mapboxgl-map{font-family:'Inter',system-ui,-apple-system,sans-serif}.mapboxgl-map{font-size:12px;line-height:16px}.mapboxgl-ctrl-attrib{font-size:12px!important}.mapboxgl-ctrl-group:not(:empty){box-shadow:var(--shadow-sidebar)}
 .legend{background:var(--surface);border-radius:var(--radius-md);border:0;box-shadow:var(--shadow-sidebar);padding:8px 10px;font-size:12px;line-height:16px;font-weight:500;color:var(--muted);display:grid;grid-template-columns:repeat(3,auto);gap:6px 10px}
 .legend span{display:flex;gap:6px;align-items:center}.legend i{width:10px;height:10px;border-radius:3px;background:var(--level-fill);border:1px solid var(--level-stroke)}.legend .is-simulation i{border:1px dashed var(--accent-600);background:var(--accent-100)}
 .map-layers{position:relative}.map-layers #toggle-layers{height:32px;padding:0 14px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);font-size:14px;font-weight:600;cursor:pointer;transition:background-color var(--fast) var(--ease),border-color var(--fast) var(--ease),transform 160ms var(--ease-out)}#toggle-layers:active{background:var(--accent-100)}
@@ -172,14 +172,14 @@ button#nav-toggle{display:none;align-items:center;justify-content:center;width:4
 .sidebar.collapsed .workspace-pill{padding:0 2px;background:transparent}
 .sidebar.collapsed .nav-tree,.sidebar.collapsed .nav-chevron{display:none}
 button#sidebar-collapse{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;padding:0;border:0;border-radius:var(--radius-2lg);background:transparent;color:var(--shell-icon)}
-button:where(:not(.priority-row):not(.leaflet-control button)):active:not(:disabled),.nav-item:active:not(:disabled){transform:scale(.96)}
+button:where(:not(.priority-row):not(.mapboxgl-ctrl button)):active:not(:disabled),.nav-item:active:not(:disabled){transform:scale(.96)}
 .skip-link{position:fixed;left:16px;top:12px;z-index:var(--z-dialog);padding:10px 16px;border-radius:999px;background:var(--accent-600);color:white;text-decoration:none;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;white-space:nowrap}
 .skip-link:focus{clip-path:none;width:auto;height:auto}
 .drawer-backdrop{position:fixed;inset:0;background:rgb(11 31 82/.35);z-index:var(--z-drawer-backdrop);opacity:0;transition:opacity 200ms var(--ease-out)}
 .drawer-backdrop.open{opacity:1}
 @media (hover:hover) and (pointer:fine){
-  button:where(:not(.priority-row):not(.leaflet-control button)):hover{background:var(--chip)}
-  button.primary:not(:disabled):not(.leaflet-control button):hover{background:var(--accent-700)}
+  button:where(:not(.priority-row):not(.mapboxgl-ctrl button)):hover{background:var(--chip)}
+  button.primary:not(:disabled):not(.mapboxgl-ctrl button):hover{background:var(--accent-700)}
   #toggle-layers:hover,.priority-row:hover{background:var(--chip)}
   .nav-item:hover,button.nav-item:hover,button#sidebar-collapse:hover{background:var(--shell-hover)}
   .nav-item[aria-current=page]:hover,.sidebar.collapsed .nav-group.child-current:hover{background:linear-gradient(180deg,var(--accent-500),var(--accent-600))}
@@ -201,3 +201,6 @@ button:where(:not(.priority-row):not(.leaflet-control button)):active:not(:disab
 /* Small phones: the data selector keeps its words; Refresh and the wordmark shrink to icons. */
 #refresh{display:inline-flex;align-items:center;gap:6px}.refresh-icon{display:none}
 @media(max-width:479px){.refresh-label,.brand-name{display:none}.refresh-icon{display:block}.header-right #refresh{width:36px;padding:0;justify-content:center}#dataMode{max-width:none;min-width:148px}}
+/* Mapbox GL: hover tooltips, and the note shown when no Mapbox token is configured. */
+.map-tooltip .mapboxgl-popup-content{padding:6px 10px;border-radius:var(--radius-md);box-shadow:var(--shadow-sidebar);font-size:12px;line-height:16px;color:var(--ink);pointer-events:none}.map-tooltip .mapboxgl-popup-tip{display:none}
+#map[data-map-note]::after{content:attr(data-map-note);z-index:2;position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:6px 10px;border-radius:var(--radius-md);background:var(--surface);color:var(--muted);font-size:12px;box-shadow:var(--shadow-sidebar);pointer-events:none}
