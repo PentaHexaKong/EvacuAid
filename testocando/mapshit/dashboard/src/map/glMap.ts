@@ -15,6 +15,7 @@ export type MapAPI = {
   fit(bounds: mapboxgl.LngLatBoundsLike): void
   onClick(id: LayerId, cb: (feature: Feature, event: mapboxgl.MapMouseEvent) => void): () => void
   pick(): Promise<[lng: number, lat: number]>
+  cancelPick(): void
 }
 const ids: LayerId[] = ['region', 'hazard', 'shelter', 'route', 'report', 'mock', 'safe-house']
 const polygon: mapboxgl.FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false]
@@ -117,6 +118,7 @@ export function createMap(container: HTMLElement, token: string, style: string, 
       document.addEventListener('keydown', escape)
       return new Promise((resolve, reject) => { pendingPick = { resolve, reject } })
     },
+    cancelPick,
   }
   map.on('style.load', () => {
     ready = true
