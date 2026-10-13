@@ -15,6 +15,16 @@ const number = (value) => value == null ? '—' : new Intl.NumberFormat('en-US')
 const time = (value) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Unknown'
 const state = { regions: [], selected: null, generation: 0, selectionGeneration: 0 }
 const map = L.map('map', { zoomSnap: 0.25, scrollWheelZoom: false }).setView([-2, 118], 5)
+// A frame computed while the Overview view is hidden has no size, so it waits until the view shows.
+let pendingBounds = null
+function frameMap(bounds) {
+  if (!map.getContainer().offsetWidth) { pendingBounds = bounds; return }
+  pendingBounds = null
+  map.invalidateSize() // the container reaches its CSS height after Leaflet first measured it
+  map.fitBounds(bounds, { padding: [24, 24], maxZoom: 13 })
+}
+new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer()) // sidebar collapse, drawer and view changes all resize the map
+window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.invalidateSize(); if (pendingBounds) frameMap(pendingBounds) }) })
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
 map.createPane('labels')
 map.getPane('labels').style.zIndex = 450
@@ -262,8 +272,7 @@ async function refresh({ fitView = true } = {}) {
       const mainland = located.filter(region => Math.abs(region.centroid.coordinates[1] - latitude) <= 0.25 && Math.abs(region.centroid.coordinates[0] - longitude) <= 0.25)
       // Centroids choose which regions count; their polygons set the frame, so one large region still fits.
       const bounds = (mainland.length >= 3 ? mainland : located).reduce((all, region) => all.extend(L.geoJSON(region.geometry).getBounds()), L.latLngBounds([]))
-      map.invalidateSize() // the container reaches its CSS height after Leaflet first measured it
-      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 13 })
+      frameMap(bounds)
     }
     else if (fitView && !rows.length) map.setView([-2, 118], 5)
     const demo = $('dataMode').value === 'SIMULATION'
