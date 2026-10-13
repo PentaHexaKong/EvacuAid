@@ -9,7 +9,7 @@ const group = document.querySelector('.nav-group')
 const tree = document.querySelector('.nav-tree')
 const mobile = window.matchMedia('(max-width:1023px)')
 const links = [...sidebar.querySelectorAll('a.nav-item')]
-const targets = { reports: 'ops-reports', assistance: 'ops-assistance', 'check-ins': 'ops-checkins', routes: 'ops-routes' }
+const sectionTitles = { reports: 'Field reports', assistance: 'Assistance', 'check-ins': 'Check-ins', routes: 'Route setter' }
 const titles = { overview: 'Regional overview', operations: 'Field operations', about: 'About this data' }
 let collapsed = false
 let treeOpen = false
@@ -71,8 +71,9 @@ function openDrawer() {
 
 function route(initial = false) {
   const hash = location.hash.slice(1)
+  if (hash === 'operations') { location.replace('#operations/reports'); return }
   const [requestedView, child, ...extra] = hash.split('/')
-  const valid = Object.hasOwn(titles, requestedView) && !extra.length && (hash === requestedView || (requestedView === 'operations' && Object.hasOwn(targets, child)))
+  const valid = Object.hasOwn(titles, requestedView) && !extra.length && (hash === requestedView || (requestedView === 'operations' && Object.hasOwn(sectionTitles, child)))
   const view = valid ? requestedView : 'overview'
   const section = valid && view === 'operations' ? child : undefined
   for (const el of document.querySelectorAll('.view')) el.hidden = el.dataset.view !== view
@@ -82,9 +83,10 @@ function route(initial = false) {
   group.classList.toggle('child-current', view === 'operations' && Boolean(section))
   if (view === 'operations') treeOpen = true
   renderSidebar()
-  document.title = titles[view] + ' · EvacuAid Command Center'
+  for (const el of document.querySelectorAll('[data-ops-section]')) el.hidden = el.dataset.opsSection !== section
+  if (section) document.getElementById('operations-title').textContent = sectionTitles[section]
+  document.title = (section ? sectionTitles[section] : titles[view]) + ' · EvacuAid Command Center'
   page.scrollTo({ top: 0, behavior: 'instant' })
-  if (section) document.getElementById(targets[section]).scrollIntoView({ block: 'start', behavior: 'instant' })
   if (!initial) {
     if (drawerOpen) page.inert = false
     main.focus({ preventScroll: true })
