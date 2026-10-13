@@ -8,6 +8,8 @@ import { DashboardSidebar } from "@/components/application/dashboard/dashboard-s
 import { Avatar } from "@/components/base/avatar/avatar"
 import { Select, SelectItem } from "@/components/base/select/select"
 import { navigation, navigationGroups, navigationEnd } from "@/app/nav"
+import { useQueryClient } from "@tanstack/react-query"
+import { useConnectionStatus } from "@/lib/queries"
 import { useDataMode } from "@/app/data-mode"
 
 function WorkspaceHeader({ collapsed }: { collapsed: boolean }) {
@@ -19,13 +21,16 @@ function WorkspaceHeader({ collapsed }: { collapsed: boolean }) {
 
 export function CommandHeaderActions({ onRefresh }: { onRefresh?: () => void }) {
   const { dataMode, setDataMode } = useDataMode()
+  const client = useQueryClient()
+  const connection = useConnectionStatus()
+  const dotTone = { loading: "bg-white", connected: "bg-status-lime-text", error: "bg-status-rose-text" }[connection.tone]
   return <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-    <span role="status" className="flex items-center gap-2 text-body-2-regular"><span aria-hidden className="size-2 rounded-full bg-white" /><span className="sr-only md:not-sr-only">Loading dashboard</span></span>
+    <span role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-2 text-body-2-regular"><span aria-hidden className={`size-2 rounded-full ${dotTone}`} /><span className="sr-only md:not-sr-only">{connection.text}</span></span>
     <Select aria-label="Data environment" size="sm" value={dataMode} onChange={(value) => { if (value === "REFERENCE" || value === "SIMULATION") setDataMode(value) }}>
       <SelectItem id="REFERENCE">Operational data</SelectItem>
       <SelectItem id="SIMULATION">Simulation data</SelectItem>
     </Select>
-    <Button variant="secondary" leadingIcon={RiRefreshLine} aria-label="Refresh" onClick={onRefresh}><span className="hidden sm:inline">Refresh</span></Button>
+    <Button variant="secondary" leadingIcon={RiRefreshLine} aria-label="Refresh" onClick={() => { void client.invalidateQueries({ queryKey: ["command"] }); onRefresh?.() }}><span className="hidden sm:inline">Refresh</span></Button>
   </div>
 }
 
