@@ -106,6 +106,8 @@ export default function Page() {
     map.setLayer('route', { type: 'FeatureCollection', features: (dataMode === 'REFERENCE' ? routes.data ?? [] : []).filter(r => r.usable && r.result.route?.geometry).map(r => feature(r.result.route?.geometry ?? null, { color: '#176D60', weight: 3, tooltip: r.name + ' · expires ' + time(r.expiresAt) + ' · safety not verified' })) })
     map.setVisible('route', visible.routes)
   }, [map, rows, selected, parent, level, geo, detail, visible, routes.data, dataMode])
+  // Legacy cleared the report marker whenever SIMULATION was selected (operations.js:150).
+  useEffect(() => { if (map && dataMode === 'SIMULATION') map.setLayer('report', { type: 'FeatureCollection', features: [] }) }, [map, dataMode])
   const errors = [regions.error, parents.error, region.error, routes.error].filter(Boolean)
   const stale = rows.filter(r => r.snapshotStale).length
   const explanation = (dataMode === 'SIMULATION' ? 'Simulation data. Synthetic administrative boundaries and population; not real operational statistics. ' : 'Operational data. ') + String(rows.length) + ' regions in the current filter scope. ' + String(stale) + ' unavailable/stale projections. Signal counts show known evidence only; numeric totals become Unknown when a contributing metric is missing. ' + (!rows.length ? 'Import administrative GeoJSON using the command importer.' : 'Hazard and shelter overlays load when a region is selected.')
