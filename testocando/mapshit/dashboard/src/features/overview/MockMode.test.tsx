@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { MapAPI } from '@/map/glMap'
 import { MockMode } from './MockMode'
+import { setMockMode } from '@/features/routes/formState'
 import { storageKey } from './mockStore'
 
 const map = { setLayer: vi.fn(), setVisible: vi.fn(), fit: vi.fn(), onClick: vi.fn(() => () => {}), pick: vi.fn(() => new Promise<[number, number]>(() => {})), cancelPick: vi.fn() } satisfies MapAPI
@@ -14,7 +15,7 @@ vi.mock('@/lib/queries', () => ({
   useCreateMockDisaster: () => mutation, useCreateSafeHouse: () => mutation, useClearMockDisasters: () => mutation, useDeleteMockDisaster: () => mutation,
 }))
 
-beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); setMockMode(false) })
 afterEach(cleanup)
 
 test('in mock mode, saved mock safe houses are drawn as one mock feature each', async () => {

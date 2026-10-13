@@ -32,20 +32,20 @@ export function useMockDisasters() {
   return useQuery({ queryKey: ['command', 'mock-disasters', dataMode], queryFn: () => api<MockDisaster[]>('mock-disasters?' + new URLSearchParams({ dataMode }).toString()) })
 }
 
-function useOperations<T>(resource: string, params?: PagingParams) {
+function useOperations<T>(resource: string, params?: PagingParams, refetchOnMount = true) {
   const { dataMode } = useDataMode()
   const paging = params ? { limit: params.limit ?? 50, offset: params.offset ?? 0 } : undefined
-  return useQuery({ queryKey: paging ? ['command', resource, paging] : ['command', resource], enabled: dataMode === 'REFERENCE', queryFn: () => api<T>('operations/' + resource + (paging ? '?' + new URLSearchParams({ limit: String(paging.limit), offset: String(paging.offset) }).toString() : '')), refetchInterval: 15_000, refetchIntervalInBackground: false })
+  return useQuery({ queryKey: paging ? ['command', resource, paging] : ['command', resource], enabled: dataMode === 'REFERENCE', refetchOnMount, queryFn: () => api<T>('operations/' + resource + (paging ? '?' + new URLSearchParams({ limit: String(paging.limit), offset: String(paging.offset) }).toString() : '')), refetchInterval: 15_000, refetchIntervalInBackground: false })
 }
 
 export function useReports(params: PagingParams = {}) { return useOperations<FieldReport[]>('reports', params) }
 export function useAssistance(params: PagingParams = {}) { return useOperations<AssistanceCase[]>('assistance', params) }
 export function useCheckIns() { return useOperations<CheckIns>('check-ins') }
-export function useRoutes(params: PagingParams = {}) { return useOperations<OperationalRoute[]>('routes', params) }
+export function useRoutes(params: PagingParams = {}, refetchOnMount = true) { return useOperations<OperationalRoute[]>('routes', params, refetchOnMount) }
 
-export function useAssistanceCounts() {
+export function useAssistanceCounts(refetchOnMount = true) {
   const { dataMode } = useDataMode()
-  return useQuery({ queryKey: ['command', 'assistance', 'counts'], enabled: dataMode === 'REFERENCE', queryFn: async () => {
+  return useQuery({ queryKey: ['command', 'assistance', 'counts'], refetchOnMount, enabled: dataMode === 'REFERENCE', queryFn: async () => {
     let open = 0
     let stale = 0
     for (let offset = 0; ; offset += 50) {

@@ -15,12 +15,15 @@ import { Checkbox } from '@/components/base/checkbox/checkbox'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/base/popover/popover'
 import { Kpis } from './Kpis'
 import { orderedRegions, PriorityRegions } from './PriorityRegions'
-import { RegionPanel, severity, Signal, titleCase, readable, Metrics, groupHazards, hazardName, hazardKind, sourceName, provenanceName, time } from './RegionPanel'
+import { RegionPanel, severity, Signal, titleCase, readable, Metrics, groupHazards, hazardName, hazardKind, sourceName, provenanceName } from './RegionPanel'
 import { Shelters } from './Shelters'
 import { Needs } from './Needs'
 import { Sources } from './Sources'
 import { MockMode } from './MockMode'
 import { hazardTypes } from './SafeHouseDialog'
+import { useEvaluated, mergeRouteFeatures } from '@/features/routes/evaluated'
+import { cancelAssemblyPick } from '@/features/routes/pick'
+import { selectRouteRegion } from '@/features/routes/formState'
 
 const layerLabels = { regions: 'Regional status', active: 'Official active', baseline: 'Baseline susceptibility', community: 'Community observations', satellite: 'Satellite observations', shelters: 'Shelters', routes: 'Published evacuation routes' }
 const emptyRegions: Region[] = []
@@ -38,7 +41,13 @@ function geography(rows: Region[]) {
 export default function Page() {
   const { dataMode } = useDataMode()
   const map = useMap()
+  const evaluated = useEvaluated()
   const client = useQueryClient()
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; queueMicrotask(() => { if (!mounted.current) cancelAssemblyPick() }) }
+  }, [])
   const [level, setLevel] = useState<AdministrativeLevel>('VILLAGE')
   const [parent, setParent] = useState('')
   const [filterMode, setFilterMode] = useState(dataMode)
@@ -48,16 +57,19 @@ export default function Page() {
   const [selection, setSelection] = useState<{ scope: string; id: string | null; updatedAt: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [visible, setVisible] = useState({ regions: true, active: true, baseline: false, community: false, satellite: false, shelters: true, routes: true })
+  const [shownEvaluated, setShownEvaluated] = useState(evaluated)
+  if (shownEvaluated !== evaluated) { setShownEvaluated(evaluated); if (evaluated) setVisible(current => ({ ...current, routes: true })) }
   const params = useMemo(() => ({ administrativeLevel: level, ...(parent ? { parentRegionId: parent } : {}), ...(hazard ? { hazardType: hazard as HazardType } : {}), ...(signal ? { signalLevel: signal as SignalLevel } : {}) }), [level, parent, hazard, signal])
   const scope = JSON.stringify([dataMode, params])
   const regions = useRegions(params)
   const parents = useRegions({ administrativeLevel: parentLevels[level] ?? 'PROVINCE' })
-  const cases = useAssistanceCounts()
-  const routes = useRoutes()
+  const cases = useAssistanceCounts(false)
+  const routes = useRoutes({}, false)
   const rows = regions.data ?? emptyRegions
   const selected = selection?.scope === scope && ((selection.id === null && selection.updatedAt === regions.dataUpdatedAt) || rows.some(r => r.id === selection.id)) ? selection.id : rows[0]?.id ?? null
   const region = useRegion(selected)
   const detail = region.data
+  useEffect(() => { if (detail?.dataMode === 'REFERENCE') selectRouteRegion(detail.id) }, [detail])
   const geo = useMemo(() => geography(rows), [rows])
   const hero = useRef<HTMLDivElement>(null)
   const frameScope = useRef<string | null>(null)
@@ -68,13 +80,13 @@ export default function Page() {
     return () => { clearInterval(interval); }
   }, [busy, refresh])
   useEffect(() => {
-    if (!map || regions.isPending || frameScope.current === scope) return
+    if (!map || evaluated || regions.isPending || frameScope.current === scope) return
     frameScope.current = scope
     const geometry: Geometry = { type: 'GeometryCollection', geometries: (geo.mainland.length >= 3 ? geo.mainland : geo.located).map(r => r.geometry) }
     const bounds = boundsOf(geometry)
     if (bounds) map.fit(bounds)
     else if (!rows.length) map.fit([[95, -11], [141, 6]])
-  }, [map, scope, geo, rows.length, regions.isPending])
+  }, [map, scope, geo, rows.length, regions.isPending, evaluated])
   const select = useCallback((id: string) => {
     setSelection({ scope, id, updatedAt: regions.dataUpdatedAt })
     const bounds = boundsOf(rows.find(r => r.id === id)?.geometry)
@@ -103,9 +115,14 @@ export default function Page() {
     map.setVisible('hazard', visible.active || visible.baseline || visible.community || visible.satellite)
     map.setLayer('shelter', { type: 'FeatureCollection', features: (detail?.shelters ?? []).map(s => feature(s.geometry, { radius: 6, color: accent, fillColor: surface, fillOpacity: 1, weight: 2, tooltip: s.name + ' · capacity ' + (s.capacity == null ? '—' : s.capacity.toLocaleString('en-US')) })) })
     map.setVisible('shelter', visible.shelters)
-    map.setLayer('route', { type: 'FeatureCollection', features: (dataMode === 'REFERENCE' ? routes.data ?? [] : []).filter(r => r.usable && r.result.route?.geometry).map(r => feature(r.result.route?.geometry ?? null, { color: '#176D60', weight: 3, tooltip: r.name + ' · expires ' + time(r.expiresAt) + ' · safety not verified' })) })
+    map.setLayer('route', { type: 'FeatureCollection', features: mergeRouteFeatures(routes.data ?? [], evaluated, dataMode) })
     map.setVisible('route', visible.routes)
-  }, [map, rows, selected, parent, level, geo, detail, visible, routes.data, dataMode])
+  }, [map, rows, selected, parent, level, geo, detail, visible, routes.data, dataMode, evaluated])
+  useEffect(() => {
+    if (!evaluated || dataMode !== 'REFERENCE') return
+    const bounds = boundsOf(evaluated.geometry)
+    if (map && bounds) map.fit(bounds)
+  }, [map, evaluated, dataMode])
   // Legacy cleared the report marker whenever SIMULATION was selected (operations.js:150).
   useEffect(() => { if (map && dataMode === 'SIMULATION') map.setLayer('report', { type: 'FeatureCollection', features: [] }) }, [map, dataMode])
   const errors = [regions.error, parents.error, region.error, routes.error].filter(Boolean)
