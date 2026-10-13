@@ -65,6 +65,10 @@ def payload(row):
     return result
 
 
+def recipientsQuery(hazardId, now):
+    return select(User.id).select_from(HazardRecord).join(User, hazardRepository.coversLocation(User.latitude, User.longitude)).where(HazardRecord.id == hazardId, User.latitude.is_not(None), User.longitude.is_not(None), User.locationObservedAt >= now - timedelta(hours=24), User.locationObservedAt <= now)
+
+
 async def enqueueAlerts(db):
     if not config.ALERT_PUSH_ENABLED:
         return
@@ -72,7 +76,7 @@ async def enqueueAlerts(db):
     alerts = (await db.execute(hazardRepository.activeOfficialAlerts(('SIAGA', 'AWAS'), now))).scalars().all()
     for row in alerts:
         alertId = alertKey(row)
-        candidates = select(User.id).select_from(HazardRecord).join(User, hazardRepository.coversLocation(User.latitude, User.longitude)).where(HazardRecord.id == row.id, User.latitude.is_not(None), User.longitude.is_not(None), User.locationObservedAt >= now - timedelta(hours=24), User.locationObservedAt <= now)
+        candidates = recipientsQuery(row.id, now)
         userIds = (await db.execute(candidates)).scalars().all()
         if not userIds:
             continue

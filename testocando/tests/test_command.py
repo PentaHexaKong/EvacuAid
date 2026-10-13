@@ -635,6 +635,45 @@ async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch
 
 
 @pytest.mark.asyncio
+async def testMockDisasterCountsFreshUsersWithoutIdentifiers(commandSession,monkeypatch):
+    monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
+    monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')
+    now=datetime.now(timezone.utc)
+    inside=User(name='PRIVATE INSIDE',latitude=.005,longitude=.005,location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=now-timedelta(hours=1))
+    commandSession.add(inside); await commandSession.flush()
+    async def override():
+        yield commandSession
+    app.dependency_overrides[get_session]=override
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'X-Command-Key':'test-command-key'}) as client:
+            url='/v1/command/mock-disasters'
+            payload={'id':str(uuid.uuid4()),'name':'Drill','hazardType':'FLOOD','latitude':.005,'longitude':.005,'radiusM':300,'severity':'CRITICAL'}
+            expectedKeys={'id','name','hazardType','latitude','longitude','radiusM','severity','expiresAt','usersInArea'}
+            response=await client.post(url,json=payload)
+            assert response.status_code==201, response.text
+            assert response.json()['usersInArea']==1
+            assert set(response.json())==expectedKeys
+            outside=User(name='PRIVATE OUTSIDE',latitude=.005,longitude=.015,location=from_shape(Point(.015,.005),srid=4326),locationObservedAt=now-timedelta(hours=1))
+            stale=User(name='PRIVATE STALE',latitude=.005,longitude=.005,location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=now-timedelta(hours=30))
+            commandSession.add_all([outside,stale]); await commandSession.flush()
+            response=await client.post(url,json=payload)
+            assert response.status_code==201, response.text
+            assert response.json()['usersInArea']==1
+            assert set(response.json())==expectedKeys
+            listed=await client.get(url)
+            assert listed.status_code==200, listed.text
+            assert len(listed.json())==1
+            assert listed.json()[0]['usersInArea']==1
+            assert set(listed.json()[0])==expectedKeys
+            for body in [response.json(),listed.json()[0]]:
+                encoded=json.dumps(body)
+                assert 'PRIVATE' not in encoded
+                assert all(str(user.id) not in encoded for user in [inside,outside,stale])
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def testMockDisasterValidationAndKey(commandSession,monkeypatch):
     monkeypatch.setenv('COMMAND_API_KEY','test-command-key')
     monkeypatch.setenv('COMMAND_MOCK_ALERTS_ENABLED','1')

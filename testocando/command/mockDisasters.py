@@ -13,7 +13,7 @@ from app.db.models.hazard import HazardRecord
 from app.db.session import get_session
 from app.models.hazard import HazardType
 from app.services import alertSimulation
-from app.services.alertService import alertKey
+from app.services.alertService import alertKey, recipientsQuery
 from command.access import requireCommandKey
 from command.aggregation import refreshSnapshots
 
@@ -46,6 +46,7 @@ class MockDisasterCreate(BaseModel):
 
 class MockDisasterResponse(MockDisasterCreate):
     expiresAt: datetime
+    usersInArea: int
 
 
 def mockQuery():
@@ -53,11 +54,11 @@ def mockQuery():
         HazardRecord.evidenceMetadata['commandMock'].as_boolean() == True)
 
 
-def mockResponse(row):
+def mockResponse(row, usersInArea):
     metadata = row.evidenceMetadata
     return MockDisasterResponse(id=metadata['mockId'], name=metadata['name'], hazardType=row.hazardType,
         latitude=metadata['center'][1], longitude=metadata['center'][0], radiusM=metadata['radiusM'],
-        severity=metadata['severity'], expiresAt=row.validUntil)
+        severity=metadata['severity'], expiresAt=row.validUntil, usersInArea=usersInArea)
 
 
 @router.post('', response_model=MockDisasterResponse, status_code=201)
@@ -71,16 +72,23 @@ async def addMockDisaster(payload: MockDisasterCreate, session: AsyncSession = D
         radiusM=payload.radiusM, area=payload.name,
         metadata={'commandMock': True, 'mockId': str(payload.id), 'name': payload.name, 'radiusM': payload.radiusM,
             'severity': payload.severity, 'center': [payload.longitude, payload.latitude]})
+    now = datetime.now(timezone.utc)
+    usersInArea = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
     await refreshSnapshots(session)
     await session.commit()
-    return mockResponse(row)
+    return mockResponse(row, usersInArea)
 
 
 @router.get('', response_model=list[MockDisasterResponse])
 async def listMockDisasters(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(mockQuery().where(HazardRecord.validUntil > datetime.now(timezone.utc))
+    now = datetime.now(timezone.utc)
+    rows = (await session.execute(mockQuery().where(HazardRecord.validUntil > now)
         .order_by(HazardRecord.observedAt.desc(), HazardRecord.id))).scalars().all()
-    return [mockResponse(row) for row in rows]
+    result = []
+    for row in rows:
+        usersInArea = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
+        result.append(mockResponse(row, usersInArea))
+    return result
 
 
 async def removeMocks(session, mockId=None):
