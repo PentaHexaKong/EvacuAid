@@ -19,19 +19,19 @@ afterEach(cleanup)
 
 test('in mock mode, saved mock safe houses are drawn as one mock feature each', async () => {
   localStorage.setItem(storageKey, JSON.stringify([{ kind: 'safeHouse', id: 'a', name: 'Masjid', latitude: -6.2, longitude: 106.8 }]))
-  render(<MockMode filters={null} layers={null} refresh={async () => null} onBusyChange={() => {}} />)
+  render(<MockMode filters={null} layers={null} refresh={() => Promise.resolve(null)} onBusyChange={() => {}} />)
   await userEvent.click(screen.getByRole('switch', { name: 'Mock mode' }))
-  const mock = map.setLayer.mock.calls.filter(([id]) => id === 'mock').at(-1)
+  const mock = map.setLayer.mock.calls.filter(([id]) => id === 'mock').at(-1) as Parameters<MapAPI['setLayer']> | undefined
   expect(mock?.[1].features).toHaveLength(1)
   expect(mock?.[1].features[0]?.geometry).toEqual({ type: 'Point', coordinates: [106.8, -6.2] })
 })
 
 test('cancelling aborts only its own pick, and unmount leaves other picks alone', async () => {
-  const { unmount } = render(<MockMode filters={null} layers={null} refresh={async () => null} onBusyChange={() => {}} />)
+  const { unmount } = render(<MockMode filters={null} layers={null} refresh={() => Promise.resolve(null)} onBusyChange={() => {}} />)
   unmount()
   expect(map.cancelPick).not.toHaveBeenCalled()
 
-  render(<MockMode filters={null} layers={null} refresh={async () => null} onBusyChange={() => {}} />)
+  render(<MockMode filters={null} layers={null} refresh={() => Promise.resolve(null)} onBusyChange={() => {}} />)
   await userEvent.click(screen.getByRole('button', { name: 'Add safe house' }))
   expect(map.pick).toHaveBeenCalledOnce()
   await userEvent.click(await screen.findByRole('button', { name: 'Cancel placement' }))

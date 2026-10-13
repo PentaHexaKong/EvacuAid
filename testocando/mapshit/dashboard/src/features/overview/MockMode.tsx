@@ -29,6 +29,7 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
     try { JSON.parse(localStorage.getItem(storageKey) || '[]'); return '' }
     catch { return 'Saved mock items could not be loaded. You can start a new mock scenario.' }
   })
+  const loadError = (houses.error || mocks.error)?.message
   const toolbar = useRef<HTMLDivElement>(null)
   const generation = useRef(0)
   useEffect(() => {
@@ -44,7 +45,6 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
   useEffect(() => { try { if (items.length || localStorage.getItem(storageKey) !== null) saveMocks(items) } catch { queueMicrotask(() => { setStatus('Browser storage unavailable. Mock items remain available for this tab only.') }) } }, [items])
   const picking = useRef<(() => void) | null>(null)
   useEffect(() => () => { generation.current++; picking.current?.() }, [])
-  useEffect(() => { const error = houses.error || mocks.error; if (error) setStatus(error.message) }, [houses.error, mocks.error])
   const reach = (count: number | null | undefined) => count === undefined ? '' : count === null ? 'under 5 users in area' : count.toLocaleString('en-US') + ' users in area'
   const word = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
   const all = [...(mocks.data ?? []).map(item => ({ ...item, kind: 'hazard' as const })), ...(mock ? items : [])]
@@ -84,7 +84,7 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
     <div ref={toolbar} className="absolute inset-x-3 top-3 z-20 flex max-h-[calc(100%-24px)] flex-col gap-2 overflow-auto">
       {mock && <Alert>MOCK MODE · Mock disasters are saved as test warnings: Watch appears in the app; Elevated and Critical can send test push notifications when alert delivery is enabled. Mock safe houses stay in this browser. Official data is unchanged.</Alert>}
       <Card size="sm"><CardContent className="flex flex-col gap-2"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap gap-2">{filters}</div><div className="flex flex-wrap items-center gap-2"><Switch size="sm" isSelected={mock} onChange={value => { cancel(); setMock(value); setStatus(value ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : '') }}>Mock mode</Switch><Button disabled={!mock || pending} onClick={() => { void begin('hazard') }}>Add mock disaster</Button>{placing && <Button variant="secondary" onClick={cancel}>Cancel placement</Button>}{mock && <Button variant="secondary" disabled={pending} onClick={() => { void (async () => { try { await clear.mutateAsync(); setItems([]); cancel(); await refresh() } catch (error) { setStatus((error as Error).message) } })() }}>Clear mock items</Button>}</div></div><div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={pending} onClick={() => { void begin('safeHouse') }}>{mock ? 'Add mock safe house' : 'Add safe house'}</Button>{layers}</div></CardContent></Card>
-      {status && <Card size="sm"><CardContent><p role="status">{status}</p></CardContent></Card>}
+      {(status || loadError) && <Card size="sm"><CardContent><p role="status">{status || loadError}</p></CardContent></Card>}
       {(mock || Boolean(mocks.data?.length)) && <DataState loading={mocks.isPending}><Card size="sm"><CardContent className="flex max-h-32 flex-wrap gap-2 overflow-auto">{all.map(item => <Chip key={item.id} variant="caption"><Button variant="ghost" size="small" onClick={() => map?.fit([[item.longitude - .005, item.latitude - .005], [item.longitude + .005, item.latitude + .005]])}>{label(item)}</Button><CloseButton aria-label={'Remove ' + item.name} disabled={pending} size="sm" onClick={() => { void (async () => { try { if (item.kind === 'hazard') await remove.mutateAsync(item.id); else setItems(current => current.filter(value => value.id !== item.id)); await refresh() } catch (error) { setStatus((error as Error).message) } })() }} /></Chip>)}{!all.length && <p>No mock items. Choose Add mock disaster or Add safe house, then click the map.</p>}</CardContent></Card></DataState>}
     </div>
     {draft && <SafeHouseDialog key={draft.id} draft={draft} onClose={() => { setDraft(null); }} onSave={async payload => {
