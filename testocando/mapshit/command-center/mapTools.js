@@ -2,6 +2,11 @@ const $ = id => document.getElementById(id)
 const storageKey = 'evacuaid-command-mocks-v1'
 
 export function setupMapTools({ map, api, refresh }) {
+  const idleStatus = $('map-action-status').textContent
+  const tokens = getComputedStyle(document.documentElement)
+  const mockStroke = tokens.getPropertyValue('--mock-stroke').trim()
+  const safeHouseStroke = tokens.getPropertyValue('--safe-house-stroke').trim()
+  const surface = tokens.getPropertyValue('--surface').trim()
   const mockLayer = L.layerGroup().addTo(map)
   const realHouses = L.layerGroup().addTo(map)
   let items = []
@@ -32,8 +37,8 @@ export function setupMapTools({ map, api, refresh }) {
       const word = value => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
       const text = (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) : ' · Safe house')
       const layer = item.kind === 'hazard'
-        ? L.circle(point, { radius: item.radiusM, color: '#9d4ac1', dashArray: '6 4', fillOpacity: .18 })
-        : L.circleMarker(point, { radius: 9, color: '#9d4ac1', fillColor: '#fff', fillOpacity: 1, weight: 3 })
+        ? L.circle(point, { radius: item.radiusM, color: mockStroke, dashArray: '6 4', fillOpacity: .18 })
+        : L.circleMarker(point, { radius: 9, color: mockStroke, fillColor: surface, fillOpacity: 1, weight: 3 })
       layer.bindTooltip(label(text)).addTo(mockLayer)
       const row = document.createElement('div')
       row.className = 'mock-item'
@@ -63,7 +68,7 @@ export function setupMapTools({ map, api, refresh }) {
     placement = null
     map.getContainer().style.cursor = ''
     $('cancel-map-placement').hidden = true
-    $('map-action-status').textContent = $('mock-mode').checked ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : 'Pan, zoom, or select a region. Safe houses are saved to the backend.'
+    $('map-action-status').textContent = $('mock-mode').checked ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : idleStatus
   }
   function begin(kind) {
     placement = kind
@@ -164,7 +169,7 @@ export function setupMapTools({ map, api, refresh }) {
       if (batch.length < 200) break
     }
     realHouses.clearLayers()
-    for (const house of houses) L.circleMarker([house.latitude, house.longitude], {radius:8,color:'#176d60',fillColor:'#fff',fillOpacity:1,weight:3}).bindTooltip(label(house.name + ' · Safe house · ' + house.status)).addTo(realHouses)
+    for (const house of houses) L.circleMarker([house.latitude, house.longitude], {radius:8,color:safeHouseStroke,fillColor:surface,fillOpacity:1,weight:3}).bindTooltip(label(house.name + ' · Safe house · ' + house.status)).addTo(realHouses)
   }
   return { isPlacing: () => !!placement || saving, loadReal }
 }

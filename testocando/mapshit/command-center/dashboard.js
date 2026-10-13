@@ -5,6 +5,15 @@ const tokens = getComputedStyle(document.documentElement)
 const levels = ['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN']
 const fill = Object.fromEntries(levels.map(level => [level, tokens.getPropertyValue('--' + level.toLowerCase() + '-fill').trim()]))
 const stroke = Object.fromEntries(levels.map(level => [level, tokens.getPropertyValue('--' + level.toLowerCase() + '-stroke').trim()]))
+const baselineStroke = tokens.getPropertyValue('--baseline-stroke').trim()
+const surface = tokens.getPropertyValue('--surface').trim()
+const communityStroke = tokens.getPropertyValue('--community-stroke').trim()
+const satelliteStroke = tokens.getPropertyValue('--satellite-stroke').trim()
+const reducedMotion = window.matchMedia('(prefers-reduced-motion:reduce)')
+const compactNumber = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
+const fillOpacity = { CRITICAL: .6, ELEVATED: .45, WATCH: .22, NORMAL: .08, UNKNOWN: .12 }
+const priorityLevels = ['CRITICAL', 'ELEVATED', 'WATCH', 'UNKNOWN', 'NORMAL']
+const displayedLevel = region => region.simulation?.signalLevel || region.signalLevel
 const accent = tokens.getPropertyValue('--accent-600').trim()
 const titleCase = value => String(value).replace(/\p{L}+/gu, word => word.length > 3 && word === word.toUpperCase() ? word[0] + word.slice(1).toLowerCase() : word)
 const readable = value => value == null || value === 'UNKNOWN' ? 'Unknown' : String(value).toLowerCase().replaceAll('_', ' ').replace(/^./u, letter => letter.toUpperCase())
@@ -13,8 +22,9 @@ const sourceName = value => ({ INARISK: 'InaRISK (BNPB)', BMKG_CAP: 'BMKG', BMKG
 const provenanceName = value => ({ OFFICIAL_BASELINE: 'reference layer, not an active warning', OFFICIAL_ACTIVE: 'official active', COMMUNITY_OBSERVATION: 'community report', SATELLITE_OBSERVATION: 'satellite', SIMULATION: 'simulation' }[value] || readable(value))
 const number = (value) => value == null ? '—' : new Intl.NumberFormat('en-US').format(value)
 const time = (value) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Unknown'
-const state = { regions: [], selected: null, generation: 0, selectionGeneration: 0 }
-const map = L.map('map', { zoomSnap: 0.25, scrollWheelZoom: false }).setView([-2, 118], 5)
+const state = { regions: [], selected: null, generation: 0, selectionGeneration: 0, offshore: new Set(), regionLayers: new Map(), priorityRegions: [], pendingSelection: null, cases: null }
+const map = L.map('map', { zoomSnap: 0.25, scrollWheelZoom: false, zoomControl: false }).setView([-2, 118], 5)
+L.control.zoom({ position: 'bottomright' }).addTo(map)
 // A frame computed while the Overview view is hidden has no size, so it waits until the view shows.
 let pendingBounds = null
 function frameMap(bounds) {
@@ -29,7 +39,9 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_L
 map.createPane('labels')
 map.getPane('labels').style.zIndex = 450
 map.getPane('labels').style.pointerEvents = 'none'
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { pane: 'labels', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
+const labelTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { pane: 'labels', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
+// ponytail: a short flyToBounds leaves earlier-zoom label tiles behind, scaled up and blurred over the map; drop them once the move settles (private Leaflet 1.9 API)
+map.on('moveend', () => setTimeout(() => labelTiles._pruneTiles(), 300))
 const layers = Object.fromEntries(['regions', 'active', 'baseline', 'community', 'satellite', 'shelters', 'routes'].map((name) => [name, L.layerGroup()]))
 for (const name of ['regions', 'active', 'shelters']) layers[name].addTo(map)
 
@@ -70,7 +82,10 @@ function mapControl(id, position) {
   control.addTo(map)
 }
 mapControl('map-legend', 'bottomleft')
-mapControl('map-layers', 'topright')
+const initialActionStatus = $('map-action-status').textContent
+const updateActionStatus = () => { $('map-action-status').hidden = $('map-action-status').textContent === initialActionStatus }
+new MutationObserver(updateActionStatus).observe($('map-action-status'), { childList: true, characterData: true, subtree: true })
+updateActionStatus()
 $('toggle-layers').onclick = () => {
   const open = $('layers').hidden
   $('layers').hidden = !open
@@ -109,6 +124,19 @@ async function allRegions(params) {
     if (batch.length < 200) return rows
   }
 }
+async function assistanceCounts() {
+  let open = 0
+  let stale = 0
+  for (let offset = 0; ; offset += 50) {
+    const batch = await api('operations/assistance?limit=50&offset=' + offset)
+    for (const item of batch) {
+      if (['COMPLETED', 'CANCELLED'].includes(item.government?.status)) continue
+      if (item.stale) stale++
+      else open++
+    }
+    if (batch.length < 50) return { open, stale }
+  }
+}
 function renderKpis() {
   const rows = state.regions
   const sum = (key) => rows.length && rows.every((r) => r[key] != null) ? rows.reduce((total, r) => total + r[key], 0) : null
@@ -119,12 +147,14 @@ function renderKpis() {
     ['Regions with hazard signals', rows.some((r) => r.signalLevel !== 'UNKNOWN') ? known : null, 'Watch or higher' + unknownNote, 'Includes baseline WATCH · ' + unknown + ' regions UNKNOWN'],
     ['Critical regions', rows.some((r) => r.signalLevel !== 'UNKNOWN') ? rows.filter((r) => r.signalLevel === 'CRITICAL').length : null, 'Official critical signals' + unknownNote, 'Known official critical signals · ' + unknown + ' regions UNKNOWN'],
     ['Population exposed (est.)', sum('estimatedExposedPopulation'), sum('estimatedExposedPopulation') == null ? 'No data' : 'Area-weighted estimate', 'Approximate · missing regions → UNKNOWN'],
-    ['Active assistance requests', sum('activeAssistanceCount'), 'From recently located people', 'Recently located requester profiles'],
+    ['Open assistance cases', $('dataMode').value === 'SIMULATION' ? null : state.cases?.open, $('dataMode').value === 'SIMULATION' ? 'Hidden in simulation' : !state.cases ? "Couldn't load cases" : state.cases.stale ? state.cases.stale + ' older than 24 h need review' : 'Updated just now', 'Open government assistance cases'],
     ['Recorded shelters', sum('recordedShelterCount'), 'Reference inventory', 'Reference inventory · no live occupancy tracking'],
   ]
   $('kpis').replaceChildren()
   for (const [label, value, note, title] of values) {
-    const card = element('div', 'kpi')
+    const linked = label === 'Open assistance cases'
+    const card = element(linked ? 'a' : 'div', linked ? 'kpi kpi-link' : 'kpi')
+    if (linked) card.href = '#operations/assistance'
     card.title = title
     card.append(element('label', '', label), numeric(value), element('small', '', note))
     $('kpis').append(card)
@@ -132,21 +162,45 @@ function renderKpis() {
 }
 function renderRegions() {
   layers.regions.clearLayers()
+  state.regionLayers.clear()
   $('priorities').replaceChildren()
+  state.priorityRegions = priorityLevels.flatMap(level => state.regions.filter(region => displayedLevel(region) === level))
+  for (const level of [...levels, 'SIMULATION']) {
+    const count = state.regions.filter(region => level === 'SIMULATION' ? region.simulation : displayedLevel(region) === level).length
+    const entry = $('map-legend').querySelector('.is-' + level.toLowerCase())
+    entry.replaceChildren(element('i'), document.createTextNode(readable(level) + ' ' + count))
+    entry.style.opacity = count ? '1' : '.5'
+  }
+  if (state.selected != null) $('priorities').setAttribute('aria-activedescendant', 'region-' + state.selected)
+  else $('priorities').removeAttribute('aria-activedescendant')
   $('region-count').textContent = state.regions.length + (state.regions.length === 1 ? ' region' : ' regions')
   let selectedLayer = null
-  for (const region of state.regions) {
-    const level = region.simulation ? region.simulation.signalLevel : region.signalLevel
+  let previousLevel = null
+  for (const region of state.priorityRegions) {
+    const level = displayedLevel(region)
+    if (level !== previousLevel) {
+      const count = state.priorityRegions.filter(item => displayedLevel(item) === level).length
+      $('priorities').append(element('h3', 'priority-group is-' + level.toLowerCase(), readable(level) + ' · ' + count))
+      previousLevel = level
+    }
     const selected = state.selected === region.id
-    const style = { color: selected || region.simulation ? accent : stroke[level], weight: selected ? 2.5 : region.simulation ? 2 : 1, opacity: .9, fillColor: fill[level], fillOpacity: .55, dashArray: region.simulation ? '4 4' : null }
-    const layer = L.geoJSON(region.geometry, { style })
-    layer.on('mouseover', () => layer.setStyle({ weight: selected ? 2.5 : 2 }))
-    layer.on('mouseout', () => layer.setStyle(style))
-    layer.bindTooltip(element('span', '', (region.simulation ? 'Simulation · ' : '') + titleCase(region.name) + ' · ' + readable(level)))
-    layer.on('click', () => { if (!mapTools.isPlacing()) selectRegion(region.id) })
-    layer.addTo(layers.regions)
-    if (selected) selectedLayer = layer
+    const style = { color: selected || region.simulation ? accent : stroke[level], weight: selected ? 2.5 : region.simulation ? 2 : 1, opacity: .9, fillColor: fill[level], fillOpacity: region.simulation ? .5 : fillOpacity[level], dashArray: region.simulation ? '4 4' : null }
+    if (!state.offshore.has(region.id) || selected || $('parent').value || !['VILLAGE', 'DISTRICT'].includes($('level').value)) {
+      const layer = L.geoJSON(region.geometry, { style })
+      layer.on('mouseover', () => layer.setStyle({ weight: selected ? 2.5 : 2 }))
+      layer.on('mouseout', () => layer.setStyle(style))
+      layer.bindTooltip(element('span', '', (region.simulation ? 'Simulation · ' : '') + titleCase(region.name) + ' · ' + readable(level)))
+      layer.on('click', () => { if (!mapTools.isPlacing()) selectRegion(region.id) })
+      layer.addTo(layers.regions)
+      state.regionLayers.set(region.id, layer)
+      if (selected) selectedLayer = layer
+    }
     const row = element('button', 'priority-row' + (state.selected === region.id ? ' selected' : ''))
+    row.type = 'button'
+    row.id = 'region-' + region.id
+    row.tabIndex = -1
+    row.setAttribute('role', 'option')
+    row.setAttribute('aria-selected', String(selected))
     const top = element('div', 'row-top')
     top.append(element('strong', '', titleCase(region.name)))
     const badges = element('span', 'row-badges')
@@ -154,11 +208,11 @@ function renderRegions() {
     badges.append(badge(region.signalLevel, region.signalLevel))
     top.append(badges)
     const updated = region.updatedAt ? new Date(region.updatedAt).toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '—'
-    const description = element('p', '', (region.activeAssistanceCount > 0 ? 'Assistance ' + number(region.activeAssistanceCount) + ' · ' : '') + 'Updated ' + updated + (region.estimatedExposedPopulation == null ? '' : ' · Est. exposed ' + number(region.estimatedExposedPopulation)))
+    const description = element('p', '', (region.estimatedExposedPopulation == null ? 'Exposure unknown' : '≈' + compactNumber.format(region.estimatedExposedPopulation).toLowerCase() + ' exposed') + ' · Updated ' + updated + (region.activeAssistanceCount > 0 ? ' · Assistance ' + number(region.activeAssistanceCount) : ''))
     if (region.activeAssistanceCount == null || !region.updatedAt) description.setAttribute('aria-label', description.textContent.replaceAll('—', 'Unknown'))
     row.title = region.snapshotStale ? 'Projection unavailable / stale' : description.textContent.replaceAll('—', 'Unknown')
     row.append(top, description)
-    row.addEventListener('click', () => selectRegion(region.id))
+    row.addEventListener('click', () => { $('priorities').focus({ preventScroll: true }); selectRegion(region.id) })
     $('priorities').append(row)
   }
   if (selectedLayer) selectedLayer.bringToFront()
@@ -167,6 +221,8 @@ function renderRegions() {
 function clearSelection() {
   state.selectionGeneration++
   state.selected = null
+  state.pendingSelection = null
+  $('region-card').hidden = true
   for (const [name, layer] of Object.entries(layers)) if (name !== 'regions') layer.clearLayers()
   $('selected-name').textContent = 'Choose a region'
   $('selected-signal').textContent = 'Unknown'
@@ -177,13 +233,69 @@ function clearSelection() {
   $('routing').removeAttribute('aria-label')
   $('routing').textContent = 'Responder inventory and regional routing status: Unknown.'
 }
-async function selectRegion(id) {
+function closeRegionCard() {
+  const focused = $('region-card').contains(document.activeElement)
+  clearSelection()
+  renderRegions()
+  if (focused) document.querySelector('.map-hero').focus({ preventScroll: true })
+}
+function renderRegionCard(detail, hazardGroups) {
+  const card = $('region-card')
+  const top = element('div', 'region-card-top')
+  top.append(element('strong', '', titleCase(detail.name)), badge(detail.signalLevel, detail.signalLevel))
+  if (detail.simulation) top.append(badge('Simulation · ' + readable(detail.simulation.signalLevel), detail.simulation.signalLevel))
+  const hierarchy = element('p', 'region-card-hierarchy', detail.hierarchy.map(region => titleCase(region.name)).join(' / '))
+  const fresh = [...hazardGroups.values()].filter(hazard => hazard.active && hazard.freshness === 'FRESH')
+  const grid = element('dl')
+  for (const [label, value] of [['Estimated exposed', number(detail.estimatedExposedPopulation)], ['Reference population', number(detail.population)], ['Active hazards', fresh.length || 'None'], ['Shelters', number(detail.recordedShelterCount)]]) {
+    const cell = element('div')
+    cell.append(element('dt', '', label), element('dd', '', value))
+    grid.append(cell)
+  }
+  const hazard = fresh[0]
+  const kind = hazard ? ({ ACTIVE_WARNING: 'warning', CRITICAL_HAZARD: 'critical hazard', OBSERVATION: 'observation', CONFIRMED_CLOSURE: 'closure', BASELINE_HAZARD: 'susceptibility' }[hazard.evidenceType] || readable(hazard.evidenceType).toLowerCase()) : ''
+  const mainHazard = element('p', 'region-card-hazard', hazard ? hazardName(hazard.hazardType) + ' ' + kind + ' · ' + sourceName(hazard.source) : 'No active warning')
+  const view = element('button', 'btn-sm', 'View details')
+  view.type = 'button'
+  view.onclick = () => {
+    const heading = $('selected-name')
+    heading.closest('article').scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'instant' : 'smooth' })
+    heading.focus({ preventScroll: true })
+  }
+  const close = element('button', 'region-card-close')
+  close.type = 'button'
+  close.setAttribute('aria-label', 'Close region summary')
+  close.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 10.5858L16.9497 5.63604L18.364 7.05025L13.4142 12L18.364 16.9497L16.9497 18.364L12 13.4142L7.05025 18.364L5.63604 16.9497L10.5858 12L5.63604 7.05025L7.05025 5.63604L12 10.5858Z"></path></svg>'
+  close.onclick = closeRegionCard
+  card.replaceChildren(top, hierarchy, grid, mainHazard, view, close)
+  card.hidden = false
+}
+document.querySelector('.map-hero').addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('region-card').hidden) { event.preventDefault(); closeRegionCard() }
+})
+$('priorities').addEventListener('keydown', event => {
+  const rows = state.priorityRegions
+  if (!rows.length || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const current = rows.findIndex(region => region.id === (state.pendingSelection ?? state.selected))
+  const index = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : event.key === 'ArrowDown' ? Math.min(current + 1, rows.length - 1) : current < 0 ? rows.length - 1 : Math.max(current - 1, 0)
+  selectRegion(rows[index].id, { scrollRow: true })
+})
+async function selectRegion(id, { moveMap = true, scrollRow = false } = {}) {
   const generation = ++state.selectionGeneration
+  state.pendingSelection = id
   try {
     const detail = await api('regions/' + id)
     if (generation !== state.selectionGeneration) return
     state.selected = id
+    state.pendingSelection = null
     renderRegions()
+    if (scrollRow) $('region-' + id).scrollIntoView({ block: 'nearest' })
+    const bounds = state.regionLayers.get(id)?.getBounds()
+    if (moveMap && bounds?.isValid()) {
+      if (reducedMotion.matches) map.fitBounds(bounds, { padding: [80, 80], maxZoom: 15, animate: false })
+      else map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 15, duration: .25 })
+    }
     $('selected-name').textContent = titleCase(detail.name)
     $('hierarchy').textContent = detail.hierarchy.map((r) => titleCase(r.name)).join(' / ') || readable(detail.administrativeLevel)
     $('selected-signal').replaceWith(Object.assign(badge(detail.signalLevel, detail.signalLevel), { id: 'selected-signal' }))
@@ -210,7 +322,7 @@ async function selectRegion(id) {
     for (const shelter of detail.shelters) {
       const access = shelter.wheelchairAccessible === true ? 'step-free access reported' : shelter.wheelchairAccessible === false ? 'not reported step-free' : 'step-free access unknown'
       evidenceRow($('shelter-list'), shelter.name, 'Capacity ' + number(shelter.capacity) + ' · ' + access + ' · ' + sourceName(shelter.source) + ' · recorded ' + time(shelter.verifiedAt), shelter.status)
-      L.geoJSON(shelter.geometry, { pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: accent, fillColor: '#fff', fillOpacity: 1, weight: 2 }) }).bindPopup(element('span', '', shelter.name + ' · capacity ' + number(shelter.capacity))).addTo(layers.shelters)
+      L.geoJSON(shelter.geometry, { pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: accent, fillColor: surface, fillOpacity: 1, weight: 2 }) }).bindPopup(element('span', '', shelter.name + ' · capacity ' + number(shelter.capacity))).addTo(layers.shelters)
     }
     if (!detail.shelters.length) $('shelter-list').append(element('p', 'empty', 'No shelter records for this region.'))
     operations.setRegion(detail)
@@ -219,11 +331,12 @@ async function selectRegion(id) {
     const hazardGroups = new Map()
     for (const hazard of detail.hazards) {
       // Freshness and validity are part of the key so a fresh warning never hides behind an expired one.
-      const key = JSON.stringify([hazard.hazardType, hazard.source, hazard.evidenceType, hazard.provenanceClass, hazard.freshness, hazard.expiresAt])
+      const key = JSON.stringify([hazard.hazardType, hazard.source, hazard.evidenceType, hazard.provenanceClass, hazard.freshness, hazard.expiresAt, hazard.active])
       const group = hazardGroups.get(key)
       if (group) group.count++
       else hazardGroups.set(key, { ...hazard, count: 1 })
     }
+    renderRegionCard(detail, hazardGroups)
     for (const hazard of hazardGroups.values()) {
       const kind = { BASELINE_HAZARD: 'susceptibility', ACTIVE_WARNING: 'warning', CRITICAL_HAZARD: 'critical hazard', OBSERVATION: 'observation', CONFIRMED_CLOSURE: 'closure' }[hazard.evidenceType] || readable(hazard.evidenceType).toLowerCase()
       evidenceRow($('hazard-list'), hazardName(hazard.hazardType) + ' ' + kind + (hazard.count > 1 ? ' · ' + hazard.count + ' areas' : ''), sourceName(hazard.source) + ' · ' + provenanceName(hazard.provenanceClass), hazard.freshness)
@@ -234,33 +347,34 @@ async function selectRegion(id) {
       if (!hazard.active || !['FRESH', 'REFERENCE'].includes(hazard.freshness) || detail.snapshotStale) continue
       const baseline = hazard.provenanceClass === 'OFFICIAL_BASELINE'
       const target = baseline ? 'baseline' : hazard.provenanceClass === 'COMMUNITY_OBSERVATION' ? 'community' : hazard.provenanceClass === 'SATELLITE_OBSERVATION' ? 'satellite' : 'active'
-      L.geoJSON(hazard.geometry, { style: { color: baseline ? '#8663af' : '#c63f4e', weight: 2, dashArray: baseline ? '5 5' : null, fillOpacity: baseline ? .06 : .17 }, pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: target === 'community' ? '#277ac0' : '#dc8132', fillOpacity: .6 }) }).bindTooltip(element('span', '', sourceName(hazard.source) + ' · ' + provenanceName(hazard.provenanceClass))).addTo(layers[target])
+      L.geoJSON(hazard.geometry, { style: { color: baseline ? baselineStroke : stroke.CRITICAL, weight: 2, dashArray: baseline ? '5 5' : null, fillOpacity: baseline ? .06 : .17 }, pointToLayer: (_, point) => L.circleMarker(point, { radius: 6, color: target === 'community' ? communityStroke : satelliteStroke, fillOpacity: .6 }) }).bindTooltip(element('span', '', sourceName(hazard.source) + ' · ' + provenanceName(hazard.provenanceClass))).addTo(layers[target])
     }
     if (!detail.hazards.length) $('hazard-list').append(element('p', 'empty', 'Hazard evidence: Unknown. No intersecting normalized evidence in this projection.'))
     evidenceRow($('sources'), 'Reported profiles / assistance', readable(detail.metricProvenance.assistance), detail.dataMode)
     $('routing').textContent = 'Responders available: ' + number(detail.availableResponderCount) + ' · assigned: ' + number(detail.assignedResponderCount) + '. Routes feasible: ' + number(detail.feasibleRouteCount) + ' · blocked: ' + number(detail.blockedRouteCount) + ' · no feasible route: ' + number(detail.noFeasibleRouteCount) + '. ' + detail.limitations.join(' ')
     $('routing').setAttribute('aria-label', $('routing').textContent.replaceAll('—', 'Unknown'))
-  } catch (error) { if (generation === state.selectionGeneration) notice(error.message, 'error') }
+  } catch (error) { if (generation === state.selectionGeneration) { state.pendingSelection = null; notice(error.message, 'error') } }
 }
 async function refresh({ fitView = true } = {}) {
   const generation = ++state.generation
   const previousSelection = state.selected
   clearSelection()
   state.regions = []
+  state.cases = null
   renderRegions(); renderKpis()
   connection('Loading projections…', 'loading')
   const params = { administrativeLevel: $('level').value, dataMode: $('dataMode').value }
   for (const [id, key] of [['parent', 'parentRegionId'], ['hazard', 'hazardType'], ['signal', 'signalLevel']]) if ($(id).value) params[key] = $(id).value
   try {
-    const rows = await allRegions(params)
+    const [rows, cases] = await Promise.all([allRegions(params), params.dataMode === 'SIMULATION' ? Promise.resolve(null) : assistanceCounts().catch(() => null)])
     if (generation !== state.generation) return
     state.regions = rows
-    renderRegions(); renderKpis()
-    await mapTools.loadReal()
-    if (generation !== state.generation) return
+    state.cases = cases
     const located = rows.filter(region => region.centroid?.type === 'Point' && region.centroid.coordinates?.length >= 2)
     const centroids = located.map(region => [region.centroid.coordinates[1], region.centroid.coordinates[0]])
-    if (fitView && centroids.length) {
+    state.offshore = new Set()
+    let mainland = located
+    if (centroids.length) {
       const median = (values) => {
         const sorted = values.slice().sort((a, b) => a - b)
         const middle = Math.floor(sorted.length / 2)
@@ -269,7 +383,14 @@ async function refresh({ fitView = true } = {}) {
       const latitude = median(centroids.map(([lat]) => lat))
       const longitude = median(centroids.map(([, lng]) => lng))
       // ponytail: Outlying islands are left out of the initial frame on purpose.
-      const mainland = located.filter(region => Math.abs(region.centroid.coordinates[1] - latitude) <= 0.25 && Math.abs(region.centroid.coordinates[0] - longitude) <= 0.25)
+      mainland = located.filter(region => Math.abs(region.centroid.coordinates[1] - latitude) <= 0.25 && Math.abs(region.centroid.coordinates[0] - longitude) <= 0.25)
+      const mainlandIds = new Set(mainland.map(region => region.id))
+      state.offshore = new Set(located.filter(region => !mainlandIds.has(region.id)).map(region => region.id))
+    }
+    renderRegions(); renderKpis()
+    await mapTools.loadReal()
+    if (generation !== state.generation) return
+    if (fitView && centroids.length) {
       // Centroids choose which regions count; their polygons set the frame, so one large region still fits.
       const bounds = (mainland.length >= 3 ? mainland : located).reduce((all, region) => all.extend(L.geoJSON(region.geometry).getBounds()), L.latLngBounds([]))
       frameMap(bounds)
@@ -281,7 +402,7 @@ async function refresh({ fitView = true } = {}) {
     if (!demo) $('about-data-text').textContent = explanation
     notice(demo || !rows.length ? explanation : '', demo ? 'simulation' : 'info')
     connection(!rows.length ? 'Connected · no regions in this scope' : stale === rows.length ? 'Connected · regional snapshots unavailable' : 'Connected · ' + rows.length + ' regions · ' + stale + ' stale', 'connected')
-    if (rows.length) await selectRegion(rows.some((r) => r.id === previousSelection) ? previousSelection : rows[0].id)
+    if (rows.length) await selectRegion(rows.some((r) => r.id === previousSelection) ? previousSelection : rows[0].id, { moveMap: false })
   } catch (error) {
     if (generation !== state.generation) return
     state.regions = []; clearSelection(); renderRegions(); renderKpis()
