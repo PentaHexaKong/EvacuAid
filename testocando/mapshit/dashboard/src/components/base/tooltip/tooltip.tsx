@@ -14,8 +14,8 @@ export function Tooltip(props: ComponentProps<typeof AriaTooltipTrigger>) {
   return <AriaTooltipTrigger delay={delay} closeDelay={0} {...props} />
 }
 
-export function TooltipTrigger({ children }: { children: ReactElement }) {
-  return <Focusable>{children as ComponentProps<typeof Focusable>["children"]}</Focusable>
+export function TooltipTrigger({ children, isDisabled }: { children: ReactElement; isDisabled?: boolean }) {
+  return <Focusable isDisabled={isDisabled}>{children as ComponentProps<typeof Focusable>["children"]}</Focusable>
 }
 
 export function TooltipContent({ className, side = "top", sideOffset = 10, size = "sm", ...props }: Omit<ComponentProps<typeof AriaTooltip>, "className"> & { className?: string; side?: "top" | "bottom" | "left" | "right"; sideOffset?: number; size?: "sm" | "md" }) {

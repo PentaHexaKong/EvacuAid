@@ -60,3 +60,37 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: testInfo.outputPath(`shell-${String(width)}.png`), fullPage: true })
   })
 }
+
+test('legacy hashes, redirects and unknown hashes resolve to the expected views', async ({ page }) => {
+  await page.goto('./#operations/assistance')
+  await expect(page.getByRole('heading', { name: 'Assistance', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/#\/operations\/assistance$/)
+  await page.goto('./#/operations')
+  await expect(page.getByRole('heading', { name: 'Field reports', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/#\/operations\/reports$/)
+  await page.goto('./#/nope')
+  await expect(page.getByRole('heading', { name: 'Regional overview', exact: true })).toBeAttached()
+  await expect(page).toHaveURL(/#\/overview$/)
+  const wordmark = page.getByRole('link', { name: 'EvacuAid command center', exact: true })
+  await expect(wordmark).toHaveAttribute('href', '#/overview')
+  await expect(wordmark.locator('span', { hasText: /^E$/ })).toHaveAttribute('aria-hidden', 'true')
+})
+
+for (const width of [1440, 390]) {
+  test(`shell avoids React Aria focusability warnings at ${String(width)}px`, async ({ page }) => {
+    const warnings: string[] = []
+    page.on('console', (message) => {
+      if (/^<(Focusable|Pressable)> child must/.test(message.text())) warnings.push(message.text())
+    })
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('./#/overview')
+    await expect(page.getByRole('button', { name: /Data environment/ })).toBeVisible()
+    if (width === 390) {
+      await page.getByRole('button', { name: 'Open navigation' }).click()
+      await expect(page.getByRole('dialog', { name: 'EvacuAid' })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog', { name: 'EvacuAid' })).toBeHidden()
+    }
+    expect(warnings).toEqual([])
+  })
+}

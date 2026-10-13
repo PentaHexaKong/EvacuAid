@@ -1,6 +1,7 @@
 import { RiArrowDownSLine, RiCloseLine, RiSideBarLine, type RemixiconComponentType } from "@remixicon/react"
 import { useEffect, useId, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Link, useLocation, useMatch, useNavigate } from "react-router"
+import { Button as AriaButton } from "react-aria-components"
 
 import { Radio, RadioGroup } from "@/components/base/radio/radio"
 import { Avatar } from "@/components/base/avatar/avatar"
@@ -24,7 +25,7 @@ function Collapsible({ collapsed, children, className }: { collapsed: boolean; c
 }
 
 function SidebarTooltip({ children, label, show }: { children: ReactElement; label: string; show: boolean }) {
-  return <Tooltip isDisabled={!show}><TooltipTrigger>{children}</TooltipTrigger><TooltipContent side="right" className="origin-(--transform-origin) transition-[opacity,scale,filter] duration-150 data-instant:transition-none data-[entering]:scale-97 data-[entering]:blur-0 data-[exiting]:scale-97 data-[exiting]:blur-0">{label}</TooltipContent></Tooltip>
+  return <Tooltip isDisabled={!show}><TooltipTrigger isDisabled={!show}>{children}</TooltipTrigger><TooltipContent side="right" className="origin-(--transform-origin) transition-[opacity,scale,filter] duration-150 data-instant:transition-none data-[entering]:scale-97 data-[entering]:blur-0 data-[exiting]:scale-97 data-[exiting]:blur-0">{label}</TooltipContent></Tooltip>
 }
 
 function NavItem({ item, collapsed, nested = false, secondary = false, onNavigate }: { item: NavigationItem; collapsed: boolean; nested?: boolean; secondary?: boolean; onNavigate: () => void }) {
@@ -32,7 +33,7 @@ function NavItem({ item, collapsed, nested = false, secondary = false, onNavigat
   const { pathname } = useLocation()
   const isActive = Boolean(useMatch({ path: item.path, end: false }))
   const groupActive = item.activePaths?.some((path) => pathname === path || pathname.startsWith(`${path}/`))
-  return <SidebarTooltip label={item.label} show={collapsed}><Link
+  return <SidebarTooltip label={item.label} show={collapsed && !nested}><Link
     to={item.path}
     aria-label={item.label}
     aria-current={isActive || groupActive ? "page" : undefined}
@@ -215,7 +216,7 @@ export function DashboardSidebar({ navigation, navigationGroups = [], companies,
   const onNavigate = () => { onClose?.() }
 
   const sidebarControl = <Popover isOpen={controlOpen} onOpenChange={setControlOpen}>
-        <SidebarTooltip label="Sidebar control" show={!mobile && collapsed}><PopoverTrigger><button onClick={() => { setControlOpen(!controlOpen) }} type="button" aria-label="Sidebar control" className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-2lg text-text-secondary-strong hover:bg-background-secondary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus-ring"><RiSideBarLine className="size-5" aria-hidden /></button></PopoverTrigger></SidebarTooltip>
+        <SidebarTooltip label="Sidebar control" show={!mobile && collapsed}><AriaButton onClick={() => { setControlOpen(!controlOpen) }} type="button" aria-label="Sidebar control" className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-2lg text-text-secondary-strong hover:bg-background-secondary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus-ring"><RiSideBarLine className="size-5" aria-hidden /></AriaButton></SidebarTooltip>
         <PopoverContent animation="notification" variant="custom" side="top" align="start" sideOffset={8} className="max-h-[calc(100dvh-2rem)]! w-[265px] max-w-[calc(100vw-32px)] gap-1.5 overflow-y-auto rounded-2xl border-border-button-default bg-background-primary-default p-2.5 shadow-dropdown! dark:bg-background-secondary-default">
           <PopoverTitle className="px-2 pt-[5px] text-body-medium text-text-secondary">Sidebar control</PopoverTitle>
           <SidebarControlSection label="Sidebar display"><RadioGroup aria-label="Sidebar display" value={mode} onChange={(value) => { const nextMode = sidebarModes.find((item) => item === value); if (nextMode) changeMode(nextMode) }} className="gap-1">{sidebarModes.map((item) => <Radio key={item} value={item} className="min-h-10 w-full gap-2.5 rounded-2lg px-2 py-1.5 hover:bg-background-primary-hover focus-within:bg-background-primary-hover">{item}</Radio>)}</RadioGroup></SidebarControlSection>

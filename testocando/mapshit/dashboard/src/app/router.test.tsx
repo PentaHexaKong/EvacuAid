@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { routes } from './router'
+import { normalizeLegacyHash } from './normalize-legacy-hash'
 
 afterEach(() => { cleanup(); localStorage.clear() })
 
@@ -31,7 +32,7 @@ test.each([
 test('rebrands the shell and keeps the data environment across routes', async () => {
   const user = userEvent.setup()
   mount('/overview')
-  expect(screen.getByRole('link', { name: 'E EvacuAid Command center' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'EvacuAid command center' })).toHaveAttribute('href', '#/overview')
   expect(screen.getByText('DKI Jakarta')).toBeInTheDocument()
   expect(screen.getByText('Loading dashboard')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /Data environment/ }))
@@ -43,4 +44,18 @@ test('rebrands the shell and keeps the data environment across routes', async ()
   cleanup()
   mount('/overview')
   expect(screen.getByRole('button', { name: /Data environment/ })).toHaveTextContent('Operational data')
+})
+
+test.each(['#overview', '#operations/reports', '#operations/assistance', '#/operations', '#/nope', ''])('normalizes %s before router mounting without adding a history entry', (hash) => {
+  const originalUrl = window.location.href
+  const state = { existing: 'state' }
+  window.history.replaceState(state, '', `/command-center/?existing=1${hash}`)
+  const length = window.history.length
+  normalizeLegacyHash()
+  expect(window.location.hash).toBe(hash && !hash.startsWith('#/') ? `#/${hash.slice(1)}` : hash)
+  expect(window.location.pathname).toBe('/command-center/')
+  expect(window.location.search).toBe('?existing=1')
+  expect(window.history.state).toEqual(state)
+  expect(window.history.length).toBe(length)
+  window.history.replaceState(null, '', originalUrl)
 })

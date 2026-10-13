@@ -1,12 +1,10 @@
-import { RiMenuLine as IconMenu2 } from "@remixicon/react"
+import { RiMenuLine as IconMenu2, RiRefreshLine } from "@remixicon/react"
 import { Wordmark } from "@/components/app/wordmark"
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react"
 import { useLocation } from "react-router"
 import { Button } from "@/components/base/buttons/button"
 import { MobileNavigation } from "@/components/app/MobileNavigation"
 import { DashboardSidebar } from "@/components/application/dashboard/dashboard-sidebar"
-
-import { RiRefreshLine } from "@remixicon/react"
 import { Avatar } from "@/components/base/avatar/avatar"
 import { Select, SelectItem } from "@/components/base/select/select"
 import { navigation, navigationGroups, navigationEnd } from "@/app/nav"
@@ -77,7 +75,7 @@ export function AppShell({ children, onRefresh }: { children: ReactNode; onRefre
                   className="w-full border-0 border-r-0 bg-background-full shadow-none!"
                 />
               </MobileNavigation>
-              <a href="#overview" aria-label="E EvacuAid Command center" className="min-w-0 overflow-hidden rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><Wordmark /></a>
+              <a href="#/overview" aria-label="EvacuAid command center" className="min-w-0 overflow-hidden rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><Wordmark /></a>
             </div>
             <CommandHeaderActions onRefresh={onRefresh} />
           </div>

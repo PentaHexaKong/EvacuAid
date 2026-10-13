@@ -2,7 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createHashRouter, RouterProvider } from 'react-router'
 import { routes } from './app/router'
+import { normalizeLegacyHash } from './app/normalize-legacy-hash'
 import './app/styles.css'
+
+normalizeLegacyHash()
 
 const root = document.getElementById('root')
 if (!root) throw new Error('Missing root element')
