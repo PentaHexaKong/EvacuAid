@@ -9,11 +9,36 @@
   <link rel="stylesheet" href="/command-center/styles.css">
 </head>
 <body>
-  <header>
-    <a class="brand" href="/command-center/" aria-label="EvacuAid command center"><span class="brand-icon">E</span><span>EvacuAid</span><span class="brand-divider"></span><span class="brand-context">Command center</span></a>
-    <div class="header-right"><span class="connection-status"><span id="connection-dot" class="live-dot loading" role="img" aria-label="Loading dashboard"></span><span id="connection">Loading dashboard</span></span><label><span class="sr-only">Data environment</span><select id="dataMode" aria-label="Data environment"><option value="REFERENCE">Operational data</option><option value="SIMULATION">Simulation data</option></select></label><button id="refresh">Refresh</button></div>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app">
+  <header class="app-header">
+    <div class="header-left"><button id="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M3 4H21V6H3V4ZM3 11H21V13H3V11ZM3 18H21V20H3V18Z"></path></svg></button>
+    <a class="brand" href="/command-center/" aria-label="EvacuAid command center"><span class="brand-icon">E</span><span class="brand-name">EvacuAid</span><span class="brand-divider"></span><span class="brand-context">Command center</span></a></div>
+    <div class="header-right"><span class="connection-status"><span id="connection-dot" class="live-dot loading" role="img" aria-label="Loading dashboard"></span><span id="connection">Loading dashboard</span></span><label><span class="sr-only">Data environment</span><select id="dataMode" class="on-dark" aria-label="Data environment"><option value="REFERENCE">Operational data</option><option value="SIMULATION">Simulation data</option></select></label><button id="refresh" class="on-dark" aria-label="Refresh"><svg class="refresh-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z"></svg><span class="refresh-label">Refresh</span></button></div>
   </header>
-  <main>
+  <aside class="sidebar" id="sidebar" aria-label="Command center navigation">
+    <div class="sidebar-top">
+      <div class="workspace-pill"><span class="workspace-avatar">J</span><span class="nav-label workspace-label">DKI Jakarta</span></div>
+      <nav aria-label="Primary">
+        <a class="nav-item" href="#overview" aria-label="Overview"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M2 5L9 2L15 5L21.303 2.2987C21.5569 2.18992 21.8508 2.30749 21.9596 2.56131C21.9862 2.62355 22 2.69056 22 2.75827V19L15 22L9 19L2.69696 21.7013C2.44314 21.8101 2.14921 21.6925 2.04043 21.4387C2.01375 21.3765 2 21.3094 2 21.2417V5ZM16 19.3955L20 17.6812V5.03308L16 6.74736V19.3955ZM14 19.2639V6.73607L10 4.73607V17.2639L14 19.2639ZM8 17.2526V4.60451L4 6.31879V18.9669L8 17.2526Z"></path></svg><span class="nav-label">Overview</span></a>
+        <div class="operations-nav">
+          <button type="button" class="nav-item nav-group" aria-label="Operations" aria-expanded="false" aria-controls="ops-tree"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8.96456 18C8.72194 19.6961 7.26324 21 5.5 21C3.73676 21 2.27806 19.6961 2.03544 18H1V6C1 5.44772 1.44772 5 2 5H16C16.5523 5 17 5.44772 17 6V8H20L23 12.0557V18H20.9646C20.7219 19.6961 19.2632 21 17.5 21C15.7368 21 14.2781 19.6961 14.0354 18H8.96456ZM15 7H3V15.0505C3.63526 14.4022 4.52066 14 5.5 14C6.8962 14 8.10145 14.8175 8.66318 16H14.3368C14.5045 15.647 14.7296 15.3264 15 15.0505V7ZM17 13H21V12.715L18.9917 10H17V13ZM17.5 19C18.1531 19 18.7087 18.5826 18.9146 18C18.9699 17.8436 19 17.6753 19 17.5C19 16.6716 18.3284 16 17.5 16C16.6716 16 16 16.6716 16 17.5C16 17.6753 16.0301 17.8436 16.0854 18C16.2913 18.5826 16.8469 19 17.5 19ZM7 17.5C7 16.6716 6.32843 16 5.5 16C4.67157 16 4 16.6716 4 17.5C4 17.6753 4.03008 17.8436 4.08535 18C4.29127 18.5826 4.84689 19 5.5 19C6.15311 19 6.70873 18.5826 6.91465 18C6.96992 17.8436 7 17.6753 7 17.5Z"></path></svg><span class="nav-label">Operations</span><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" class="nav-chevron"><path d="M11.9999 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L11.9999 13.1714Z"></path></svg></button>
+          <div class="nav-tree" inert aria-hidden="true"><div class="nav-tree-inner"><ul id="ops-tree" aria-label="Operations">
+            <li><a class="nav-item" href="#operations/reports">Field reports</a></li>
+            <li><a class="nav-item" href="#operations/assistance">Assistance</a></li>
+            <li><a class="nav-item" href="#operations/check-ins">Check-ins</a></li>
+            <li><a class="nav-item" href="#operations/routes">Route setter</a></li>
+          </ul></div></div>
+        </div>
+        <a class="nav-item" href="#about" aria-label="About this data"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 7H13V9H11V7ZM11 11H13V17H11V11Z"></path></svg><span class="nav-label">About this data</span></a>
+      </nav>
+    </div>
+    <button id="sidebar-collapse" type="button" aria-label="Collapse sidebar" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M3 3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3ZM8 5H4V19H8V5ZM10 5V19H20V5H10Z"></path></svg></button>
+  </aside>
+  <div class="app-page" id="app-page-scroll">
+  <main id="main-content" tabindex="-1">
+    <section class="view" data-view="overview" aria-labelledby="overview-title">
+    <h1 class="page-title" id="overview-title">Regional overview</h1>
     <div id="notice" class="notice" role="status" hidden></div>
     <section id="kpis" class="kpis" aria-label="Regional key indicators"></section>
     <section class="workspace">
@@ -37,13 +62,16 @@
       <article class="panel"><div class="panel-heading"><div><h2>Reported assistance needs</h2><p>Reported categories may overlap.</p></div></div><div id="needs" class="needs"></div><p class="footnote">These are reported needs among recently located EvacuAid profiles. Categories must not be summed as unique people or interpreted as demographic prevalence.</p></article>
       <article class="panel"><div class="panel-heading"><div><h2>Data sources &amp; freshness</h2><p>Evidence, provenance and coverage</p></div></div><div id="sources" class="evidence-list"><p class="empty">No evidence loaded. Provider connections are not inferred.</p></div><div id="routing" class="footnote">Responder inventory and regional routing status: Unknown.</div></article>
     </section>
+    </section>
+    <section class="view" data-view="operations" aria-labelledby="operations-title" hidden>
+    <h1 class="page-title" id="operations-title">Field operations</h1>
     <section class="panel operations" aria-label="Field operations">
       <div class="panel-heading"><div><h2>Field operations &amp; Route Setter</h2><p id="operations-message" role="status">Loading operational records</p></div><button id="operations-refresh">Refresh operations</button></div>
       <div id="operations-content">
-        <h3>Evacuation check-ins</h3><div id="evacuation-check-ins"></div>
-        <h3>Field report review</h3><p>Unverified reports support awareness. Only an explicitly confirmed barrier becomes a hard routing exclusion. Locations describe public incidents; exclude citizen personal details.</p><div id="field-report-list"></div><div class="pager"><button id="reports-previous">Previous reports</button><button id="reports-next">Next reports</button></div>
-        <h3>Assistance case management</h3><p>Anonymous case identifiers and reported needs. Government completion records dispatch work; it never asserts citizen safety or completes a Buddy session.</p><div id="assistance-case-list"></div><div class="pager"><button id="cases-previous">Previous cases</button><button id="cases-next">Next cases</button></div>
-        <h3>Route Setter</h3><p>Select a reference region on the map to load its recorded shelters. Routes are evaluated against known evidence, expire after five minutes, and require revalidation to publish. No overall safety certification.</p>
+        <h3 id="ops-checkins">Evacuation check-ins</h3><div id="evacuation-check-ins"></div>
+        <h3 id="ops-reports">Field report review</h3><p>Unverified reports support awareness. Only an explicitly confirmed barrier becomes a hard routing exclusion. Locations describe public incidents; exclude citizen personal details.</p><div id="field-report-list"></div><div class="pager"><button id="reports-previous">Previous reports</button><button id="reports-next">Next reports</button></div>
+        <h3 id="ops-assistance">Assistance case management</h3><p>Anonymous case identifiers and reported needs. Government completion records dispatch work; it never asserts citizen safety or completes a Buddy session.</p><div id="assistance-case-list"></div><div class="pager"><button id="cases-previous">Previous cases</button><button id="cases-next">Next cases</button></div>
+        <h3 id="ops-routes">Route Setter</h3><p>Select a reference region on the map to load its recorded shelters. Routes are evaluated against known evidence, expire after five minutes, and require revalidation to publish. No overall safety certification.</p>
         <form id="route-form"><input id="route-id" type="hidden"><input id="route-region-id" type="hidden"><p>Region: <strong id="route-region-label">Select a region</strong></p>
           <label>Route name<input id="route-name" required minlength="3" maxlength="120"></label>
           <div class="form-grid"><label>Assembly-point latitude<input id="route-origin-lat" type="number" step="any" min="-90" max="90" required></label><label>Assembly-point longitude<input id="route-origin-lon" type="number" step="any" min="-180" max="180" required></label><label>Recorded shelter<select id="route-shelter-id" required><option value="">Select a region first</option></select></label></div>
@@ -53,9 +81,16 @@
         <div id="operational-route-list"></div><div class="pager"><button id="routes-previous">Previous routes</button><button id="routes-next">Next routes</button></div>
       </div>
     </section>
-    <details class="about-data"><summary>About this data</summary><p id="about-data-text">Operational data. Signal counts show known evidence only; numeric totals become Unknown when a contributing metric is missing. Hazard and shelter overlays load when a region is selected.</p></details>
+    </section>
+    <section class="view" data-view="about" aria-labelledby="about-title" hidden>
+    <h1 class="page-title" id="about-title">About this data</h1>
+    <div class="panel about-data"><p id="about-data-text">Operational data. Signal counts show known evidence only; numeric totals become Unknown when a contributing metric is missing. Hazard and shelter overlays load when a region is selected.</p></div>
     <footer>EvacuAid Command Center <span>Regional aggregates · Anonymous assistance cases · Public field reports</span></footer>
+    </section>
   </main>
+  </div>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
   <dialog id="placement-dialog"><form id="placement-form">
     <p id="placement-environment" class="badge"></p><h2 id="placement-title"></h2>
     <p id="placement-coordinates"></p>
@@ -65,6 +100,7 @@
     <p id="placement-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancel-placement">Cancel</button><button id="save-placement" class="primary" type="submit">Save</button></div>
   </form></dialog>
   <script src="/command-center/vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="/command-center/shell.js"></script>
   <script type="module" src="/command-center/dashboard.js"></script>
 </body>
 </html>

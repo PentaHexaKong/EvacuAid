@@ -12,7 +12,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
   const note = () => window.prompt('Review / action note (public operational text; exclude personal information):')
   function row(title, body) { const el=node('article',''); el.className='operation-row'; el.append(node('strong',title),node('p',body)); return el }
   async function refresh() {
-    if (refreshing || document.hidden) return
+    if (refreshing) return
     if ($('dataMode').value === 'SIMULATION') { $('operations-content').hidden=true; $('operations-message').textContent='SIMULATION: live cases and route publishing are hidden.'; routeLayer.clearLayers(); reportLayer.clearLayers(); return }
     $('operations-content').hidden=false
     refreshing=true
@@ -25,7 +25,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
       reportLayer.clearLayers()
       for(const report of reports) {
         const el=row(report.kind+' · '+report.status,report.description+' · observed '+report.observedAt+' · received '+report.createdAt+(report.review.note?' · '+report.review.note:''))
-        el.append(button('Show location',()=>{ map.setView([report.latitude,report.longitude],16); L.circleMarker([report.latitude,report.longitude],{radius:8,color:report.status==='CONFIRMED'?'#c63f4e':'#277ac0'}).bindTooltip(node('span',report.kind+' · '+report.status)).addTo(reportLayer); reportLayer.addTo(map) }))
+        el.append(button('Show location',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.invalidateSize(); map.setView([report.latitude,report.longitude],16); L.circleMarker([report.latitude,report.longitude],{radius:8,color:report.status==='CONFIRMED'?'#c63f4e':'#277ac0'}).bindTooltip(node('span',report.kind+' · '+report.status)).addTo(reportLayer); reportLayer.addTo(map) }))
         for(const status of ['CONFIRMED','REJECTED','RESOLVED']) el.append(button(status,async()=>{
           const reviewNote=note(); if(!reviewNote) return
           let barrier=false, radiusM=30,validUntil=null
@@ -56,7 +56,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
         const result=route.result
         const el=row(route.name+' · '+route.status+(route.stale?' · EXPIRED':''), (result.shelterName||'Shelter')+' · '+result.routeStatus+' · '+(result.selectionReasonCodes||[]).join(', ')+' · expires '+route.expiresAt+' · Safety not verified')
         if(result.route?.geometry) {
-          el.append(button('Show evaluated geometry',()=>{ const layer=L.geoJSON(result.route.geometry,{style:{color:route.usable?'#176d60':'#82929e',dashArray:route.usable?null:'5 5'}}).addTo(routeLayer); routeLayer.addTo(map); map.fitBounds(layer.getBounds()) }))
+          el.append(button('Show evaluated geometry',async()=>{ location.hash = '#overview'; await new Promise(requestAnimationFrame); map.invalidateSize(); const layer=L.geoJSON(result.route.geometry,{style:{color:route.usable?'#176d60':'#82929e',dashArray:route.usable?null:'5 5'}}).addTo(routeLayer); routeLayer.addTo(map); map.fitBounds(layer.getBounds()) }))
           if(route.usable) L.geoJSON(result.route.geometry,{style:{color:'#176d60'}}).bindTooltip(node('span',route.name+' · expires '+route.expiresAt+' · safety not verified')).addTo(routeLayer)
         }
         el.append(button('Edit / recalculate',async()=>{ setRegion(await api('regions/'+route.regionId)); $('route-id').value=route.id; $('route-name').value=route.name; $('route-shelter-id').value=route.shelterId; $('route-origin-lat').value=route.originLatitude; $('route-origin-lon').value=route.originLongitude; $('route-step-free').checked=route.mobilityRequired; $('route-form').scrollIntoView({behavior:'smooth'}) }),
@@ -73,7 +73,7 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
     $(prefix+'-previous').onclick=()=>{set(Math.max(0,get()-50));void refresh()}
     $(prefix+'-next').onclick=()=>{set(get()+50);void refresh()}
   }
-  $('route-pick-origin').onclick=()=>{armed=true;$('route-feedback').textContent='Click a public evacuation assembly point on the map.'}
+  $('route-pick-origin').onclick=()=>{location.hash = '#overview';armed=true;$('route-feedback').textContent='Click a public evacuation assembly point on the map.'}
   map.on('click',event=>{ if(!armed || isPlacing()) return; armed=false; $('route-origin-lat').value=event.latlng.lat; $('route-origin-lon').value=event.latlng.lng;$('route-feedback').textContent='Origin selected. Choose a recorded shelter and calculate.' })
   $('route-new').onclick=()=>{ const regionId=$('route-region-id').value; $('route-form').reset(); $('route-region-id').value=regionId; $('route-id').value=''; armed=false }
   $('route-form').onsubmit=async event=>{
@@ -89,7 +89,9 @@ export function setupOperations({ map, api, routeLayer, isPlacing }) {
     finally {$('route-calculate').disabled=false}
   }
   $('dataMode').addEventListener('change',refresh)
-  const timer=setInterval(refresh,15000)
+  // Background tabs skip the poll, never the first load or explicit refreshes.
+  const timer=setInterval(()=>{ if(!document.hidden) refresh() },15000)
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh() })
   window.addEventListener('beforeunload',()=>clearInterval(timer))
   void refresh()
   function setRegion(detail) {
