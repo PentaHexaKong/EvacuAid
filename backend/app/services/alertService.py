@@ -65,8 +65,8 @@ def payload(row):
     return result
 
 
-def recipientsQuery(hazardId, now):
-    return select(User.id).select_from(HazardRecord).join(User, hazardRepository.coversLocation(User.latitude, User.longitude)).where(HazardRecord.id == hazardId, User.latitude.is_not(None), User.longitude.is_not(None), User.locationObservedAt >= now - timedelta(hours=24), User.locationObservedAt <= now)
+def recipientsQuery(hazardIds, now):
+    return select(HazardRecord.id.label('hazardId'), User.id.label('userId')).select_from(HazardRecord).join(User, hazardRepository.coversLocation(User.latitude, User.longitude)).where(HazardRecord.id.in_(hazardIds), User.latitude.is_not(None), User.longitude.is_not(None), User.locationObservedAt >= now - timedelta(hours=24), User.locationObservedAt <= now)
 
 
 async def enqueueAlerts(db):
@@ -76,8 +76,7 @@ async def enqueueAlerts(db):
     alerts = (await db.execute(hazardRepository.activeOfficialAlerts(('SIAGA', 'AWAS'), now))).scalars().all()
     for row in alerts:
         alertId = alertKey(row)
-        candidates = recipientsQuery(row.id, now)
-        userIds = (await db.execute(candidates)).scalars().all()
+        userIds = [userId for _, userId in await db.execute(recipientsQuery([row.id], now))]
         if not userIds:
             continue
         statement = insert(AlertDelivery).values([{'alert_key': alertId, 'user_id': userId, 'level': row.evidenceMetadata['officialStatus'].lower()} for userId in userIds]).on_conflict_do_nothing(index_elements=['alert_key', 'user_id', 'level']).returning(AlertDelivery.user_id)

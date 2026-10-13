@@ -52,9 +52,12 @@ class MockDisasterResponse(MockDisasterCreate):
 MIN_REPORTED_USERS = 5
 
 
-async def countUsersInArea(session, row, now):
-    count = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
-    return count if count >= MIN_REPORTED_USERS else None  # small counts would reveal whether someone is at a point
+async def usersInArea(session, rows, now):
+    if not rows:
+        return {}
+    pairs = recipientsQuery([row.id for row in rows], now).subquery()
+    counts = dict((await session.execute(select(pairs.c.hazardId, func.count()).group_by(pairs.c.hazardId))).all())
+    return {row.id: counts[row.id] if counts.get(row.id, 0) >= MIN_REPORTED_USERS else None for row in rows}
 
 
 def mockQuery():
@@ -81,10 +84,10 @@ async def addMockDisaster(payload: MockDisasterCreate, session: AsyncSession = D
         metadata={'commandMock': True, 'mockId': str(payload.id), 'name': payload.name, 'radiusM': payload.radiusM,
             'severity': payload.severity, 'center': [payload.longitude, payload.latitude]})
     now = datetime.now(timezone.utc)
-    usersInArea = await countUsersInArea(session, row, now)
+    reach = await usersInArea(session, [row], now)
     await refreshSnapshots(session)
     await session.commit()
-    return mockResponse(row, usersInArea)
+    return mockResponse(row, reach[row.id])
 
 
 @router.get('', response_model=list[MockDisasterResponse])
@@ -92,10 +95,8 @@ async def listMockDisasters(session: AsyncSession = Depends(get_session)):
     now = datetime.now(timezone.utc)
     rows = (await session.execute(mockQuery().where(HazardRecord.validUntil > now)
         .order_by(HazardRecord.observedAt.desc(), HazardRecord.id))).scalars().all()
-    result = []
-    for row in rows:
-        result.append(mockResponse(row, await countUsersInArea(session, row, now)))
-    return result
+    reach = await usersInArea(session, rows, now)
+    return [mockResponse(row, reach[row.id]) for row in rows]
 
 
 async def removeMocks(session, mockId=None):

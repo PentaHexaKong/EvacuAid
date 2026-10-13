@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -670,6 +671,18 @@ async def testMockDisasterCountsFreshUsersWithoutIdentifiers(commandSession,monk
                 encoded=json.dumps(body)
                 assert 'PRIVATE' not in encoded
                 assert all(str(user.id) not in encoded for user in [inside,*others,outside,stale])
+            far={**payload,'id':str(uuid.uuid4()),'name':'Far drill','latitude':.5,'longitude':.5}
+            assert (await client.post(url,json=far)).status_code==201
+            overlapping={**payload,'id':str(uuid.uuid4()),'name':'Overlapping drill'}
+            assert (await client.post(url,json=overlapping)).status_code==201
+            with monkeypatch.context() as patch:
+                execute=AsyncMock(wraps=commandSession.execute)
+                patch.setattr(commandSession,'execute',execute)
+                listed=await client.get(url)
+                assert listed.status_code==200, listed.text
+                counts={row['name']:row['usersInArea'] for row in listed.json()}
+                assert counts=={'Drill':5,'Far drill':None,'Overlapping drill':5}
+                assert execute.await_count==2
     finally:
         app.dependency_overrides.clear()
 
