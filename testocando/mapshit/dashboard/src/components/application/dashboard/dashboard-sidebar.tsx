@@ -12,7 +12,7 @@ type NavigationItem = { label: string; path: string; icon: RemixiconComponentTyp
 type NavigationGroup = { label: string; icon: RemixiconComponentType; items: readonly NavigationItem[] }
 const sidebarModes = ["Expanded", "Collapsed", "Expand on hover"] as const
 type SidebarMode = typeof sidebarModes[number]
-const sidebarModeKey = "enterprisehub.sidebar-mode"
+const sidebarModeKey = "evacuaid.command.sidebar-mode"
 const companyAvatarColors = ["neutral", "lime", "pink", "blue"] as const
 
 function Collapsible({ collapsed, children, className }: { collapsed: boolean; children: ReactNode; className?: string }) {
@@ -190,7 +190,9 @@ function useSidebarDisplay() {
   return { keyboardMotion, setKeyboardMotion, mode, changeMode, setHovered, setFocused, collapsed }
 }
 
-export function DashboardSidebar({ navigation, navigationGroups = [], companies, companyId, onCompanyChange, mobile = false, layout = "two", onLayoutChange, onClose, className }: {
+export function DashboardSidebar({ navigation, navigationGroups = [], companies, companyId, onCompanyChange, mobile = false, layout = "two", onLayoutChange, onClose, className, workspaceHeader, navigationEnd = [] }: {
+  workspaceHeader?: (collapsed: boolean) => ReactNode
+  navigationEnd?: readonly NavigationItem[]
   navigation: NavigationItem[]
   navigationGroups?: readonly NavigationGroup[]
   companies: Array<{ id: string; name: string }>
@@ -227,8 +229,8 @@ export function DashboardSidebar({ navigation, navigationGroups = [], companies,
       </Popover>
 
   if (mobile) return <TooltipProvider delayDuration={300}><aside aria-label="Workspace sidebar" data-reduced-motion={keyboardMotion ? "" : undefined} onKeyDownCapture={() => { setKeyboardMotion(true) }} onPointerDownCapture={() => { setKeyboardMotion(false) }} className={cx("flex h-full w-full shrink-0 flex-col justify-between gap-3 overflow-hidden border-r border-border-button-white bg-background-secondary-default p-3 shadow-sidebar [&_nav_a]:min-h-11 [&_nav_button]:min-h-11", className)}>
-    <div className="flex h-11 w-full shrink-0 items-center justify-between gap-2" data-slot="sidebar-header"><SidebarCompanyMenu companies={companies} companyId={companyId} collapsed={false} mobile={mobile} onCompanyChange={onCompanyChange} onClose={onClose} companyOpen={companyOpen} setCompanyOpen={setCompanyOpen} /><MobileSidebarClose onClose={onClose} /></div>
-    <div className="-m-2 flex min-h-0 w-[calc(100%+16px)] flex-1 flex-col overflow-y-auto p-2 [scrollbar-width:none]"><nav aria-label="Primary" className="flex w-full flex-col gap-1">{navigation.map((item) => <NavItem key={item.path} item={item} collapsed={false} onNavigate={onNavigate} />)}{navigationGroups.map((group) => <MobileNavigationTree single={layout === "single"} active={routeGroupLabel === group.label} key={group.label} icon={group.icon} items={group.items} label={group.label} onNavigate={onNavigate} />)}</nav></div>
+    <div className="flex h-11 w-full shrink-0 items-center justify-between gap-2" data-slot="sidebar-header">{workspaceHeader ? workspaceHeader(false) : <SidebarCompanyMenu companies={companies} companyId={companyId} collapsed={false} mobile={mobile} onCompanyChange={onCompanyChange} onClose={onClose} companyOpen={companyOpen} setCompanyOpen={setCompanyOpen} />}<MobileSidebarClose onClose={onClose} /></div>
+    <div className="-m-2 flex min-h-0 w-[calc(100%+16px)] flex-1 flex-col overflow-y-auto p-2 [scrollbar-width:none]"><nav aria-label="Primary" className="flex w-full flex-col gap-1">{navigation.map((item) => <NavItem key={item.path} item={item} collapsed={false} onNavigate={onNavigate} />)}{navigationGroups.map((group) => <MobileNavigationTree single={layout === "single"} active={routeGroupLabel === group.label} key={group.label} icon={group.icon} items={group.items} label={group.label} onNavigate={onNavigate} />)}{navigationEnd.map((item) => <NavItem key={item.path} item={item} collapsed={false} onNavigate={onNavigate} />)}</nav></div>
   </aside></TooltipProvider>
 
   return <TooltipProvider delayDuration={300}><aside aria-label="Workspace sidebar" data-reduced-motion={keyboardMotion ? "" : undefined} onKeyDownCapture={() => { setKeyboardMotion(true) }} onPointerDownCapture={() => { setKeyboardMotion(false) }} className={cx("relative flex h-full shrink-0 bg-background-secondary-default shadow-sidebar", className)}>
@@ -242,8 +244,8 @@ export function DashboardSidebar({ navigation, navigationGroups = [], companies,
       onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
       className={cx("absolute inset-y-0 left-0 z-20 flex h-full flex-col justify-between gap-3 border-r border-border-button-white bg-background-secondary-default px-2.5 py-3 transition-[width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none", collapsed ? "w-[60px]" : "w-[240px]", selectedGroup ? "border-border-button-hover shadow-[inset_-1px_0_0_var(--color-white)] dark:border-black/40 dark:shadow-[inset_-1px_0_0_rgb(255_255_255/0.08)]" : mode === "Expand on hover" && !collapsed && "shadow-sidebar")}
     >
-      <div className="flex w-full shrink-0 justify-center" data-slot="sidebar-header"><SidebarCompanyMenu companies={companies} companyId={companyId} collapsed={collapsed} mobile={false} onCompanyChange={onCompanyChange} companyOpen={companyOpen} setCompanyOpen={setCompanyOpen} /></div>
-      <div className="-m-2 flex min-h-0 w-[calc(100%+16px)] flex-1 flex-col overflow-y-auto p-2 [scrollbar-width:none]"><nav aria-label="Primary" className="flex w-full flex-col items-center gap-1">{navigation.map((item) => <NavItem key={item.path} item={item} collapsed={collapsed} onNavigate={onNavigate} />)}{navigationGroups.map((group) => layout === "single" ? <MobileNavigationTree key={group.label} single active={routeGroupLabel === group.label} collapsed={collapsed} onExpand={() => { changeMode("Expanded") }} icon={group.icon} items={group.items} label={group.label} onNavigate={onNavigate} /> : <NavigationGroupButton active={selectedGroup?.label === group.label} collapsed={collapsed} controls={panelId} group={group} key={group.label} onSelect={() => { const first = group.items[0]; if (first) void navigate(first.path) }} />)}</nav></div>
+      <div className="flex w-full shrink-0 justify-center" data-slot="sidebar-header">{workspaceHeader ? workspaceHeader(collapsed) : <SidebarCompanyMenu companies={companies} companyId={companyId} collapsed={collapsed} mobile={false} onCompanyChange={onCompanyChange} companyOpen={companyOpen} setCompanyOpen={setCompanyOpen} />}</div>
+      <div className="-m-2 flex min-h-0 w-[calc(100%+16px)] flex-1 flex-col overflow-y-auto p-2 [scrollbar-width:none]"><nav aria-label="Primary" className="flex w-full flex-col items-center gap-1">{navigation.map((item) => <NavItem key={item.path} item={item} collapsed={collapsed} onNavigate={onNavigate} />)}{navigationGroups.map((group) => layout === "single" ? <MobileNavigationTree key={group.label} single active={routeGroupLabel === group.label} collapsed={collapsed} onExpand={() => { changeMode("Expanded") }} icon={group.icon} items={group.items} label={group.label} onNavigate={onNavigate} /> : <NavigationGroupButton active={selectedGroup?.label === group.label} collapsed={collapsed} controls={panelId} group={group} key={group.label} onSelect={() => { const first = group.items[0]; if (first) void navigate(first.path) }} />)}{navigationEnd.map((item) => <NavItem key={item.path} item={item} collapsed={collapsed} onNavigate={onNavigate} />)}</nav></div>
       {sidebarControl}
     </div>
     </div>

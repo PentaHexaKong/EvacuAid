@@ -48,7 +48,7 @@ test("switches company from the rail popover", async () => {
 })
 
 test("renders a fixed icon rail with forty-pixel controls and contextual tooltips", async () => {
-  localStorage.setItem("enterprisehub.sidebar-mode", "Collapsed")
+  localStorage.setItem("evacuaid.command.sidebar-mode", "Collapsed")
   const user = userEvent.setup()
   render(<MemoryRouter>{sidebar()}</MemoryRouter>)
 
@@ -107,7 +107,7 @@ test("removes a selected panel when its group becomes unavailable", async () => 
 })
 
 test("uses the selected company's avatar color in the rail", () => {
-  localStorage.setItem("enterprisehub.sidebar-mode", "Collapsed")
+  localStorage.setItem("evacuaid.command.sidebar-mode", "Collapsed")
   render(<MemoryRouter>{sidebar({ companies: [company, { id: "akp", name: "Aneka Karya Perdana" }], companyId: "akp" })}</MemoryRouter>)
   const trigger = screen.getByRole("button", { name: "Open company menu for Aneka Karya Perdana" })
   expect(trigger.firstElementChild).toHaveClass("size-8", "rounded-full", "bg-lime-200", "text-lime-700")
@@ -179,7 +179,7 @@ test.each([
 })
 
 test.each([null, "invalid"])("defaults to expanded with a missing or invalid preference (%s)", (saved) => {
-  if (saved) localStorage.setItem("enterprisehub.sidebar-mode", saved)
+  if (saved) localStorage.setItem("evacuaid.command.sidebar-mode", saved)
   render(<MemoryRouter>{sidebar()}</MemoryRouter>)
   const rail = screen.getByLabelText("Workspace sidebar").querySelector('[data-slot="sidebar-rail"]')
   if (!rail) throw new Error("Sidebar rail is missing")
@@ -196,7 +196,7 @@ test("selects and restores all three modes", async () => {
   await user.click(screen.getByRole("button", { name: "Sidebar display" }))
     await user.click(screen.getByRole("radio", { name: mode }))
     expect(screen.getByRole("radio", { name: mode })).toBeChecked()
-    expect(localStorage.getItem("enterprisehub.sidebar-mode")).toBe(mode)
+    expect(localStorage.getItem("evacuaid.command.sidebar-mode")).toBe(mode)
     await user.keyboard("{Escape}")
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     unmount()
@@ -224,7 +224,7 @@ test("still switches modes when storage is unavailable", async () => {
 })
 
 test("hover and focus reveal labels without changing reserved space or replacing focused links", async () => {
-  localStorage.setItem("enterprisehub.sidebar-mode", "Expand on hover")
+  localStorage.setItem("evacuaid.command.sidebar-mode", "Expand on hover")
   const user = userEvent.setup()
   render(<MemoryRouter initialEntries={["/settings/users"]}>{sidebar()}</MemoryRouter>)
   const rail = screen.getByLabelText("Workspace sidebar").querySelector('[data-slot="sidebar-rail"]')
@@ -246,7 +246,7 @@ test("hover and focus reveal labels without changing reserved space or replacing
 })
 
 test.each(["Sidebar control", "Open company menu for Aneka Karya Advertising"])("collapses outside the rail while keeping %s open", async (name) => {
-  localStorage.setItem("enterprisehub.sidebar-mode", "Expand on hover")
+  localStorage.setItem("evacuaid.command.sidebar-mode", "Expand on hover")
   const user = userEvent.setup()
   render(<MemoryRouter>{sidebar()}</MemoryRouter>)
   const rail = screen.getByLabelText("Workspace sidebar").querySelector('[data-slot="sidebar-rail"]')
@@ -264,7 +264,7 @@ test.each(["Sidebar control", "Open company menu for Aneka Karya Advertising"])(
 })
 
 test.each(["Expanded", "Expand on hover"])("dismisses sidebar control outside and supports BoardUI keyboard selection in %s mode", async (mode) => {
-  localStorage.setItem("enterprisehub.sidebar-mode", mode)
+  localStorage.setItem("evacuaid.command.sidebar-mode", mode)
   const user = userEvent.setup()
   render(<MemoryRouter><button>Outside</button>{sidebar()}</MemoryRouter>)
   const control = screen.getByRole("button", { name: "Sidebar control" })
@@ -273,13 +273,13 @@ test.each(["Expanded", "Expand on hover"])("dismisses sidebar control outside an
   await user.click(screen.getByRole("radio", { name: "Expanded" }))
   await user.keyboard("{ArrowDown}")
   expect(screen.getByRole("radio", { name: "Collapsed" })).toBeChecked()
-  expect(localStorage.getItem("enterprisehub.sidebar-mode")).toBe("Collapsed")
+  expect(localStorage.getItem("evacuaid.command.sidebar-mode")).toBe("Collapsed")
   await user.click(screen.getByRole("button", { name: "Outside" }))
   await waitFor(() => { expect(screen.queryByRole("dialog")).not.toBeInTheDocument() })
 })
 
 test("single sidebar keeps labels expanded and toggles groups without navigating", async () => {
-  localStorage.setItem("enterprisehub.sidebar-mode", "Expanded")
+  localStorage.setItem("evacuaid.command.sidebar-mode", "Expanded")
   const user = userEvent.setup()
   render(<MemoryRouter initialEntries={["/dashboard"]}>{sidebar({ layout: "single" })}</MemoryRouter>)
   expect(screen.getByRole("button", { name: "Sidebar control" })).toBeInTheDocument()
@@ -289,7 +289,7 @@ test("single sidebar keeps labels expanded and toggles groups without navigating
   await user.click(screen.getByRole("link", { name: "Users" }))
   expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("aria-current", "page")
   expect(screen.queryByLabelText("Settings navigation")).not.toBeInTheDocument()
-  expect(localStorage.getItem("enterprisehub.sidebar-mode")).toBe("Expanded")
+  expect(localStorage.getItem("evacuaid.command.sidebar-mode")).toBe("Expanded")
 })
 
  test("single-sidebar controls collapse the rail and group clicks restore its labels", async () => {
@@ -303,5 +303,11 @@ test("single sidebar keeps labels expanded and toggles groups without navigating
   await user.click(screen.getByRole("button", { name: "Settings" }))
   expect(screen.getByRole("link", { name: "Users" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page")
-  expect(localStorage.getItem("enterprisehub.sidebar-mode")).toBe("Expanded")
+  expect(localStorage.getItem("evacuaid.command.sidebar-mode")).toBe("Expanded")
  })
+
+test("renders a static workspace header instead of the company menu", () => {
+  render(<MemoryRouter>{sidebar({ workspaceHeader: () => <span>DKI Jakarta</span> })}</MemoryRouter>)
+  expect(screen.getByText("DKI Jakarta")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /Open company menu/ })).not.toBeInTheDocument()
+})

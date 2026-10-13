@@ -43,7 +43,6 @@
   --color-accent-950: color-mix(in oklab, var(--color-primary-base) 42%, black);
 
   /* ----- Typography ----------------------------------------------------------
-   * Font sizes, weights, line-heights, and tracking all match Tailwind v4
    * --------------------------------------------------------------------------*/
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif,
                "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",

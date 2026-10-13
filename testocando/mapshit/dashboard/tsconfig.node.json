@@ -28,6 +28,8 @@
   },
   "include": [
     "vite.config.ts",
+    "playwright.config.ts",
+    "tests/e2e/**/*.ts",
     "eslint.config.js"
   ]
 }
