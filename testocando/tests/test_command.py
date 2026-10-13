@@ -651,24 +651,25 @@ async def testMockDisasterCountsFreshUsersWithoutIdentifiers(commandSession,monk
             expectedKeys={'id','name','hazardType','latitude','longitude','radiusM','severity','expiresAt','usersInArea'}
             response=await client.post(url,json=payload)
             assert response.status_code==201, response.text
-            assert response.json()['usersInArea']==1
+            assert response.json()['usersInArea'] is None
             assert set(response.json())==expectedKeys
+            others=[User(name='PRIVATE INSIDE',latitude=.005,longitude=.005,location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=now-timedelta(hours=1)) for _ in range(4)]
             outside=User(name='PRIVATE OUTSIDE',latitude=.005,longitude=.015,location=from_shape(Point(.015,.005),srid=4326),locationObservedAt=now-timedelta(hours=1))
             stale=User(name='PRIVATE STALE',latitude=.005,longitude=.005,location=from_shape(Point(.005,.005),srid=4326),locationObservedAt=now-timedelta(hours=30))
-            commandSession.add_all([outside,stale]); await commandSession.flush()
+            commandSession.add_all([*others,outside,stale]); await commandSession.flush()
             response=await client.post(url,json=payload)
             assert response.status_code==201, response.text
-            assert response.json()['usersInArea']==1
+            assert response.json()['usersInArea']==5
             assert set(response.json())==expectedKeys
             listed=await client.get(url)
             assert listed.status_code==200, listed.text
             assert len(listed.json())==1
-            assert listed.json()[0]['usersInArea']==1
+            assert listed.json()[0]['usersInArea']==5
             assert set(listed.json()[0])==expectedKeys
             for body in [response.json(),listed.json()[0]]:
                 encoded=json.dumps(body)
                 assert 'PRIVATE' not in encoded
-                assert all(str(user.id) not in encoded for user in [inside,outside,stale])
+                assert all(str(user.id) not in encoded for user in [inside,*others,outside,stale])
     finally:
         app.dependency_overrides.clear()
 

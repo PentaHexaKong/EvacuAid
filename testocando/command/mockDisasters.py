@@ -46,7 +46,15 @@ class MockDisasterCreate(BaseModel):
 
 class MockDisasterResponse(MockDisasterCreate):
     expiresAt: datetime
-    usersInArea: int
+    usersInArea: int | None
+
+
+MIN_REPORTED_USERS = 5
+
+
+async def countUsersInArea(session, row, now):
+    count = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
+    return count if count >= MIN_REPORTED_USERS else None  # small counts would reveal whether someone is at a point
 
 
 def mockQuery():
@@ -73,7 +81,7 @@ async def addMockDisaster(payload: MockDisasterCreate, session: AsyncSession = D
         metadata={'commandMock': True, 'mockId': str(payload.id), 'name': payload.name, 'radiusM': payload.radiusM,
             'severity': payload.severity, 'center': [payload.longitude, payload.latitude]})
     now = datetime.now(timezone.utc)
-    usersInArea = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
+    usersInArea = await countUsersInArea(session, row, now)
     await refreshSnapshots(session)
     await session.commit()
     return mockResponse(row, usersInArea)
@@ -86,8 +94,7 @@ async def listMockDisasters(session: AsyncSession = Depends(get_session)):
         .order_by(HazardRecord.observedAt.desc(), HazardRecord.id))).scalars().all()
     result = []
     for row in rows:
-        usersInArea = (await session.execute(select(func.count()).select_from(recipientsQuery(row.id, now).subquery()))).scalar_one()
-        result.append(mockResponse(row, usersInArea))
+        result.append(mockResponse(row, await countUsersInArea(session, row, now)))
     return result
 
 
