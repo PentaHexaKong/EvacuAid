@@ -39,7 +39,7 @@ new ResizeObserver(() => map.resize()).observe(map.getContainer()) // sidebar co
 new ResizeObserver(([entry]) => document.querySelector('.map-hero').style.setProperty('--toolbar-h', entry.target.offsetHeight + 'px')).observe(document.querySelector('.map-toolbar'))
 window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.resize(); if (pendingBounds) frameMap(pendingBounds) }) })
 const optional = { visible: false }
-const layers = { regions: group('regions'), baseline: group('baseline', optional), active: group('active'), community: group('community', optional), satellite: group('satellite', optional), shelters: group('shelters'), routes: group('routes', optional) }
+const layers = { regions: group('regions'), baseline: group('baseline', optional), active: group('active'), community: group('community', optional), satellite: group('satellite', optional), shelters: group('shelters'), routes: group('routes') }
 
 function element(tag, className, text) {
   const result = document.createElement(tag)
