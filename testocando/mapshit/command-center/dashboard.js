@@ -34,6 +34,8 @@ function frameMap(bounds) {
   map.fitBounds(bounds, { padding: [24, 24], maxZoom: 13 })
 }
 new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer()) // sidebar collapse, drawer and view changes all resize the map
+// The toolbar wraps to more rows in mock mode or on narrower screens; the status line and region card sit below it.
+new ResizeObserver(([entry]) => document.querySelector('.map-hero').style.setProperty('--toolbar-h', entry.target.offsetHeight + 'px')).observe(document.querySelector('.map-toolbar'))
 window.addEventListener('viewchange', e => { if (e.detail.view === 'overview') requestAnimationFrame(() => { map.invalidateSize(); if (pendingBounds) frameMap(pendingBounds) }) })
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxNativeZoom: 16, maxZoom: 19 }).addTo(map)
 map.createPane('labels')

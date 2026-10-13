@@ -28,6 +28,8 @@ export function setupMapTools({ map, api, refresh }) {
     span.textContent = text
     return span
   }
+  // The server hides counts below 5 (null) so a small count can't reveal whether someone is at a point.
+  const reach = count => count === undefined ? '' : count === null ? 'under 5 users in area' : count.toLocaleString('en-US') + ' users in area'
   function renderMocks() {
     mockLayer.clearLayers()
     $('mock-items').replaceChildren()
@@ -35,7 +37,7 @@ export function setupMapTools({ map, api, refresh }) {
       if (item.kind === 'safeHouse' && !$('mock-mode').checked) continue
       const point = [item.latitude, item.longitude]
       const word = value => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
-      const text = (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) : ' · Safe house')
+      const text = (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) + (reach(item.usersInArea) && ' · ' + reach(item.usersInArea)) : ' · Safe house')
       const layer = item.kind === 'hazard'
         ? L.circle(point, { radius: item.radiusM, color: mockStroke, dashArray: '6 4', fillOpacity: .18 })
         : L.circleMarker(point, { radius: 9, color: mockStroke, fillColor: surface, fillOpacity: 1, weight: 3 })
@@ -108,7 +110,7 @@ export function setupMapTools({ map, api, refresh }) {
     $('safe-house-fields').hidden = disaster
     $('mock-radius').disabled = !disaster
     $('placement-title').textContent = disaster ? 'Add mock disaster' : draft.mock ? 'Add mock safe house' : 'Add safe house'
-    $('placement-environment').textContent = disaster ? 'Simulation · sends a test alert to phones in the area' : draft.mock ? 'Mock · this browser only' : 'Operational · saves to backend'
+    $('placement-environment').textContent = disaster ? 'Simulation · Watch appears in the app; Elevated and Critical can send test push notifications' : draft.mock ? 'Mock · this browser only' : 'Operational · saves to backend'
     $('placement-environment').className = 'badge' + (disaster || draft.mock ? ' is-simulation' : '')
     $('placement-coordinates').textContent = 'Location: ' + draft.latitude.toFixed(6) + ', ' + draft.longitude.toFixed(6)
     $('placement-dialog').showModal()
@@ -135,10 +137,14 @@ export function setupMapTools({ map, api, refresh }) {
       }
       if (draft.kind === 'hazard') {
         const { kind, ...payload } = item
-        await api('mock-disasters', { method: 'POST', body: JSON.stringify(payload) })
+        const { usersInArea } = await api('mock-disasters', { method: 'POST', body: JSON.stringify(payload) })
         await loadMocks()
         await refresh({ fitView: false })
-        $('map-action-status').textContent = name + ' placed. Phones inside the area get a test alert within a minute.'
+        $('map-action-status').textContent = name + ' placed. ' + (usersInArea === undefined ? ''
+          : usersInArea === null ? 'Fewer than 5 recently located EvacuAid users are in the area, so the exact count is hidden. '
+          : usersInArea.toLocaleString('en-US') + ' recently located EvacuAid users are in the area. ')
+          + (item.severity === 'WATCH' ? 'Watch warnings appear in the app without a push notification.'
+            : 'Test push notifications depend on alert delivery being enabled and a registered device. Delivery is not confirmed here.')
       } else if (draft.mock) {
         if (items.length >= 200) throw new Error('Remove an existing mock item before adding more (limit 200).')
         items.push(item); persist(); await loadMocks()
