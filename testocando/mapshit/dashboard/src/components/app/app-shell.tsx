@@ -1,6 +1,6 @@
 import { RiMenuLine as IconMenu2, RiRefreshLine } from "@remixicon/react"
 import { Wordmark } from "@/components/app/wordmark"
-import { useEffect, useLayoutEffect, useState, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { useLocation } from "react-router"
 import { Button } from "@/components/base/buttons/button"
 import { MobileNavigation } from "@/components/app/MobileNavigation"
@@ -23,9 +23,14 @@ export function CommandHeaderActions({ onRefresh }: { onRefresh?: () => void }) 
   const { dataMode, setDataMode } = useDataMode()
   const client = useQueryClient()
   const connection = useConnectionStatus()
+  const announcement = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const node = announcement.current
+    if (node && (!node.textContent || connection.tone !== "loading") && node.textContent !== connection.text) node.textContent = connection.text
+  }, [connection.text, connection.tone])
   const dotTone = { loading: "bg-white", connected: "bg-status-lime-text", error: "bg-status-rose-text" }[connection.tone]
   return <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-    <span role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-2 text-body-2-regular"><span aria-hidden className={`size-2 rounded-full ${dotTone}`} /><span className="sr-only md:not-sr-only">{connection.text}</span></span>
+    <span className="flex items-center gap-2 text-body-2-regular"><span aria-hidden className={`size-2 rounded-full ${dotTone}`} /><span aria-hidden className="hidden md:inline">{connection.text}</span><span ref={announcement} role="status" aria-live="polite" aria-atomic="true" className="sr-only" /></span>
     <Select aria-label="Data environment" size="sm" value={dataMode} onChange={(value) => { if (value === "REFERENCE" || value === "SIMULATION") setDataMode(value) }}>
       <SelectItem id="REFERENCE">Operational data</SelectItem>
       <SelectItem id="SIMULATION">Simulation data</SelectItem>

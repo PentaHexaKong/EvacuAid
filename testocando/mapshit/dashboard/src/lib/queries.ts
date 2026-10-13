@@ -62,7 +62,13 @@ export function useAssistanceCounts() {
 
 function useCommandMutation<T, V>(resource: string, mutationFn: (value: V) => Promise<T>) {
   const client = useQueryClient()
-  return useMutation({ mutationFn, onSuccess: () => client.invalidateQueries({ queryKey: ['command', resource] }) })
+  return useMutation({ mutationFn, onSuccess: () => Promise.all([
+    client.invalidateQueries({ queryKey: ['command', resource] }),
+    ...(resource === 'safe-houses' || resource === 'mock-disasters' ? [
+      client.invalidateQueries({ queryKey: ['command', 'regions'] }),
+      client.invalidateQueries({ queryKey: ['command', 'region'] }),
+    ] : []),
+  ]) })
 }
 
 type ReviewInput = Omit<Review, 'status'> & { id: string }
@@ -97,15 +103,22 @@ export function useDeleteMockDisaster() {
   return useCommandMutation('mock-disasters', (id: string) => api<null>('mock-disasters/' + encodeURIComponent(id), { method: 'DELETE' }))
 }
 
+export function operationsConnectionError(error: Error): string {
+  return 'Connection unavailable · retained data may be stale. ' + error.message
+}
+
 export function useConnectionStatus(params: RegionParams = defaultRegionParams): { text: string; tone: 'loading' | 'connected' | 'error'; error?: Error } {
+  const client = useQueryClient()
   const regions = useRegions(params)
   const houses = useSafeHouses()
   const mocks = useMockDisasters()
   const queries = [regions, houses, mocks]
+  if (queries.some(query => query.isPending || query.isFetching)) {
+    const hasData = client.getQueriesData({ queryKey: ['command', 'regions'] }).some(([, data]) => data !== undefined)
+    return { text: hasData ? 'Loading projections…' : 'Loading dashboard', tone: 'loading' }
+  }
   const error = queries.find(query => query.isError)?.error
   if (error) return { text: 'Connection unavailable', tone: 'error', error }
-  if (queries.some(query => query.isPending)) return { text: 'Loading dashboard', tone: 'loading' }
-  if (queries.some(query => query.isFetching)) return { text: 'Loading projections…', tone: 'loading' }
   const rows = regions.data ?? []
   const stale = rows.filter(region => region.snapshotStale).length
   return { text: !rows.length ? 'Connected · no regions in this scope' : stale === rows.length ? 'Connected · regional snapshots unavailable' : 'Connected · ' + String(rows.length) + ' regions · ' + String(stale) + ' stale', tone: 'connected' }

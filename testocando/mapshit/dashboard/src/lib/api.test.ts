@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { CommandHeaderActions } from '@/components/app/app-shell'
 import { DataModeProvider, useDataMode } from '@/app/data-mode'
 import { api, allRegions } from './api'
+import * as queries from './queries'
 import { mapConfig } from './config'
 import { useRegions, useRegion, useSafeHouses, useMockDisasters, useReports, useAssistance, useCheckIns, useRoutes, useConnectionStatus, useAssistanceCounts, useConfirmReport, useRejectReport, useResolveReport, useUpdateAssistance, useCreateRoute, usePublishRoute, useWithdrawRoute, useCreateSafeHouse, useCreateMockDisaster, useClearMockDisasters, useDeleteMockDisaster } from './queries'
 
@@ -104,7 +105,11 @@ test.each([
   ['delete mock', useDeleteMockDisaster, 'mock-1', 'mock-disasters', 'DELETE', 'mock-disasters/mock-1', undefined],
 ] as const)('%s uses the correct method, body and resource invalidation', async (_name, hook, input, resource, method, path, body) => {
   const { client, wrapper } = setup(); fetchMock.mockResolvedValue(respond({}))
-  for (const key of ['regions', 'reports', 'assistance', 'routes', 'safe-houses', 'mock-disasters']) client.setQueryData(['command', key, 'existing'], [])
+  for (const key of ['reports', 'assistance', 'routes', 'safe-houses', 'mock-disasters']) client.setQueryData(['command', key, 'existing'], [])
+  for (const mode of ['REFERENCE', 'SIMULATION']) {
+    client.setQueryData(['command', 'regions', mode, {}], [])
+    client.setQueryData(['command', 'region', mode, 'region-1'], {})
+  }
   const invalidate = vi.spyOn(client, 'invalidateQueries')
   const { result } = renderHook(() => hook(), { wrapper })
   await act(async () => { await (result.current.mutateAsync as (value: typeof input) => Promise<unknown>)(input) })
@@ -113,9 +118,17 @@ test.each([
   expect(url).toBe('/api/command/' + path)
   expect(init?.method).toBe(method)
   expect(init?.body === undefined ? undefined : JSON.parse(typeof init.body === 'string' ? init.body : '') as unknown).toEqual(body)
-  expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ['command', resource] })
+  const refreshRegions = resource === 'safe-houses' || resource === 'mock-disasters'
+  expect(invalidate.mock.calls).toEqual(refreshRegions ? [
+    [{ queryKey: ['command', resource] }],
+    [{ queryKey: ['command', 'regions'] }],
+    [{ queryKey: ['command', 'region'] }],
+  ] : [[{ queryKey: ['command', resource] }]])
   expect(client.getQueryState(['command', resource, 'existing'])?.isInvalidated).toBe(true)
-  expect(client.getQueryState(['command', 'regions', 'existing'])?.isInvalidated).toBe(false)
+  for (const mode of ['REFERENCE', 'SIMULATION']) {
+    expect(client.getQueryState(['command', 'regions', mode, {}])?.isInvalidated).toBe(refreshRegions)
+    expect(client.getQueryState(['command', 'region', mode, 'region-1'])?.isInvalidated).toBe(refreshRegions)
+  }
 })
 
 test.each([
@@ -141,18 +154,24 @@ test('header refresh invalidates all command data and keeps identical status tex
   fetchMock.mockImplementation(() => Promise.resolve(respond([])))
   client.setQueryData(['command', 'reports'], [])
   const invalidate = vi.spyOn(client, 'invalidateQueries')
-  const view = render(createElement(CommandHeaderActions), { wrapper })
+  render(createElement(CommandHeaderActions), { wrapper })
   const status = screen.getByRole('status')
   expect(status).toHaveAttribute('aria-live', 'polite')
   await waitFor(() => { expect(status).toHaveTextContent('Connected · no regions in this scope') })
   const changes = vi.fn()
   const observer = new MutationObserver(changes)
   observer.observe(status, { childList: true, characterData: true, subtree: true })
-  view.rerender(createElement(CommandHeaderActions))
-  await act(async () => { await Promise.resolve() })
+  const finish: (() => void)[] = []
+  fetchMock.mockImplementation(() => new Promise<Response>(resolve => { finish.push(() => { resolve(respond([])) }) }))
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
+  await waitFor(() => { expect(finish).toHaveLength(3) })
+  expect(screen.getByText('Loading projections…')).toBeInTheDocument()
+  expect(status).toHaveTextContent('Connected · no regions in this scope')
+  await act(async () => { finish.forEach(resolve => { resolve() }); await Promise.resolve() })
+  await waitFor(() => { expect(screen.queryByText('Loading projections…')).not.toBeInTheDocument() })
+  expect(fetchMock).toHaveBeenCalledTimes(6)
   expect(changes).not.toHaveBeenCalled()
   observer.disconnect()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
   expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ['command'] })
   expect(client.getQueryState(['command', 'reports'])?.isInvalidated).toBe(true)
 })
@@ -182,4 +201,65 @@ test('assistance KPI pages in 50s and excludes completed/cancelled cases', async
     '/api/command/operations/assistance?limit=50&offset=0',
     '/api/command/operations/assistance?limit=50&offset=50',
   ])
+})
+
+test.each(['refresh', 'data-mode toggle'])('connection uses legacy refresh text during %s after data has loaded', async action => {
+  const { client, wrapper } = setup()
+  fetchMock.mockImplementation(() => Promise.resolve(respond([])))
+  const { result } = renderHook(() => ({ connection: useConnectionStatus(), mode: useDataMode() }), { wrapper })
+  expect(result.current.connection.text).toBe('Loading dashboard')
+  await waitFor(() => { expect(result.current.connection.tone).toBe('connected') })
+  fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
+  act(() => {
+    if (action === 'refresh') void client.invalidateQueries({ queryKey: ['command'] })
+    else result.current.mode.setDataMode('SIMULATION')
+  })
+  await waitFor(() => { expect(result.current.connection).toMatchObject({ text: 'Loading projections…', tone: 'loading' }) })
+})
+
+test('simulation skips all operations queries and assistance KPI loading', async () => {
+  const { wrapper } = setup()
+  function SimulationOperations() {
+    const { setDataMode } = useDataMode()
+    return createElement('button', { onClick: () => { setDataMode('SIMULATION') } }, 'Simulation')
+  }
+  function Operations() {
+    const reports = useReports()
+    const assistance = useAssistance()
+    const checkins = useCheckIns()
+    const routes = useRoutes()
+    const counts = useAssistanceCounts()
+    return createElement('div', null, [reports, assistance, checkins, routes, counts].map((query, index) => createElement('span', { key: index }, query.fetchStatus)))
+  }
+  const view = render(createElement(SimulationOperations), { wrapper })
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Simulation' }))
+  view.rerender(createElement(Operations))
+  await act(async () => { await Promise.resolve() })
+  expect(fetchMock).not.toHaveBeenCalled()
+  expect(view.container).toHaveTextContent('idleidleidleidleidle')
+})
+
+test.each([
+  ['safe-houses', useSafeHouses],
+  ['mock-disasters', useMockDisasters],
+] as const)('%s query keys include both data environments', async (resource, hook) => {
+  const { client, wrapper } = setup()
+  fetchMock.mockImplementation(() => Promise.resolve(respond([])))
+  const { result } = renderHook(() => ({ query: hook(), mode: useDataMode() }), { wrapper })
+  await waitFor(() => { expect(result.current.query.isSuccess).toBe(true) })
+  expect(client.getQueryData(['command', resource, 'REFERENCE'])).toEqual([])
+  act(() => { result.current.mode.setDataMode('SIMULATION') })
+  await waitFor(() => { expect(result.current.query.isSuccess).toBe(true) })
+  expect(client.getQueryData(['command', resource, 'SIMULATION'])).toEqual([])
+  expect(fetchMock.mock.calls.map(([url]) => requestUrl(url))).toEqual(resource === 'safe-houses' ? [
+    '/api/command/safe-houses?dataMode=REFERENCE&limit=200&offset=0',
+    '/api/command/safe-houses?dataMode=SIMULATION&limit=200&offset=0',
+  ] : [
+    '/api/command/mock-disasters?dataMode=REFERENCE',
+    '/api/command/mock-disasters?dataMode=SIMULATION',
+  ])
+})
+
+test('operations connection errors preserve the retained-data warning verbatim', () => {
+  expect(queries.operationsConnectionError(new Error('Backend request timed out.'))).toBe('Connection unavailable · retained data may be stale. Backend request timed out.')
 })
