@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import mapboxgl from 'mapbox-gl'
 import { mapConfig } from '@/lib/config'
 import { createMap, noTokenNote, noWebGLNote, type MapAPI } from './glMap'
@@ -39,8 +39,9 @@ export function MapProvider({ children }: { children: ReactNode }) {
         node.style.height = '100%'
         container.current = node
         ;(slot.current ?? parking.current)?.append(node)
-        try { runtime.current = createMap(node, token, style, value => { if (mounted.current) setAPI(value) }) }
-        catch (error) { console.error(error); node.remove(); container.current = null; queueMicrotask(() => { if (mounted.current) setNote(noWebGLNote) }) }
+        let constructed: mapboxgl.Map | undefined
+        try { runtime.current = createMap(node, token, style, value => { if (mounted.current) setAPI(value) }, map => { constructed = map }) }
+        catch (error) { constructed?.remove(); console.error(error); node.remove(); container.current = null; queueMicrotask(() => { if (mounted.current) setNote(noWebGLNote) }) }
       }
     }
     return () => {
@@ -52,7 +53,8 @@ export function MapProvider({ children }: { children: ReactNode }) {
       })
     }
   }, [config])
-  return <MapContext.Provider value={{ api, note, attach }}><div ref={parking} hidden />{children}</MapContext.Provider>
+  const value = useMemo(() => ({ api, note, attach }), [api, note, attach])
+  return <MapContext.Provider value={value}><div ref={parking} hidden />{children}</MapContext.Provider>
 }
 
 export function useMap(): MapAPI | null { return useContext(MapContext)?.api ?? null }

@@ -1,5 +1,6 @@
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import './map.css'
 import type { Geometry } from '@/lib/types'
 
 export type Feature = { type: 'Feature'; id?: string | number; geometry: Geometry | null; properties: Record<string, unknown> | null }
@@ -24,12 +25,13 @@ const calmBasemap = { theme: 'monochrome', showPointOfInterestLabels: false, sho
 export const noTokenNote = 'Map unavailable · set MAPBOX_TOKEN'
 export const noWebGLNote = "Map unavailable · this browser can't start WebGL"
 
-export function createMap(container: HTMLElement, token: string, style: string, onReady: (api: MapAPI) => void) {
+export function createMap(container: HTMLElement, token: string, style: string, onReady: (api: MapAPI) => void, onConstruct?: (map: mapboxgl.Map) => void) {
   mapboxgl.accessToken = token
   const map = new mapboxgl.Map({
     container, style: 'mapbox://styles/' + style, ...(style === 'mapbox/standard' ? { config: { basemap: calmBasemap } } : {}),
     center: [118, -2], zoom: 4, cooperativeGestures: true, dragRotate: false, pitchWithRotate: false, touchPitch: false,
   })
+  onConstruct?.(map)
   map.touchZoomRotate.disableRotation()
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right')
   map.on('error', event => { console.error(event.error) })
@@ -90,12 +92,12 @@ export function createMap(container: HTMLElement, token: string, style: string, 
       clearHover()
       for (const feature of group.data.features) meta.delete(feature.properties?.fid as number)
       const features = fc.features.map(feature => {
-        const properties = feature.properties ?? {}
-        const appearance = { ...style, ...properties }
+        const { tooltip: content, ...properties } = feature.properties ?? {}
+        const appearance = { ...properties, ...style }
         const fid = nextId++
         const color = appearance.color || '#000'
         const weight = appearance.weight ?? 2
-        meta.set(fid, { feature, content: properties.tooltip as string | Node | undefined })
+        meta.set(fid, { feature, content: content as string | Node | undefined })
         return { ...feature, properties: { ...properties, fid, color, weight, hoverWeight: appearance.hoverWeight ?? weight, opacity: appearance.opacity ?? 1, dashed: Boolean(appearance.dashed), fillColor: appearance.fillColor || color, fillOpacity: appearance.fillOpacity ?? .2, radius: appearance.radius ?? 6, sortKey: appearance.sortKey ?? 0 } }
       })
       group.data = { type: 'FeatureCollection', features }
@@ -119,7 +121,7 @@ export function createMap(container: HTMLElement, token: string, style: string, 
   map.on('style.load', () => {
     ready = true
     for (const id of ids) install(id)
-    if (!framed) { framed = true; frame([[106.68, -6.38], [107.02, -6.08]]) }
+    if (!framed) { framed = true; api.fit([[106.68, -6.38], [107.02, -6.08]]) }
     resize()
     onReady(api)
   })

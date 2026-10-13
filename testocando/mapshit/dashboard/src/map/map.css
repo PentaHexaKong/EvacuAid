@@ -1,0 +1,4 @@
+.map-tooltip { pointer-events: none; }
+.map-tooltip .mapboxgl-popup-content { padding: 6px 10px; border-radius: var(--radius-md); box-shadow: var(--shadow-sidebar); font-size: 12px; line-height: 16px; color: var(--color-text-primary); background: var(--color-background-primary-default); pointer-events: none; }
+.map-tooltip .mapboxgl-popup-tip { display: none; }
+.map-note { z-index: 2; position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 6px 10px; border-radius: var(--radius-md); background: var(--color-background-primary-default); color: var(--color-text-secondary-strong); font-size: 12px; box-shadow: var(--shadow-sidebar); pointer-events: none; }

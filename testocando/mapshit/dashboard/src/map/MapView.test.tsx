@@ -3,11 +3,14 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LayerSpecification } from 'mapbox-gl'
 import type { FeatureCollection } from './glMap'
-import { MapProvider, useMap } from './MapProvider'
+import { MapProvider, useMap, useMapHost } from './MapProvider'
 import { MapView } from './MapView'
 import { circlePolygon } from './glMap'
+import { readFileSync } from 'node:fs'
 
-const mock = vi.hoisted(() => ({ supported: vi.fn(), maps: [] as InstanceType<typeof FakeMap>[], popup: { remove: vi.fn(), setDOMContent: vi.fn<(node: Node) => unknown>(), setLngLat: vi.fn(), addTo: vi.fn(), isOpen: vi.fn() } }))
+const mapCSS = readFileSync('src/map/map.css', 'utf8')
+
+const mock = vi.hoisted(() => ({ supported: vi.fn(), width: 800, constructorThrows: false, setupThrows: false, maps: [] as InstanceType<typeof FakeMap>[], popup: { remove: vi.fn(), setDOMContent: vi.fn<(node: Node) => unknown>(), setLngLat: vi.fn(), addTo: vi.fn(), isOpen: vi.fn() } }))
 const FakeMap = vi.hoisted(() => class FakeMap {
   container: HTMLElement
   canvas = document.createElement('canvas')
@@ -15,14 +18,14 @@ const FakeMap = vi.hoisted(() => class FakeMap {
   sources = new Map<string, { setData: ReturnType<typeof vi.fn<(data: FeatureCollection) => void>> }>()
   layers = new Map<string, LayerSpecification>()
   touchZoomRotate = { disableRotation: vi.fn() }
-  addControl = vi.fn()
+  addControl = vi.fn(() => { if (mock.setupThrows) throw new Error('Control setup failed') })
   resize = vi.fn()
   remove = vi.fn()
   fitBounds = vi.fn()
   setFeatureState = vi.fn()
   queryRenderedFeatures = vi.fn(() => [] as { source: string; properties: { fid: number } }[])
   setLayoutProperty = vi.fn()
-  constructor(public options: { container: HTMLElement }) { this.container = options.container; this.container.append(this.canvas); mock.maps.push(this) }
+  constructor(public options: { container: HTMLElement }) { if (mock.constructorThrows) throw new Error('WebGL construction failed'); this.container = options.container; Object.defineProperty(this.container, 'offsetWidth', { get: () => mock.width }); this.container.append(this.canvas); mock.maps.push(this) }
   on(name: string, cb: (event: unknown) => void) { if (!this.events.has(name)) this.events.set(name, new Set()); required(this.events.get(name)).add(cb); return this }
   off(name: string, cb: (event: unknown) => void) { this.events.get(name)?.delete(cb); return this }
   emit(name: string, event = {}) { for (const cb of [...(this.events.get(name) ?? [])]) cb(event) }
@@ -41,10 +44,93 @@ function Consumer() { const value = useMap(); useEffect(() => { api = value }, [
 function Host({ show = true }: { show?: boolean }) { return <div id="map-host-boundary"><MapProvider><Consumer />{show && <MapView />}</MapProvider></div> }
 const fc: FeatureCollection = { type: 'FeatureCollection', features: [{ type: 'Feature', id: 'r1', geometry: { type: 'Point', coordinates: [106.8, -6.2] }, properties: { tooltip: '<b>Region</b>', color: '#123456', radius: 9 } }] }
 function ready() { act(() => { required(mock.maps[0]).emit('style.load'); }); return required(mock.maps[0]) }
-beforeEach(() => { vi.clearAllMocks(); mock.maps.length = 0; mock.supported.mockReturnValue(true); window.EVACUAID_MAP = { mapboxToken: 'test-token', mapboxStyle: 'mapbox/standard' }; api = null; for (const name of ['remove', 'setDOMContent', 'setLngLat', 'addTo'] as const) mock.popup[name].mockReturnValue(mock.popup) })
-afterEach(() => { cleanup(); delete window.EVACUAID_MAP })
+let styleElement: HTMLStyleElement
+beforeEach(() => { styleElement = document.createElement('style'); styleElement.textContent = mapCSS; document.head.append(styleElement); mock.width = 800; mock.constructorThrows = false; mock.setupThrows = false; vi.clearAllMocks(); mock.maps.length = 0; mock.supported.mockReturnValue(true); window.EVACUAID_MAP = { mapboxToken: 'test-token', mapboxStyle: 'mapbox/standard' }; api = null; for (const name of ['remove', 'setDOMContent', 'setLngLat', 'addTo'] as const) mock.popup[name].mockReturnValue(mock.popup) })
+afterEach(() => { cleanup(); styleElement.remove(); delete window.EVACUAID_MAP; vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('shared map', () => {
+  it('defers Jakarta framing until the parked map is visible and fits only once', () => {
+    mock.width = 0
+    const view = render(<Host show={false} />)
+    const map = ready()
+    expect(map.fitBounds).not.toHaveBeenCalled()
+    mock.width = 800
+    view.rerender(<Host />)
+    expect(map.fitBounds).toHaveBeenCalledTimes(1)
+    expect(map.fitBounds).toHaveBeenCalledWith([[106.68, -6.38], [107.02, -6.08]], { padding: 24, maxZoom: 12, animate: false })
+    view.rerender(<Host show={false} />)
+    view.rerender(<Host />)
+    expect(map.fitBounds).toHaveBeenCalledTimes(1)
+  })
+  it('keeps a DOM tooltip out of GeoJSON while rendering a cloned tooltip', () => {
+    render(<Host />); const map = ready()
+    const tooltip = document.createElement('span')
+    tooltip.textContent = 'Safe house'
+    required(api).setLayer('safe-house', { type: 'FeatureCollection', features: [{ ...required(fc.features[0]), properties: { name: 'House', tooltip } }] })
+    const feature = required(required(required(map.getSource('safe-house')).setData.mock.calls.at(-1)?.[0]).features[0])
+    expect(feature.properties).not.toHaveProperty('tooltip')
+    expect(feature.properties).toHaveProperty('name', 'House')
+    const fid = required(feature.properties).fid as number
+    map.queryRenderedFeatures.mockReturnValue([{ source: 'safe-house', properties: { fid } }])
+    map.emit('mousemove', { point: {}, lngLat: {} })
+    const rendered = required(mock.popup.setDOMContent.mock.calls[0])[0]
+    expect(rendered.textContent).toBe('Safe house')
+    expect(rendered).not.toBe(tooltip)
+  })
+  it('applies explicit style after API properties for every style key', () => {
+    render(<Host />); const map = ready()
+    const properties = { name: 'Region', color: '#ff0000', weight: 1, radius: 1, opacity: 0, dashed: false, hoverWeight: 1, fillColor: '#ff0000', fillOpacity: 0, sortKey: 0 }
+    const style = { color: '#123456', weight: 3, radius: 9, opacity: 0.7, dashed: true, hoverWeight: 5, fillColor: '#654321', fillOpacity: 0.4, sortKey: 2 }
+    required(api).setLayer('region', { type: 'FeatureCollection', features: [{ ...required(fc.features[0]), properties }] }, style)
+    const feature = required(required(required(map.getSource('region')).setData.mock.calls.at(-1)?.[0]).features[0])
+    expect(feature.properties).toMatchObject({ name: 'Region', ...style })
+    expect(properties.color).toBe('#ff0000')
+  })
+  it('renders fallback notes as a bottom pill and tooltips without pointer interception', () => {
+    window.EVACUAID_MAP = {} as Window['EVACUAID_MAP']
+    render(<Host />)
+    const noteStyle = getComputedStyle(screen.getByRole('note'))
+    expect(noteStyle.position).toBe('absolute')
+    expect(noteStyle.bottom).toBe('16px')
+    expect(noteStyle.left).toBe('50%')
+    expect(noteStyle.pointerEvents).toBe('none')
+    const popup = document.createElement('div')
+    popup.className = 'map-tooltip'
+    popup.innerHTML = '<div class="mapboxgl-popup-content"></div><div class="mapboxgl-popup-tip"></div>'
+    document.body.append(popup)
+    expect(getComputedStyle(popup).pointerEvents).toBe('none')
+    expect(getComputedStyle(required(popup.firstElementChild)).pointerEvents).toBe('none')
+    expect(getComputedStyle(required(popup.lastElementChild)).display).toBe('none')
+    popup.remove()
+  })
+  it('removes the constructed map if later setup throws and shows the WebGL note', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mock.setupThrows = true
+    render(<Host />)
+    expect(await screen.findByText("Map unavailable · this browser can't start WebGL")).toBeInTheDocument()
+    expect(mock.maps).toHaveLength(1)
+    expect(required(mock.maps[0]).remove).toHaveBeenCalledTimes(1)
+    expect(required(mock.maps[0]).container.isConnected).toBe(false)
+    expect(api).toBeNull()
+  })
+  it('shows the WebGL note when the Map constructor throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mock.constructorThrows = true
+    render(<Host />)
+    expect(await screen.findByText("Map unavailable · this browser can't start WebGL")).toBeInTheDocument()
+    expect(mock.maps).toHaveLength(0)
+    expect(api).toBeNull()
+  })
+  it('keeps the context value stable across unrelated provider renders', () => {
+    const changes = vi.fn()
+    function Probe() { const value = useMapHost(); useEffect(() => { changes(value) }, [value]); return null }
+    const child = <Probe />
+    const view = render(<MapProvider>{child}</MapProvider>)
+    ready()
+    changes.mockClear()
+    view.rerender(<MapProvider>{child}</MapProvider>)
+    expect(changes).not.toHaveBeenCalled()
+  })
   it('renders the no-token note without constructing a map', () => {
     window.EVACUAID_MAP = {} as Window['EVACUAID_MAP']
     render(<Host />)
@@ -110,6 +196,7 @@ describe('shared map', () => {
   it('uses safe tooltip text and hover state', () => {
     render(<Host />); const map = ready(); required(api).setLayer('region', fc)
     const data = required(required(map.getSource('region')).setData.mock.calls.at(-1)?.[0])
+    expect(required(data.features[0]).properties).not.toHaveProperty('tooltip')
     const fid = required(required(data.features[0]).properties).fid as number
     map.queryRenderedFeatures.mockReturnValue([{ source: 'region', properties: { fid } }])
     map.emit('mousemove', { point: {}, lngLat: {} })
