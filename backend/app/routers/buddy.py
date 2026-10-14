@@ -363,7 +363,7 @@ async def nearby_helper(request_id: uuid.UUID, payload: NearbyHelperSelection, d
         raise HTTPException(409, 'nearby helper unavailable')
     await service.lock_users(db, [row.requester_id, helper])
     eligibility = await db.get(BuddyAvailability, helper, populate_existing=True)
-    if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2) or await service.occupied(db, helper, row.id):
+    if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2) or not service.ble_in_range(row, eligibility) or await service.occupied(db, helper, row.id):
         raise HTTPException(409, 'nearby helper unavailable')
     attempt = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == row.id, BuddyAttempt.helper_id == helper).order_by(BuddyAttempt.created_at.desc()).limit(1))).scalar_one_or_none()
     if attempt:
@@ -390,6 +390,8 @@ async def nearby_beacons(payload: BeaconSearch, db: AsyncSession = Depends(get_s
             raise HTTPException(409, 'helper availability expired')
         if await service.occupied(db, actor.id, row.id):
             raise HTTPException(409, 'helper already occupied')
+        if not service.ble_in_range(row, eligibility):
+            continue
         attempt = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == row.id, BuddyAttempt.helper_id == actor.id).order_by(BuddyAttempt.created_at.desc()).limit(1))).scalar_one_or_none()
         if attempt:
             if attempt.status != 'PENDING' or attempt.expires_at <= service.now():

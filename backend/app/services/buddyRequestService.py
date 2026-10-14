@@ -40,6 +40,15 @@ async def beacon_id(db, user_id):
     return value
 
 
+# Bluetooth range is ~100 m, but a heard beacon ID is unauthenticated and never rotates, so a remote client
+# could replay one. Both reported GPS positions must be plausibly close; 10 km tolerates a bad fix.
+BLE_MAX_METERS = 10_000
+
+
+def ble_in_range(request, availability):
+    return request.latitude is not None and availability.latitude is not None and calculate_distance_meters(request.latitude, request.longitude, availability.latitude, availability.longitude) <= BLE_MAX_METERS
+
+
 async def occupied(db, user_id, exclude=None):
     query = select(BuddyRequest.id).where(or_(BuddyRequest.requester_id == user_id, BuddyRequest.helper_id == user_id), BuddyRequest.status.not_in(TERMINAL))
     if exclude:

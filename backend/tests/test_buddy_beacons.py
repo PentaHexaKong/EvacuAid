@@ -29,7 +29,8 @@ async def search(client, owner, key='synthetic-beacon-request'):
     return response.json()
 
 
-async def opt_in(client, helper, latitude=20):
+# 0.06° ≈ 6.7 km: outside the 5 km GPS shortlist, inside the 10 km Bluetooth plausibility cap.
+async def opt_in(client, helper, latitude=0.06):
     response = await client.put('/v1/buddy/availability', headers=helper, json={'optedIn': True, **point(latitude)})
     assert response.status_code == 200, response.text
 
@@ -443,3 +444,20 @@ async def test_parallel_bluetooth_acceptance_uses_independent_database_sessions(
         final = (await client.get('/v1/buddy/requests/' + request['id'], headers=owner)).json()
         assert final['status'] == 'ACCEPTED'
         assert sorted(attempt['status'] for attempt in final['attempts']) == ['ACCEPTED', 'CANCELLED']
+
+
+@pytest.mark.asyncio
+async def test_bluetooth_ids_heard_far_away_never_create_offers(dbSession):
+    # A beacon ID is public and stable; replaying it from another city must not reach the requester.
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        _, remote = await guest(client)
+        await opt_in(client, remote, 1)
+        request = await search(client, owner)
+        beacon = (await client.get('/v1/buddy/me/beacon', headers=owner)).json()['beaconId']
+        claimed = await client.post('/v1/buddy/nearby/beacons', headers=remote, json={'beaconIds': [beacon]})
+        assert claimed.status_code == 200 and claimed.json() == []
+        remote_beacon = (await client.get('/v1/buddy/me/beacon', headers=remote)).json()['beaconId']
+        selected = await client.post('/v1/buddy/requests/' + request['id'] + '/nearby/helper', headers=owner, json={'beaconId': remote_beacon})
+        assert selected.status_code == 409 and selected.json()['detail'] == 'nearby helper unavailable'
+        assert (await dbSession.execute(select(BuddyAttempt).where(BuddyAttempt.source == 'BLE'))).first() is None
