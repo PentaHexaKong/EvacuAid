@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 
 import { clearEvaluated } from '@/features/routes/evaluated'
 
@@ -8,7 +8,8 @@ const DataModeContext = createContext<{ dataMode: DataMode; setDataMode: Dispatc
 export function DataModeProvider({ children }: { children: ReactNode }) {
   const [dataMode, setDataMode] = useState<DataMode>('REFERENCE')
   useEffect(() => { if (dataMode === 'SIMULATION') clearEvaluated() }, [dataMode])
-  return <DataModeContext.Provider value={{ dataMode, setDataMode }}>{children}</DataModeContext.Provider>
+  const value = useMemo(() => ({ dataMode, setDataMode }), [dataMode])
+  return <DataModeContext.Provider value={value}>{children}</DataModeContext.Provider>
 }
 
 export function useDataMode() {

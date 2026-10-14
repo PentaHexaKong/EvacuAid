@@ -3,7 +3,7 @@ export type AdministrativeLevel = 'PROVINCE' | 'CITY_REGENCY' | 'DISTRICT' | 'VI
 export type SignalLevel = 'NORMAL' | 'WATCH' | 'ELEVATED' | 'CRITICAL' | 'UNKNOWN'
 export type HazardType = 'FLOOD' | 'EARTHQUAKE' | 'TSUNAMI' | 'WILDFIRE' | 'LANDSLIDE' | 'EXTREME_WEATHER'
 export type Geometry = { type: string; coordinates?: number[] | number[][] | number[][][] | number[][][][]; geometries?: Geometry[] }
-export interface SimulationOverlay { signalLevel: SignalLevel; hazardTypes: string[]; names: string[] }
+interface SimulationOverlay { signalLevel: SignalLevel; hazardTypes: string[]; names: string[] }
 export interface Region {
   id: string
   code: string
@@ -31,7 +31,7 @@ export interface Region {
   snapshotExpiresAt: string | null
   snapshotStale: boolean
 }
-export interface AssistanceAggregate {
+interface AssistanceAggregate {
   assistanceRequestedCount: number | null
   activeAssistanceCount: number | null
   evacuatingCount: number | null
@@ -45,7 +45,7 @@ export interface AssistanceAggregate {
   categoriesOverlap: boolean
   scope: string
 }
-export interface ShelterSummary {
+interface ShelterSummary {
   id: string
   name: string
   geometry: Geometry
@@ -166,7 +166,7 @@ export interface AssistanceCase {
   caseUpdatedAt: string | null
 }
 export type CaseUpdateResponse = Omit<CaseUpdate, 'expectedUpdatedAt'> & { requestId: string; updatedAt: string }
-export type CheckInStatus = 'NEEDS_ASSISTANCE' | 'EVACUATING' | 'ARRIVED' | 'SAFE_REPORTED' | 'UNKNOWN'
+type CheckInStatus = 'NEEDS_ASSISTANCE' | 'EVACUATING' | 'ARRIVED' | 'SAFE_REPORTED' | 'UNKNOWN'
 export interface CheckIns { scope: string; regions: { regionId: string; status: CheckInStatus; count: number; lastObservedAt: string }[] }
 export interface RouteSet {
   id: string
@@ -177,7 +177,7 @@ export interface RouteSet {
   originLongitude: number
   mobilityRequired: boolean
 }
-export interface HazardMetrics {
+interface HazardMetrics {
   state: string
   exposure: number | null
   intersectionRatio: number
@@ -194,7 +194,7 @@ export interface HazardMetrics {
   sources: string[]
   reasonCodes: string[]
 }
-export interface RouteCandidateEvaluation {
+interface RouteCandidateEvaluation {
   routeId: string
   distanceM: number
   durationSec: number
@@ -211,7 +211,7 @@ export interface RouteCandidateEvaluation {
   reasonCodes: string[]
   hazards: Record<string, HazardMetrics>
 }
-export interface RouteResult {
+interface RouteResult {
   routeStatus: 'NOT_REQUIRED' | 'PENDING' | 'READY' | 'UNAVAILABLE'
   route: { distanceM: number; durationSec: number; geometry: Geometry; routeScore: number; profile: string; maneuvers: Record<string, unknown>[] } | null
   selectionReasonCodes: string[]

@@ -84,7 +84,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
             return
-        if self.path in ('/command-center', '/command-center/') or (self.path == '/' and os.getenv('DASHBOARD_HOME') == 'true'):
+        if self.path == '/' and os.getenv('DASHBOARD_HOME') == 'true':
+            # Redirect rather than rewrite so the page's relative config.js and assets resolve under /command-center/.
+            self.send_response(302)
+            self.send_header('Location', '/command-center/')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        if self.path in ('/command-center', '/command-center/'):
             self.path = '/command-center/index.html'
         if self.path.startswith('/api/external/'):
             self.forward(self.externalUrl())

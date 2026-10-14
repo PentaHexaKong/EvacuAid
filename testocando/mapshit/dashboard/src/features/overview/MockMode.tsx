@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMap } from '@/map/MapProvider'
 import { circlePolygon } from '@/map/glMap'
 import { useMockDisasters, useSafeHouses, useCreateMockDisaster, useCreateSafeHouse, useClearMockDisasters, useDeleteMockDisaster } from '@/lib/queries'
@@ -13,6 +13,10 @@ import { DataState } from './RegionPanel'
 import { loadMocks, saveMocks, storageKey, type MockItem } from './mockStore'
 import { useMockMode, setMockMode } from '@/features/routes/formState'
 import { SafeHouseDialog, type Draft } from './SafeHouseDialog'
+
+const reach = (count: number | null | undefined) => count === undefined ? '' : count === null ? 'under 5 users in area' : count.toLocaleString('en-US') + ' users in area'
+const word = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
+const label = (item: MockItem & { usersInArea?: number | null }) => (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) + (reach(item.usersInArea) && ' · ' + reach(item.usersInArea)) : ' · Safe house')
 
 export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: ReactNode; layers: ReactNode; refresh: () => Promise<unknown>; onBusyChange: (busy: boolean) => void }) {
   const map = useMap()
@@ -46,14 +50,11 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
   useEffect(() => { try { if (items.length || localStorage.getItem(storageKey) !== null) saveMocks(items) } catch { queueMicrotask(() => { setStatus('Browser storage unavailable. Mock items remain available for this tab only.') }) } }, [items])
   const picking = useRef<(() => void) | null>(null)
   useEffect(() => () => { generation.current++; picking.current?.() }, [])
-  const reach = (count: number | null | undefined) => count === undefined ? '' : count === null ? 'under 5 users in area' : count.toLocaleString('en-US') + ' users in area'
-  const word = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
-  const all = [...(mocks.data ?? []).map(item => ({ ...item, kind: 'hazard' as const })), ...(mock ? items : [])]
-  const label = (item: MockItem & { usersInArea?: number | null }) => (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) + (reach(item.usersInArea) && ' · ' + reach(item.usersInArea)) : ' · Safe house')
+  const all = useMemo(() => [...(mocks.data ?? []).map(item => ({ ...item, kind: 'hazard' as const })), ...(mock ? items : [])], [mocks.data, items, mock])
   useEffect(() => {
     if (!map) return
     map.setLayer('mock', { type: 'FeatureCollection', features: all.map(item => ({ type: 'Feature', id: item.id, geometry: item.kind === 'hazard' ? circlePolygon(item.longitude, item.latitude, item.radiusM) : { type: 'Point', coordinates: [item.longitude, item.latitude] }, properties: { color: '#9D4AC1', weight: 3, dashed: item.kind === 'hazard', radius: 9, fillColor: item.kind === 'safeHouse' ? getComputedStyle(document.documentElement).getPropertyValue('--color-surface-100').trim() || '#FFFFFF' : '#9D4AC1', fillOpacity: item.kind === 'hazard' ? .18 : 1, tooltip: label(item) } })) })
-  })
+  }, [map, all])
   useEffect(() => {
     map?.setLayer('safe-house', { type: 'FeatureCollection', features: (houses.data ?? []).map(house => ({ type: 'Feature', id: house.id, geometry: { type: 'Point', coordinates: [house.longitude, house.latitude] }, properties: { radius: 8, color: '#176D60', fillColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface-100').trim() || '#FFFFFF', fillOpacity: 1, weight: 3, tooltip: house.name + ' · Safe house · ' + house.status } })) })
   }, [map, houses.data])

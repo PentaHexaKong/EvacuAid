@@ -9,9 +9,11 @@ import { storageKey } from './mockStore'
 const map = { setLayer: vi.fn(), setVisible: vi.fn(), fit: vi.fn(), onClick: vi.fn(() => () => {}), pick: vi.fn(() => new Promise<[number, number]>(() => {})), cancelPick: vi.fn() } satisfies MapAPI
 const mutation = { mutateAsync: vi.fn(), isPending: false }
 vi.mock('@/map/MapProvider', () => ({ useMap: () => map }))
+// Query data is referentially stable between renders, as TanStack Query keeps it.
+const empty = { data: [], isPending: false, error: null }
 vi.mock('@/lib/queries', () => ({
-  useMockDisasters: () => ({ data: [], isPending: false, error: null }),
-  useSafeHouses: () => ({ data: [], isPending: false, error: null }),
+  useMockDisasters: () => empty,
+  useSafeHouses: () => empty,
   useCreateMockDisaster: () => mutation, useCreateSafeHouse: () => mutation, useClearMockDisasters: () => mutation, useDeleteMockDisaster: () => mutation,
 }))
 
@@ -37,4 +39,14 @@ test('cancelling aborts only its own pick, and unmount leaves other picks alone'
   expect(map.pick).toHaveBeenCalledOnce()
   await userEvent.click(await screen.findByRole('button', { name: 'Cancel placement' }))
   await waitFor(() => { expect(map.cancelPick).toHaveBeenCalledOnce() })
+})
+
+test('an unrelated re-render does not re-upload the mock layer (setLayer clears the hover tooltip)', () => {
+  const props = { filters: null, layers: null, refresh: () => Promise.resolve(null), onBusyChange: () => {} }
+  const { rerender } = render(<MockMode {...props} />)
+  const uploads = () => map.setLayer.mock.calls.filter(([id]) => id === 'mock').length
+  const before = uploads()
+  rerender(<MockMode {...props} refresh={() => Promise.resolve(null)} />)
+  rerender(<MockMode {...props} onBusyChange={() => {}} />)
+  expect(uploads()).toBe(before)
 })

@@ -87,7 +87,7 @@ for (const [action, submit, status, message] of [['Reject', 'Reject report', 'RE
     await page.goto('./#/operations/reports')
     await page.getByText('More actions', { exact: true }).last().click()
     await page.getByRole('button', { name: action, exact: true }).click()
-    const dialog = page.getByRole('dialog')
+    const dialog = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: /Note/ }) })
     await expect(dialog.getByRole('checkbox')).toHaveCount(0)
     await dialog.getByRole('textbox', { name: /Note/ }).fill('Reviewed evidence')
     await dialog.getByRole('button', { name: submit, exact: true }).click()

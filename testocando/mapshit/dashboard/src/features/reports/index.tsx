@@ -1,17 +1,18 @@
 import { useRef, useState } from 'react';
+import { Popover, PopoverContent } from '@/components/base/popover/popover'
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useReports, useConfirmReport, useRejectReport, useResolveReport, useRoutes, useAssistanceCounts } from '@/lib/queries';
 import type { FieldReport, ReportReviewStatus } from '@/lib/types';
 import { useMap } from '@/map/MapProvider';
 import { drawReport } from './drawReport';
-import { OperationsPage, OperationsTime, label } from '@/features/operations/OperationsPage';
+import { MenuAction, OperationsPage, OperationsTime, label } from '@/features/operations/OperationsPage';
 import { OpsDialog, type OpsValue } from '@/features/operations/OpsDialog';
 import { Card } from '@/components/app/primitives/card';
 import { Empty } from '@/components/app/primitives/empty';
 import { Skeleton } from '@/components/app/primitives/skeleton';
 import { Chip } from '@/components/base/badges/chip';
-import { Button } from '@/components/base/buttons/button';
+import { Button, MenuButton } from '@/components/base/buttons/button';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@/components/base/table/table';
 export default function Page() {
     const [offset, setOffset] = useState(0);
@@ -58,6 +59,6 @@ export default function Page() {
                         if (!map)
                             return;
                         drawReport(map, report);
-                    }}>Show on map</Button><details><summary>More actions</summary><div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={pending} onClick={event => { review(report, 'REJECTED', event.currentTarget); }}>Reject</Button><Button variant="secondary" disabled={pending} onClick={event => { review(report, 'RESOLVED', event.currentTarget); }}>Mark resolved</Button></div></details></div></TableCell></TableRow>;
+                    }}>Show on map</Button><Popover><MenuButton id={'more-' + report.id}>More actions</MenuButton><PopoverContent align="end"><div className="flex flex-col gap-2"><MenuAction disabled={pending} onAction={() => { review(report, 'REJECTED', document.getElementById('more-' + report.id) as HTMLButtonElement) }}>Reject</MenuAction><MenuAction disabled={pending} onAction={() => { review(report, 'RESOLVED', document.getElementById('more-' + report.id) as HTMLButtonElement) }}>Mark resolved</MenuAction></div></PopoverContent></Popover></div></TableCell></TableRow>;
             })}</TableBody></Table>}</Card>{(offset !== 0 || rows.length >= 50) && <div className="flex gap-2"><Button variant="secondary" disabled={offset === 0} onClick={() => { setMessage(null); setOffset(Math.max(0, offset - 50)); }}>Previous reports</Button><Button variant="secondary" disabled={rows.length < 50} onClick={() => { setMessage(null); setOffset(offset + 50); }}>Next reports</Button></div>}{dialog && <OpsDialog title={submitLabels[dialog.status]} context={label(dialog.report.kind) + ': ' + dialog.report.description} minNote={5} barrier={dialog.status === 'CONFIRMED' && dialog.report.kind !== 'SHELTER_CROWDING'} routes={null} submitLabel={submitLabels[dialog.status]} onClose={close} onSubmit={value => { void save(value); }}/>}</OperationsPage>;
 }

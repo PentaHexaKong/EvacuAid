@@ -593,7 +593,7 @@ def testDashboardServesTheBuiltCommandCenter(monkeypatch,tmp_path):
     from urllib.request import urlopen
     from mapshit.server import Handler
     (tmp_path/'command-center'/'assets').mkdir(parents=True)
-    (tmp_path/'command-center'/'index.html').write_text('<script src="/command-center/config.js"></script><script type="module" src="/command-center/assets/index-abc.js"></script>')
+    (tmp_path/'command-center'/'index.html').write_text('<script src="config.js"></script><script type="module" src="/command-center/assets/index-abc.js"></script>')
     (tmp_path/'command-center'/'assets'/'index-abc.js').write_text('export {}')
     monkeypatch.setattr('mapshit.server.STATIC_ROOT',tmp_path)
     monkeypatch.setenv('MAPBOX_TOKEN','sk.secret')
@@ -604,7 +604,9 @@ def testDashboardServesTheBuiltCommandCenter(monkeypatch,tmp_path):
     try:
         for path in ('/command-center/','/'):
             with urlopen(base+path) as response:
-                assert '/command-center/config.js' in response.read().decode()
+                # / redirects so the relative config.js resolves to /command-center/config.js.
+                assert response.url==base+'/command-center/'
+                assert 'src="config.js"' in response.read().decode()
         with urlopen(base+'/command-center/assets/index-abc.js') as response:
             assert response.status==200
             assert 'javascript' in response.headers['Content-Type']
