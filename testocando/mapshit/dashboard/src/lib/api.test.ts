@@ -123,6 +123,10 @@ test.each([
     [{ queryKey: ['command', resource] }],
     [{ queryKey: ['command', 'regions'] }],
     [{ queryKey: ['command', 'region'] }],
+  ] : resource === 'reports' ? [
+    // A report review demotes published routes on the backend.
+    [{ queryKey: ['command', resource] }],
+    [{ queryKey: ['command', 'routes'] }],
   ] : [[{ queryKey: ['command', resource] }]])
   expect(client.getQueryState(['command', resource, 'existing'])?.isInvalidated).toBe(true)
   for (const mode of ['REFERENCE', 'SIMULATION']) {
@@ -262,4 +266,12 @@ test.each([
 
 test('operations connection errors preserve the retained-data warning verbatim', () => {
   expect(queries.operationsConnectionError(new Error('Backend request timed out.'))).toBe('Connection unavailable · retained data may be stale. Backend request timed out.')
+})
+
+test('a failed publish still refreshes routes, because the backend may have saved the route as DRAFT', async () => {
+  const { client, wrapper } = setup(); fetchMock.mockResolvedValue(respond({ detail: { message: 'Route is no longer feasible' } }, 409))
+  client.setQueryData(['command', 'routes', 'existing'], [])
+  const { result } = renderHook(() => queries.usePublishRoute(), { wrapper })
+  await act(async () => { await expect(result.current.mutateAsync('route-1')).rejects.toThrow('Route is no longer feasible') })
+  expect(client.getQueryState(['command', 'routes', 'existing'])?.isInvalidated).toBe(true)
 })

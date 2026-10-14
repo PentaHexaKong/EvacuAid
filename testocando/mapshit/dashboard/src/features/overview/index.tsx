@@ -69,7 +69,6 @@ export default function Page() {
   const selected = selection?.scope === scope && ((selection.id === null && selection.updatedAt === regions.dataUpdatedAt) || rows.some(r => r.id === selection.id)) ? selection.id : rows[0]?.id ?? null
   const region = useRegion(selected)
   const detail = region.data
-  useEffect(() => { if (detail?.dataMode === 'REFERENCE') selectRouteRegion(detail.id) }, [detail])
   const geo = useMemo(() => geography(rows), [rows])
   const hero = useRef<HTMLDivElement>(null)
   const frameScope = useRef<string | null>(null)
@@ -89,9 +88,11 @@ export default function Page() {
   }, [map, scope, geo, rows.length, regions.isPending])
   const select = useCallback((id: string) => {
     setSelection({ scope, id, updatedAt: regions.dataUpdatedAt })
+    // Only an explicit pick feeds the route form; Overview's own first-row selection on remount must not reset a route being edited.
+    if (dataMode === 'REFERENCE') selectRouteRegion(id)
     const bounds = boundsOf(rows.find(r => r.id === id)?.geometry)
     if (map && bounds) map.fit(bounds)
-  }, [scope, rows, map, regions.dataUpdatedAt])
+  }, [scope, rows, map, regions.dataUpdatedAt, dataMode])
   useEffect(() => { if (map) return map.onClick('region', clicked => { if (!busy && typeof clicked.properties?.regionId === 'string') select(clicked.properties.regionId) }) }, [map, busy, select])
   useEffect(() => {
     if (!map) return

@@ -149,3 +149,18 @@ test('a cold load into Route setter selects the first region like the legacy boo
   await page.goto('./#/operations/routes')
   await expect(page.locator('#route-form strong')).toHaveText('REGION ALPHA')
 })
+
+test('visiting Overview while editing a route in another region keeps that route and region', async ({ page }) => {
+  await page.route('**/operations/routes?**', route => route.fulfill({ json: [{ ...routes[0], regionId: 'region-b' }] }))
+  let body: unknown
+  await page.route('**/api/command/operations/routes', route => { body = route.request().postDataJSON(); return route.fulfill({ json: { ...routes[0], regionId: 'region-b' } }) })
+  await page.goto('./#/operations/routes')
+  await page.getByRole('button', { name: 'Edit / recalculate' }).click()
+  await expect(page.locator('#route-form strong')).toHaveText('REGION BETA')
+  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await expect(page.locator('#selected-name')).toBeVisible()
+  await page.getByRole('link', { name: 'Route setter', exact: true }).click()
+  await expect(page.locator('#route-form strong')).toHaveText('REGION BETA')
+  await page.getByRole('button', { name: 'Calculate and save draft' }).click()
+  await expect.poll(() => body).toMatchObject({ id: 'route-1', regionId: 'region-b', shelterId: 'shelter-a' })
+})

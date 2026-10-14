@@ -62,8 +62,11 @@ export function useAssistanceCounts(refetchOnMount = true) {
 
 function useCommandMutation<T, V>(resource: string, mutationFn: (value: V) => Promise<T>) {
   const client = useQueryClient()
-  return useMutation({ mutationFn, onSuccess: () => Promise.all([
+  // onSettled: a failed publish can still save the route as DRAFT, so refresh after errors too.
+  return useMutation({ mutationFn, onSettled: () => Promise.all([
     client.invalidateQueries({ queryKey: ['command', resource] }),
+    // Any report review demotes every published route to DRAFT on the backend.
+    ...(resource === 'reports' ? [client.invalidateQueries({ queryKey: ['command', 'routes'] })] : []),
     ...(resource === 'safe-houses' || resource === 'mock-disasters' ? [
       client.invalidateQueries({ queryKey: ['command', 'regions'] }),
       client.invalidateQueries({ queryKey: ['command', 'region'] }),
