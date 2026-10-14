@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -35,18 +35,19 @@ test.each([
 test('rebrands the shell and keeps the data environment across routes', async () => {
   const user = userEvent.setup()
   mount('/overview')
-  expect(screen.getByRole('link', { name: 'EvacuAid command center' })).toHaveAttribute('href', '#/overview')
+  expect(screen.getByRole('link', { name: 'EvacuAid command center' })).toHaveAttribute('href', '/overview')
+  expect(screen.queryByRole('banner')).not.toBeInTheDocument()
   expect(screen.getByText('DKI Jakarta')).toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard')
-  await user.click(screen.getByRole('button', { name: /Data environment/ }))
-  await user.click(screen.getByRole('option', { name: 'Simulation data' }))
+  const environment = () => within(screen.getByRole('group', { name: 'Data environment' }))
+  await user.click(environment().getByRole('button', { name: 'Simulation' }))
   await user.click(screen.getByRole('link', { name: 'About this data' }))
   expect(await screen.findByRole('heading', { name: 'About this data' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /Data environment/ })).toHaveTextContent('Simulation data')
+  expect(environment().getByRole('button', { name: 'Simulation' })).toHaveAttribute('aria-pressed', 'true')
   expect(localStorage.length).toBe(0)
   cleanup()
   mount('/overview')
-  expect(screen.getByRole('button', { name: /Data environment/ })).toHaveTextContent('Operational data')
+  expect(environment().getByRole('button', { name: 'Operational' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test.each(['#overview', '#operations/reports', '#operations/assistance', '#/operations', '#/nope', ''])('normalizes %s before router mounting without adding a history entry', (hash) => {

@@ -71,7 +71,6 @@ for (const [action, path, message] of [['Revalidate and publish', 'publish', 'Ro
 test('selected overview region supplies shelters and New route retains the region', async ({ page }) => {
   await page.goto('./#/overview')
   await expect(page.locator('#selected-name')).toBeVisible()
-  await page.getByRole('button', { name: 'Operations', exact: true }).click()
   await page.getByRole('link', { name: 'Route setter', exact: true }).click()
   await expect(page.getByText('REGION ALPHA', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Recorded shelter' }).click()
@@ -87,7 +86,6 @@ test('mock mode prevents operational calculation and publishing', async ({ page 
   await expect(page.locator('#selected-name')).toBeVisible()
   await page.getByRole('switch', { name: 'Mock mode' }).focus()
   await page.getByRole('switch', { name: 'Mock mode' }).press('Space')
-  await page.getByRole('button', { name: 'Operations', exact: true }).click()
   await page.getByRole('link', { name: 'Route setter', exact: true }).click()
   let calls = 0
   page.on('request', request => { if (request.method() === 'POST') calls++ })

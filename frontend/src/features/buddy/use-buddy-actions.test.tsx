@@ -17,7 +17,12 @@ jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useLocalSearc
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [{ type: 'MOBILITY_LIMITATION' }] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
 jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
-jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: () => ({ speak: jest.fn(), error: null }) }));
+let mockAccess = { soundFree: false, voiceHome: false, listen: false };
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
+const mockPrompt = { say: jest.fn(), listen: jest.fn(), cancel: jest.fn(), focused: true };
+jest.mock('@/features/voice/use-voice-prompt', () => ({ useVoicePrompt: () => mockPrompt }));
+let mockSpeech: { onCommand: (transcript: string) => void } | null = null;
+jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: (options: { onCommand: (transcript: string) => void }) => { mockSpeech = options; return { speak: jest.fn(), error: null, cancelListening: jest.fn() }; } }));
 jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, foregroundOnly: false, location: null, obtainLocation, enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
 
 const session = (status: string) => ({ id: 'session', status, requesterUserId: 'requester', attempts: [] });
@@ -309,4 +314,34 @@ test('repeated requester-card taps resolve one offer', async () => {
   await act(async () => { first = view.result.current.openBeaconRequest(123); expect(await view.result.current.openBeaconRequest(123)).toBeNull(); });
   expect(jest.mocked(buddyRequest).mock.calls.filter(([, path]) => path === '/nearby/beacons')).toHaveLength(1);
   await act(async () => { finish([{ id: 'detected-request' }]); expect(await first).toBe('detected-request'); });
+});
+
+test('at the gathering point the person who was helped hears what to do and can say "safe" to confirm', async () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const pending = { ...(state('COMPLETION_PENDING') as object), session: { ...session('COMPLETION_PENDING'), helperUserId: 'helper', helperName: 'Sari Dewi' } } as never;
+    const view = renderHook(() => useBuddyActions({ token: 'token', userId: 'requester', state: pending }));
+    expect(view.result.current.sessionStatus).toBe('arrivedSpoken');
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('arrivedSpoken'));
+    act(() => mockSpeech?.onCommand('saya sudah aman'));
+    expect(alert).toHaveBeenCalledWith('confirmSafe', 'confirmSafeBody', expect.anything());
+    const helper = renderHook(() => useBuddyActions({ token: 'token', userId: 'helper', state: pending }));
+    expect(helper.result.current.sessionStatus).toBe('waitingSafe');
+  } finally { announce.mockRestore(); alert.mockRestore(); }
+});
+
+test('voice-first: after the arrival prompt the phone listens for "I am safe" without a tap', async () => {
+  mockAccess = { soundFree: false, voiceHome: true, listen: true };
+  mockPrompt.say.mockClear(); mockPrompt.listen.mockClear();
+  try {
+    const at = (status: string) => ({ ...(state(status) as object), session: { ...session(status), helperUserId: 'helper', helperName: 'Sari Dewi' } }) as never;
+    const view = renderHook(({ status }: { status: string }) => useBuddyActions({ token: 'token', userId: 'requester', state: at(status) }), { initialProps: { status: 'EVACUATING' } });
+    await waitFor(() => expect(mockPrompt.say).toHaveBeenCalledWith(expect.stringContaining('EVACUATING'), undefined));
+    view.rerender({ status: 'COMPLETION_PENDING' });
+    await waitFor(() => expect(mockPrompt.say).toHaveBeenCalledWith(expect.stringContaining('arrivedSpoken'), expect.any(Function)));
+    expect(mockPrompt.listen).not.toHaveBeenCalled();
+    mockPrompt.say.mock.calls.at(-1)?.[1]();
+    expect(mockPrompt.listen).toHaveBeenCalledTimes(1);
+  } finally { mockAccess = { soundFree: false, voiceHome: false, listen: false }; }
 });

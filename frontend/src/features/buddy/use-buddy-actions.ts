@@ -71,7 +71,13 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
   const partner = requester ? session?.helperName : session?.requesterName;
   const partnerLocation = state.locations.find(item => item.userId !== userId);
   const fallbackName = session?.helperName ?? state.contacts.find(item => item.buddyUserId === session?.attempts[session.attempts.length - 1]?.helperUserId)?.name;
-  const sessionStatus = requester && session?.status === 'FALLBACK_REQUIRED' ? fallbackName ? c('fallbackSearching', { name: fallbackName }) : c('fallbackSearchingNoName') : session ? status(session.status) : c('empty');
+  const firstName = (partner ?? c('name')).split(' ')[0];
+  // The end of a session is spoken per role: the person who was helped hears what to do next, not a status about themselves.
+  const sessionStatus = requester && session?.status === 'FALLBACK_REQUIRED' ? fallbackName ? c('fallbackSearching', { name: fallbackName }) : c('fallbackSearchingNoName')
+    : requester && session?.status === 'ARRIVED' && !session.meetingConfirmed ? c('helperArrivedSpoken', { name: firstName })
+    : session?.status === 'COMPLETION_PENDING' ? requester ? c('arrivedSpoken', { name: firstName }) : c('waitingSafe', { name: firstName })
+    : session?.status === 'COMPLETED' ? requester ? c('safeTitleSelf') : c('safeTitleOther', { name: firstName })
+    : session ? status(session.status) : c('empty');
   const statusText = [sessionStatus, partner, partnerLocation ? `${c('updated')}: ${new Date(partnerLocation.observedAt).toLocaleTimeString(language)}. ${partnerLocation.stale ? c('stale') : native.location ? `${Math.round(distanceM(native.location, partnerLocation))} m` : ''}` : session && active ? c('locationMissing') : ''].filter(Boolean).join('. ');
   const confirm = (label: string, action: () => void, body = label, yes = c('yes')) => Alert.alert(label, body, [{ text: c('cancel'), style: 'cancel' }, { text: yes, onPress: action }]);
   const catchNative = (action: () => Promise<unknown>) => { setLocalError(null); void action().catch(cause => setLocalError(cause instanceof Error ? cause.message : c('requestFailed'))); };
@@ -167,7 +173,7 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
     else if (/batal|akhiri|cancel|end/.test(command) && localSos) voiceHome ? askSpoken(c('voiceBuddyCancelAsk'), async () => { cancelNearby(); return true; }, true) : confirm(c('bluetoothCancel'), () => cancelNearby())
     else if (/batal|akhiri|cancel|end/.test(command) && session) voiceHome ? askSpoken(c('voiceBuddyCancelAsk'), () => transition('interrupt'), true) : confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'));
     else if (voiceHome && /\b(met|bertemu|here)\b|arrived with me/.test(command) && requester && session?.status === 'ARRIVED' && !session.meetingConfirmed) askSpoken(c('voiceBuddyMeetAsk'), () => transition('confirm-meeting'));
-    else if (/selesai|complete/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) voiceHome ? askSpoken(c('voiceBuddyCompleteAsk'), () => transition('confirm-complete')) : confirm(c('confirmComplete'), () => { void transition('confirm-complete'); });
+    else if (/selesai|complete|aman|safe/.test(command) && session?.status === 'COMPLETION_PENDING' && requester) voiceHome ? askSpoken(c('voiceBuddyCompleteAsk'), () => transition('confirm-complete')) : confirm(c('confirmSafe'), () => { void transition('confirm-complete'); }, c('confirmSafeBody'));
     else if (/terdekat|nearby/.test(command)) {
       if (voiceHome && session && terminalStatuses.has(session.status)) state.dismissSession();
       voiceHome ? askSpoken(c('voiceBuddyNearbyAsk'), () => startNearby(true)) : askNearby();
@@ -185,7 +191,8 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
   };
   useEffect(() => { if (!prompt.focused || !listen || soundFree) pendingConfirmation.current = null; }, [prompt.focused, listen, soundFree]);
   const voiceStatusKey = localSos ? `local-sos:${beacons.status}:${beacons.advertising}:${beacons.people.filter(person => person.role === 2).length}:${sosSending}` : session ? `${session.id}:${session.status}` : JSON.stringify([first?.buddyUserId, first?.name]);
-  const readVoiceStatus = useEffectEvent(() => { if (!pendingConfirmation.current && !voice.listening) void prompt.say(voiceStatusText); });
+  // When the requester's next step is to speak ("we met", "I'm safe"), the phone listens right after telling them, with no button to find first.
+  const readVoiceStatus = useEffectEvent(() => { if (!pendingConfirmation.current && !voice.listening) void prompt.say(voiceStatusText, requester && (session?.status === 'COMPLETION_PENDING' || (session?.status === 'ARRIVED' && !session.meetingConfirmed)) ? () => { void prompt.listen(); } : undefined); });
   useEffect(() => { if (voiceHome && listen && !soundFree && prompt.focused) readVoiceStatus(); }, [voiceHome, listen, soundFree, prompt.focused, voiceStatusKey]);
   const toggleVoice = () => {
     if (!listen || soundFree || !prompt.focused) return;
@@ -194,11 +201,14 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
   };
   const lastStatus = useRef<string | null>(null);
   useEffect(() => {
-    if (voiceHome || !session || lastStatus.current === `${session.id}:${session.status}`) return;
+    if (!session || lastStatus.current === `${session.id}:${session.status}`) return;
     lastStatus.current = `${session.id}:${session.status}`;
+    // Arrival is felt as well as heard: it is the one moment the person who was helped has to act.
+    if (requester && session.status === 'COMPLETION_PENDING' && preferences.vibrationEnabled) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (voiceHome) return;
     if (preferences.voiceEnabled && !soundFree) void voice.speak(sessionStatus);
     else AccessibilityInfo.announceForAccessibility(sessionStatus);
-  }, [session, preferences.voiceEnabled, soundFree, sessionStatus, voice, voiceHome]);
+  }, [session, requester, preferences.voiceEnabled, preferences.vibrationEnabled, soundFree, sessionStatus, voice, voiceHome]);
   const refreshState = state.refresh;
   useEffect(() => { if (params.requestId) void refreshState(params.requestId); }, [params.requestId, refreshState]);
   // Home's "Ask for help" arrives as ?help=<timestamp>; each new value asks once, after the Buddy list has loaded.

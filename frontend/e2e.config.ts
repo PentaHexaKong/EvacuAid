@@ -6,7 +6,8 @@ import { chatgpt } from 'e2e/oauth/chatgpt';
 // The dev build loads its bundle from Metro: start it first (npm start) or point E2E_METRO_URL at the one already running.
 const metro = process.env.E2E_METRO_URL ?? 'http://localhost:8081';
 
-const iphone = mobile({ platform: 'ios' });
+// E2E_DEVICE names one device from `npx agent-device devices` (e.g. a cabled iPhone); unset, every booted simulator is the pool.
+const iphone = mobile({ platform: 'ios', ...(process.env.E2E_DEVICE ? { device: process.env.E2E_DEVICE } : {}) });
 
 export default {
   targets: [{

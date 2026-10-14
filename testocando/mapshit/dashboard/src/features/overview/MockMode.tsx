@@ -6,9 +6,6 @@ import type { MockDisasterCreate, SafeHouseCreate } from '@/lib/types'
 import { Switch } from '@/components/base/switch/switch'
 import { Button } from '@/components/base/buttons/button'
 import { CloseButton } from '@/components/base/buttons/close-button'
-import { Chip } from '@/components/base/badges/chip'
-import { Alert } from '@/components/app/primitives/alert'
-import { Card, CardContent } from '@/components/app/primitives/card'
 import { DataState } from './RegionPanel'
 import { loadMocks, saveMocks, storageKey, type MockItem } from './mockStore'
 import { useMockMode, setMockMode } from '@/features/routes/formState'
@@ -18,7 +15,7 @@ const reach = (count: number | null | undefined) => count === undefined ? '' : c
 const word = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
 const label = (item: MockItem & { usersInArea?: number | null }) => (item.kind === 'hazard' ? 'Simulation · ' : 'Mock · ') + item.name + (item.kind === 'hazard' ? ' · ' + word(item.hazardType) + ' · ' + word(item.severity) + (reach(item.usersInArea) && ' · ' + reach(item.usersInArea)) : ' · Safe house')
 
-export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: ReactNode; layers: ReactNode; refresh: () => Promise<unknown>; onBusyChange: (busy: boolean) => void }) {
+export function MockMode({ filters, layers, refresh, onBusyChange, children }: { filters: ReactNode; layers: ReactNode; refresh: () => Promise<unknown>; onBusyChange: (busy: boolean) => void; children?: ReactNode }) {
   const map = useMap()
   const mocks = useMockDisasters()
   const houses = useSafeHouses()
@@ -35,16 +32,7 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
     catch { return 'Saved mock items could not be loaded. You can start a new mock scenario.' }
   })
   const loadError = (houses.error || mocks.error)?.message
-  const toolbar = useRef<HTMLDivElement>(null)
   const generation = useRef(0)
-  useEffect(() => {
-    const node = toolbar.current
-    if (!node) return
-    const update = () => node.parentElement?.style.setProperty('--overview-tools-height', getComputedStyle(node).position === 'absolute' ? String(node.offsetHeight) + 'px' : '0px')
-    const observer = new ResizeObserver(update)
-    observer.observe(node); update()
-    return () => { observer.disconnect(); }
-  }, [])
   const pending = createMock.isPending || createHouse.isPending || clear.isPending || remove.isPending
   useEffect(() => { onBusyChange(placing || Boolean(draft) || pending); return () => { onBusyChange(false); } }, [placing, draft, pending, onBusyChange])
   useEffect(() => { try { if (items.length || localStorage.getItem(storageKey) !== null) saveMocks(items) } catch { queueMicrotask(() => { setStatus('Browser storage unavailable. Mock items remain available for this tab only.') }) } }, [items])
@@ -63,7 +51,7 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
     picking.current?.()
     picking.current = null
     setPlacing(false)
-    setStatus(mock ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : '')
+    setStatus('')
   }
   async function begin(kind: Draft['kind']) {
     cancel()
@@ -78,16 +66,48 @@ export function MockMode({ filters, layers, refresh, onBusyChange }: { filters: 
       picking.current = null
       if (generation.current !== version) return
       setPlacing(false)
-      setStatus(mock ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : '')
+      setStatus('')
       setDraft({ id: crypto.randomUUID(), kind, mock, latitude, longitude })
-    } catch (error) { if (generation.current === version) { setPlacing(false); setStatus((error as Error).name === 'AbortError' ? mock ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : '' : (error as Error).message) } }
+    } catch (error) { if (generation.current === version) { setPlacing(false); setStatus((error as Error).name === 'AbortError' ? '' : (error as Error).message) } }
   }
+  const message = placing ? '' : status || loadError
+  const fitTo = (item: MockItem) => map?.fit([[item.longitude - .005, item.latitude - .005], [item.longitude + .005, item.latitude + .005]])
+  const itemList = <ul aria-label="Mock items" className="flex max-h-24 flex-wrap gap-1.5 overflow-auto">{all.map(item => <li key={item.id} className={'flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-full pe-1 ps-2.5 text-status-purple-text ' + (mock ? 'bg-background-primary-default shadow-xs' : 'bg-status-purple-background')}>
+    <span aria-hidden className={'size-2 shrink-0 rounded-full border-[1.5px] border-[#9D4AC1] ' + (item.kind === 'hazard' ? 'border-dashed bg-[#9D4AC1]/20' : 'bg-background-primary-default')} />
+    <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-caption-1-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-border-focus-ring" onClick={() => fitTo(item)}>{label(item)}</button>
+    <CloseButton aria-label={'Remove ' + item.name} disabled={pending} size="2xs" onClick={() => { void (async () => { try { if (item.kind === 'hazard') await remove.mutateAsync(item.id); else setItems(current => current.filter(value => value.id !== item.id)); await refresh() } catch (error) { setStatus((error as Error).message) } })() }} />
+  </li>)}</ul>
   return <>
-    <div ref={toolbar} className="order-first flex flex-col gap-2 p-3 md:absolute md:inset-x-3 md:top-3 md:z-20 md:max-h-[calc(100%-24px)] md:overflow-auto md:p-0">
-      {mock && <Alert>MOCK MODE · Mock disasters are saved as test warnings: Watch appears in the app; Elevated and Critical can send test push notifications when alert delivery is enabled. Mock safe houses stay in this browser. Official data is unchanged.</Alert>}
-      <Card size="sm"><CardContent className="flex flex-col gap-2"><div className="flex flex-wrap items-center justify-between gap-2"><div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">{filters}</div><div className="flex flex-wrap items-center gap-2"><Switch size="sm" isSelected={mock} onChange={value => { cancel(); setMockMode(value); setStatus(value ? 'MOCK MODE · Choose a tool, then click the map. Live region statistics remain unchanged.' : '') }}>Mock mode</Switch><Button disabled={!mock || pending} onClick={() => { void begin('hazard') }}>Add mock disaster</Button>{placing && <Button variant="secondary" onClick={cancel}>Cancel placement</Button>}{mock && <Button variant="secondary" disabled={pending} onClick={() => { void (async () => { try { await clear.mutateAsync(); setItems([]); cancel(); await refresh() } catch (error) { setStatus((error as Error).message) } })() }}>Clear mock items</Button>}</div></div><div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={pending} onClick={() => { void begin('safeHouse') }}>{mock ? 'Add mock safe house' : 'Add safe house'}</Button>{layers}</div></CardContent></Card>
-      {(status || loadError) && <Card size="sm"><CardContent><p role="status">{status || loadError}</p></CardContent></Card>}
-      {(mock || Boolean(mocks.data?.length)) && <DataState loading={mocks.isPending}><Card size="sm"><CardContent className="flex max-h-32 flex-wrap gap-2 overflow-auto">{all.map(item => <Chip key={item.id} variant="caption"><Button variant="ghost" size="small" onClick={() => map?.fit([[item.longitude - .005, item.latitude - .005], [item.longitude + .005, item.latitude + .005]])}>{label(item)}</Button><CloseButton aria-label={'Remove ' + item.name} disabled={pending} size="sm" onClick={() => { void (async () => { try { if (item.kind === 'hazard') await remove.mutateAsync(item.id); else setItems(current => current.filter(value => value.id !== item.id)); await refresh() } catch (error) { setStatus((error as Error).message) } })() }} /></Chip>)}{!all.length && <p>No mock items. Choose Add mock disaster or Add safe house, then click the map.</p>}</CardContent></Card></DataState>}
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-3 pb-3">
+      <div className="grid min-w-0 flex-[1_1_520px] grid-cols-2 gap-2 sm:grid-cols-4 xl:max-w-[760px]">{filters}</div>
+      <Switch size="md" isSelected={mock} onChange={value => { cancel(); setMockMode(value); setStatus('') }}>Mock mode</Switch>
+    </div>
+    {mock
+      ? <div className="mx-3 mb-3 flex flex-col gap-2.5 rounded-xl bg-status-purple-background px-3 py-2.5 text-status-purple-text">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <p className="min-w-0 flex-1 basis-64 text-body-2-regular text-pretty">Test data only. Elevated and Critical mocks can send test pushes.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="small" disabled={pending} onClick={() => { void begin('hazard') }}>Add mock disaster</Button>
+              <Button size="small" variant="secondary" disabled={pending} onClick={() => { void begin('safeHouse') }}>Add mock safe house</Button>
+              {all.length > 0 && <Button size="small" variant="ghost" className="bg-transparent text-status-purple-text hover:bg-background-primary-default/60" disabled={pending} onClick={() => { void (async () => { try { await clear.mutateAsync(); setItems([]); cancel(); await refresh() } catch (error) { setStatus((error as Error).message) } })() }}>Clear mock items</Button>}
+            </div>
+          </div>
+          {all.length > 0 && <DataState loading={mocks.isPending}>{itemList}</DataState>}
+        </div>
+      : Boolean(mocks.data?.length) && <div className="mx-3 mb-3">{itemList}</div>}
+    {message && <p role="status" className="mx-3 mb-3 text-body-2-regular text-text-secondary-strong">{message}</p>}
+    <div className="relative overflow-hidden rounded-xl border border-border-button-default bg-background-inner-default dark:border-border-button-white">
+      {children}
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex justify-end">
+        <div className="pointer-events-auto flex flex-wrap justify-end gap-2">
+          {!mock && <Button size="small" variant="secondary" disabled={pending} onClick={() => { void begin('safeHouse') }}>Add safe house</Button>}
+          {layers}
+        </div>
+      </div>
+      {placing && <div className="absolute bottom-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-background-primary-default py-1 pe-1 ps-3.5 shadow-sidebar">
+        <p role="status" className="text-body-2-medium text-text-primary">{status}</p>
+        <Button size="xs" variant="secondary" className="rounded-full" onClick={cancel}>Cancel placement</Button>
+      </div>}
     </div>
     {draft && <SafeHouseDialog key={draft.id} draft={draft} onClose={() => { setDraft(null); }} onSave={async payload => {
       if (draft.kind === 'hazard') {

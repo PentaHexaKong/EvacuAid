@@ -335,3 +335,13 @@ declare module '@tabler/icons-react-native/IconMapDown' {
   const Icon: typeof import('@tabler/icons-react-native').IconMapDown;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconLink' {
+  const Icon: typeof import('@tabler/icons-react-native').IconLink;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconShieldCheck' {
+  const Icon: typeof import('@tabler/icons-react-native').IconShieldCheck;
+  export default Icon;
+}

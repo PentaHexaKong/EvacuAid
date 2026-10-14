@@ -17,12 +17,14 @@ import { duration, spring } from '@/theme/motion';
 import { relativeTime } from '@/features/hazards/time';
 import { nearbyShelters } from '@/features/navigation/api';
 import { buddyRequest, terminalStatuses } from '../api';
+import { useDevWalk } from '../dev-walk';
 import { distanceM, formatDistance } from '../navigation';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, initials, StatStrip, StatusChip } from './parts';
 import { RouteView } from './route-view';
 import { BeaconWaiting } from './beacon-panel';
 import { SessionRequesterActions } from './session-requester-actions';
+import { ArrivalCard, LinkStatus, SafeCard, SessionPrototype } from './session-link';
 import { ManeuverBanner, RecenterPill, TripBar } from './navigation-view';
 
 const MIN_PEEK = 176;
@@ -35,19 +37,26 @@ const TAB_BAR = 58;
 
 // An active session with a known position: the map takes the screen and the session rides in a sheet over it.
 export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; token: string; userId: string; banner?: ReactNode }) {
-  const { state, c, requester, partner, native, route, helperRoute, requesterPoint, catchNative, navigating, guidance, routeBusy } = a;
+  const { state, c, requester, partner, native, route, helperRoute, requesterPoint, catchNative, navigating, guidance, routeBusy, session } = a;
+  // A dev-build demo walk draws its own route and moves this phone's marker too, since the real GPS stays where the phone is.
+  const walk = useDevWalk(session?.id);
+  const people = state.locations.filter(item => item.userId !== userId && !item.stale).map(item => ({ id: item.userId, title: partner ?? c('helper'), kind: 'person' as const, initials: initials(partner), coordinate: item }));
+  const markers = walk ? [...(walk.leg === 'TOGETHER' ? [{ id: 'dev-safe-house', title: c('safeHouse'), kind: 'destination' as const, coordinate: walk.destination }] : []), ...people, { id: userId, title: c('you'), kind: 'person' as const, initials: initials(c('you')), coordinate: walk.self }] : people;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { height } = useWindowDimensions();
   const sheet = useRef<BottomSheet>(null);
   const sheetSpring = useBottomSheetSpringConfigs(spring.sheet);
   const [primaryHeight, setPrimaryHeight] = useState(MIN_PEEK);
+  // Collapsed keeps only the top of the session (who is linked, how far along); the peek opens on its whole first section, capped at half the screen so the map stays in view.
   const snapPoints = useMemo(() => {
-    const peek = Math.min(Math.max(MIN_PEEK, primaryHeight + 40) + insets.bottom + TAB_BAR, height * 0.66);
-    const middle = Math.max(height * 0.55, peek + 72);
-    return [peek, middle, Math.max(height * 0.92, middle + 48)];
+    const collapsed = MIN_PEEK + insets.bottom + TAB_BAR;
+    const peek = Math.min(Math.max(MIN_PEEK, primaryHeight + 40) + insets.bottom + TAB_BAR, height * 0.5);
+    return [collapsed, ...(peek > collapsed + 24 ? [peek] : []), Math.max(height * 0.92, peek + 48)];
   }, [primaryHeight, insets.bottom, height]);
-  const [sheetIndex, setSheetIndex] = useState(0);
+  const peekIndex = snapPoints.length - 2;
+  const [sheetIndex, setSheetIndex] = useState(peekIndex);
+  const resting = snapPoints[Math.min(sheetIndex, peekIndex)];
   // Dragging the map pauses following until the walker asks for it back; every new navigation starts following again.
   const [paused, setPaused] = useState(false);
   if (!navigating && paused) setPaused(false);
@@ -62,17 +71,17 @@ export function SessionMap({ a, token, userId, banner }: { a: BuddyActions; toke
     return () => { void deactivateKeepAwake(KEEP_AWAKE).catch(() => {}); };
   }, [navigating]);
   return <View style={styles.screen}>
-    <DiscoverMap items={state.locations.filter(item => item.userId !== userId && !item.stale).map(item => ({ id: item.userId, title: partner ?? c('helper'), kind: 'person' as const, initials: initials(partner), coordinate: item }))} selected={null} onSelect={() => {}} route={requester ? helperRoute?.route?.geometry.coordinates : route?.leg === 'TO_REQUESTER' && !requesterPoint ? undefined : route?.route?.geometry.coordinates} userLocation={native.location} onLocate={() => catchNative(native.obtainLocation)} topInset={mapTop} bottomInset={snapPoints[0]} creditsInset={snapPoints[Math.min(sheetIndex, 1)]} controlsStyle={controlsStyle} follow={navigating ? !paused : undefined} onFollowChange={following => setPaused(!following)} walked={guidance.walked} />
+    <DiscoverMap items={markers} selected={null} onSelect={() => {}} route={walk ? walk.geometry : requester ? helperRoute?.route?.geometry.coordinates : route?.leg === 'TO_REQUESTER' && !requesterPoint ? undefined : route?.route?.geometry.coordinates} userLocation={walk ? null : native.location} onLocate={() => catchNative(native.obtainLocation)} topInset={mapTop} bottomInset={resting} creditsInset={resting} controlsStyle={controlsStyle} follow={navigating ? !paused : undefined} onFollowChange={following => setPaused(!following)} walked={guidance.walked} />
     {/* Keeps the bar's title readable over map labels. */}
     {navigating
       ? <ManeuverBanner guidance={guidance} busy={routeBusy} name={route?.leg === 'TO_REQUESTER' ? (partner ?? c('name')).split(' ')[0] : null} top={bannerTop} onLayout={event => setBannerHeight(Math.round(event.nativeEvent.layout.height))} />
       : <LinearGradient pointerEvents="none" colors={[colors.canvas, `${colors.canvas}00`]} locations={[0.45, 1]} style={[styles.scrim, { height: headerHeight + 32 }]} />}
-    {navigating && paused && <RecenterPill bottom={snapPoints[Math.min(sheetIndex, 1)] + 16} onPress={() => setPaused(false)} />}
+    {navigating && paused && <RecenterPill bottom={resting + 16} onPress={() => setPaused(false)} />}
     {/* The sheet's body runs below the screen at lower snaps; this frame clips it so the bottom corners always show. */}
     <View pointerEvents="box-none" style={styles.sheetFrame}>
-      <BottomSheet ref={sheet} index={0} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={mapTop} backgroundStyle={styles.sheet} handleIndicatorStyle={styles.handle} accessible={false}>
+      <BottomSheet ref={sheet} index={peekIndex} animationConfigs={sheetSpring} snapPoints={snapPoints} onAnimate={(_, to) => setSheetIndex(Math.max(0, to))} enableDynamicSizing={false} topInset={mapTop} backgroundStyle={styles.sheet} handleIndicatorStyle={styles.handle} accessible={false}>
         <BottomSheetScrollView automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: gutter - SHEET_INSET, paddingTop: 4, paddingBottom: 32 + insets.bottom, gap: 16 }}>
-          <SessionView a={a} token={token} userId={userId} banner={banner} onPrimaryLayout={setPrimaryHeight} onChatFocus={() => sheet.current?.snapToIndex(2)} />
+          <SessionView a={a} token={token} userId={userId} banner={banner} onPrimaryLayout={setPrimaryHeight} onChatFocus={() => sheet.current?.snapToIndex(snapPoints.length - 1)} />
         </BottomSheetScrollView>
       </BottomSheet>
     </View>
@@ -101,7 +110,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
   return requester ? <View style={{ gap: 16 }}>
     <View onLayout={event => onPrimaryLayout?.(Math.round(event.nativeEvent.layout.height))} style={{ gap: 16 }}>
     {banner}
-    <View style={{ gap: 6 }}>
+    {session.status === 'COMPLETED' ? <SafeCard a={a} /> : active && session.helperUserId ? <LinkStatus a={a} /> : <View style={{ gap: 6 }}>
       <View style={[buddyStyles.row, { justifyContent: 'space-between' }]}>
         <AppText variant="eyebrow" style={{ color: colors.muted }}>{session.nearby ? c('gpsAssist') : c('buddyAssist')}</AppText>
         {active && <StatusChip dot tone="info" label={c('live')} />}
@@ -109,7 +118,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       {requester
         ? (partner ? <><AppText variant="small" style={{ color: colors.muted }}>{c('helper')}</AppText><AppText variant="title" accessibilityRole="header">{partner}</AppText></> : null)
         : <AppText variant="title" accessibilityRole="header">{c('needsHelpTitle', { name: partner ?? c('name') })}</AppText>}
-    </View>
+    </View>}
 
     {active && !requester && <View style={{ gap: 10 }}>
       {session.status === 'ACCEPTED' && <ActionButton label={c('depart')} loading={state.busy} onPress={() => { void transition('depart'); }} />}
@@ -119,10 +128,11 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       {['ARRIVED', 'EVACUATING'].includes(session.status) && <ActionButton variant="secondary" label={c('complete')} loading={state.busy} onPress={() => confirm(c('complete'), () => { void transition('report-complete'); })} />}
     </View>}
     <SessionRequesterActions a={a} />
+    <ArrivalCard a={a} />
 
     </View>
 
-    <Card tint={active ? 'info' : undefined}>
+    {!['COMPLETION_PENDING', 'COMPLETED'].includes(session.status) && <Card tint={active ? 'info' : undefined}>
       <View style={buddyStyles.row}>
         {session.status === 'WAITING' && <ActivityIndicator color={colors.primary} />}
         <AppText variant="section" accessibilityLiveRegion="polite" style={buddyStyles.grow}>{headline}</AppText>
@@ -131,7 +141,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       {session.supportNeeds.length > 0 && <View accessible accessibilityLabel={`${c('support')}: ${session.supportNeeds.map(support).join(', ')}`} style={[buddyStyles.row, { gap: 6, flexWrap: 'wrap' }]}>{session.supportNeeds.map(need => <StatusChip key={need} label={support(need)} />)}</View>}
       {active && <StatStrip items={stats} />}
       {state.locations.some(item => item.stale) && <AppText accessibilityRole="alert" variant="small" style={{ color: colors.caution }}>{c('stale')}</AppText>}
-    </Card>
+    </Card>}
 
     {requester && session.nearby && session.status === 'WAITING' && <BeaconWaiting a={a} />}
 
@@ -154,6 +164,7 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
 
     {active && <SessionCards a={a} token={token} userId={userId} onChatFocus={onChatFocus} />}
 
+    <SessionPrototype a={a} token={token} />
     {!soundFree && <ActionButton compact variant="secondary" label={c('readStatus')} onPress={() => { void voice.speak(statusText); }} />}
     {!terminal && (requester || session.helperUserId === userId) && <ActionButton variant="secondary" label={c('interrupt')} loading={state.busy} onPress={() => confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'))} />}
     {terminal && <ActionButton label={c('close')} onPress={state.dismissSession} />}
@@ -198,16 +209,20 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
       {stepButton}
     </View> : <View onLayout={event => onPrimaryLayout?.(Math.round(event.nativeEvent.layout.height))} style={{ gap: 14 }}>
       {banner}
-      <View style={[buddyStyles.row, { justifyContent: 'space-between' }]}>
+      {session.status === 'COMPLETED' ? <SafeCard a={a} /> : terminal ? <>
         <AppText variant="eyebrow" style={{ color: colors.muted }}>{session.nearby ? c('gpsAssist') : c('buddyAssist')}</AppText>
-        {active && <StatusChip dot tone="info" label={c('live')} />}
-      </View>
-      <AppText variant="title" accessibilityRole="header">{terminal ? headline : c('needsHelpTitle', { name })}</AppText>
-      <View style={{ gap: 4 }}>
-        <AppText variant="section" accessibilityLiveRegion="polite">{terminal ? name : headline}</AppText>
-        {liveLine}
-      </View>
-      {!terminal && <StatStrip items={stats} />}
+        <AppText variant="title" accessibilityRole="header">{headline}</AppText>
+        <AppText variant="section">{name}</AppText>
+      </> : <>
+        <LinkStatus a={a} />
+        {session.status === 'COMPLETION_PENDING' ? <ArrivalCard a={a} /> : <>
+          <View style={{ gap: 4 }}>
+            <AppText variant="section" accessibilityRole="header" accessibilityLiveRegion="polite">{headline}</AppText>
+            {liveLine}
+          </View>
+          <StatStrip items={stats} />
+        </>}
+      </>}
       {stepButton}
       {active && session.status === 'ARRIVED' && <ActionButton variant="secondary" label={c('complete')} loading={state.busy} onPress={() => confirm(c('complete'), () => { void transition('report-complete'); })} />}
       {actions}
@@ -226,6 +241,7 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
 
     {active && <SessionCards a={a} token={token} userId={userId} onChatFocus={onChatFocus} />}
 
+    <SessionPrototype a={a} token={token} />
     {!soundFree && <ActionButton compact variant="secondary" label={c('readStatus')} onPress={() => { void voice.speak(statusText); }} />}
     {!terminal && <ActionButton variant="secondary" label={c('interrupt')} loading={state.busy} onPress={() => confirm(c('interrupt'), () => { void transition('interrupt'); }, c('endBody'))} />}
     {terminal && <ActionButton label={c('close')} onPress={state.dismissSession} />}

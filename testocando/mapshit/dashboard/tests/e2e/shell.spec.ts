@@ -36,18 +36,17 @@ test('mobile backdrop closes the drawer', async ({ page }) => {
 test('hash navigation preserves the shell and data environment', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('./#/overview')
-  await page.getByRole('button', { name: /Data environment/ }).click()
-  await page.getByRole('option', { name: 'Simulation data' }).click()
-  await page.getByRole('button', { name: 'Operations', exact: true }).click()
+  const environment = page.getByRole('group', { name: 'Data environment' })
+  await environment.getByRole('button', { name: 'Simulation' }).click()
   await page.getByRole('link', { name: 'Field reports' }).click()
   await expect(page).toHaveURL(/#\/operations\/reports$/)
   await expect(page).toHaveTitle('Field reports · EvacuAid Command Center')
-  await expect(page.getByRole('button', { name: /Data environment/ })).toContainText('Simulation data')
+  await expect(environment.getByRole('button', { name: 'Simulation' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('#map-host-boundary')).toContainText('Field reports')
   await page.getByRole('link', { name: 'About this data' }).click()
   await expect(page).toHaveTitle('About this data · EvacuAid Command Center')
   await page.reload()
-  await expect(page.getByRole('button', { name: /Data environment/ })).toContainText('Operational data')
+  await expect(environment.getByRole('button', { name: 'Operational' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 for (const width of [1440, 390]) {
@@ -71,9 +70,9 @@ test('legacy hashes, redirects and unknown hashes resolve to the expected views'
   await page.goto('./#/nope')
   await expect(page.getByRole('heading', { name: 'Regional overview', exact: true })).toBeAttached()
   await expect(page).toHaveURL(/#\/overview$/)
-  const wordmark = page.getByRole('link', { name: 'EvacuAid command center', exact: true })
-  await expect(wordmark).toHaveAttribute('href', '#/overview')
-  await expect(wordmark.locator('span', { hasText: /^E$/ })).toHaveAttribute('aria-hidden', 'true')
+  const brand = page.getByRole('link', { name: 'EvacuAid command center', exact: true })
+  await expect(brand).toHaveAttribute('href', '#/overview')
+  await expect(brand.locator('span', { hasText: /^E$/ })).toHaveAttribute('aria-hidden', 'true')
 })
 
 for (const width of [1440, 390]) {
@@ -84,7 +83,7 @@ for (const width of [1440, 390]) {
     })
     await page.setViewportSize({ width, height: 844 })
     await page.goto('./#/overview')
-    await expect(page.getByRole('button', { name: /Data environment/ })).toBeVisible()
+    await expect(page.getByRole(width === 390 ? 'button' : 'group', { name: width === 390 ? 'Open navigation' : 'Data environment' })).toBeVisible()
     if (width === 390) {
       await page.getByRole('button', { name: 'Open navigation' }).click()
       await expect(page.getByRole('dialog', { name: 'EvacuAid' })).toBeVisible()
@@ -94,3 +93,20 @@ for (const width of [1440, 390]) {
     expect(warnings).toEqual([])
   })
 }
+
+test('floating sidebar replaces the header and keeps its collapsed rail across reloads', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('./#/overview')
+  await expect(page.getByRole('banner')).toHaveCount(0)
+  const sidebar = page.getByRole('complementary', { name: 'Workspace sidebar' })
+  await expect(sidebar).toHaveCSS('border-radius', '24px')
+  await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().left)).toBe(12)
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+  await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().width)).toBe(60)
+  await page.reload()
+  await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().width)).toBe(60)
+  await page.keyboard.press('ControlOrMeta+l')
+  await page.getByRole('searchbox', { name: 'Filter navigation' }).fill('route')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/operations\/routes$/)
+})

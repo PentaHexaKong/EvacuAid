@@ -14,6 +14,7 @@ import { useInboxNotifications } from '@/features/buddy/native';
 import { VoiceBuddyView } from '@/features/buddy/ui/voice-buddy-view';
 import { BuddiesView } from '@/features/buddy/ui/buddies-view';
 import { SessionMap, SessionView } from '@/features/buddy/ui/session-view';
+import { HelperPrototype } from '@/features/buddy/ui/session-link';
 import { Card } from '@/features/buddy/ui/parts';
 import { colors } from '@/theme';
 
@@ -52,12 +53,12 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
     <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
   </Card>;
-  if (voiceHome) return <Page keyboard>{bar}{banner}<VoiceBuddyView a={a} /></Page>;
+  if (voiceHome) return <Page keyboard>{bar}{banner}<VoiceBuddyView a={a} token={token} /></Page>;
   if (inSession && active && native.location) return <>{bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;
 
   return <Page keyboard>
     {bar}
     {banner}
-    {inSession ? <SessionView a={a} token={token} userId={userId} /> : <BuddiesView a={a} />}
+    {inSession ? <SessionView a={a} token={token} userId={userId} /> : <><BuddiesView a={a} /><HelperPrototype a={a} token={token} /></>}
   </Page>;
 }

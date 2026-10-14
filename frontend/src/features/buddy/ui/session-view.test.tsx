@@ -143,3 +143,18 @@ test('a stale location replaces the live note in the same line', () => {
   expect(view.getByRole('alert')).toHaveTextContent('Last location is old, not the current position.');
   expect(view.queryByText('Live location is on during this session')).toBeNull();
 });
+
+test('at the gathering point the requester confirms they are safe and the helper waits', async () => {
+  jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => buttons?.[1]?.onPress?.());
+  mockSession = { ...mockSession, status: 'COMPLETION_PENDING', meetingConfirmed: true };
+  const helper = render(<Harness />);
+  expect(helper.getByLabelText('Test Person. Linked · you are helping. Step 4 of 4 · At the gathering point')).toBeTruthy();
+  expect(helper.getByText('Waiting for Test to confirm they are safe')).toBeTruthy();
+  expect(helper.queryByRole('button', { name: 'Confirm I am safe' })).toBeNull();
+  helper.unmount();
+  mockUserId = 'requester';
+  const requester = render(<Harness />);
+  expect(requester.getByText('Test reported that you both arrived. Confirm once you are actually safe.')).toBeTruthy();
+  fireEvent.press(requester.getByRole('button', { name: 'Confirm I am safe' }));
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests/session-1/confirm-complete', {}));
+});

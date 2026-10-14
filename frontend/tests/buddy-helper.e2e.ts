@@ -95,3 +95,75 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
     for (const contact of contacts) await call(friend, `/contacts/${contact.id}`, 'DELETE').catch(() => {});
   }
 });
+
+// The dev-build prototype card walks both people to a safe house about 300 m away, then the friend confirms they are safe.
+// No simulated location, so it also runs on a cabled iPhone (E2E_DEVICE).
+test('a linked helper and friend walk to a safe house and the friend confirms they are safe', { timeout: 480_000 }, async ({ app, agent, screen, device }) => {
+  // A real iPhone's tab bar exposes no tab items to automation, so screens open by deep link.
+  const go = (path: string) => device.openLink(`evacuaid://${path}`);
+  await app.open();
+  await expect(screen.getByRole('button', /Profil/)).toBeVisible({ timeout: 180_000 });
+  if (await screen.getByText('Areamu').count()) {
+    await go('settings');
+    await agent.act('change the app language to English');
+  }
+  await go('buddy');
+  // An earlier run can leave its ended session on screen.
+  if (await screen.getByRole('button', 'Back to Buddy').count()) await screen.getByRole('button', 'Back to Buddy').tap();
+  // With no friends yet the code sits in the empty state, without its "Your code" heading.
+  const code = (await screen.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).first().textContent())?.trim();
+  expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+
+  const guest = await (await fetch(`${API}/v1/guest-sessions`, { method: 'POST' })).json();
+  const friend: string = guest.access_token;
+  await fetch(`${API}/v1/users/${guest.user.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${friend}`, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Nina Rahma', accessibility: [{ type: 'VISUAL_IMPAIRMENT' }] }) });
+  let requestId: string | undefined;
+  try {
+    const invitation = await call(friend, '/invitations/direct', 'POST', { code, relation: 'TEMAN', direction: 'SEEK_HELP' });
+    // The page reloads when it regains focus.
+    await go('');
+    await go('buddy');
+    await expect(screen.getByText('Wants to add you')).toBeVisible({ timeout: 30_000 });
+    await screen.getByRole('button', 'Accept').tap();
+    await expect(screen.getByText('Wants to add you')).toBeHidden({ timeout: 30_000 });
+
+    const request = await call(friend, '/requests', 'POST', { helperUserId: invitation.redeemerUserId, message: 'Please walk with me to the gathering point', supportNeeds: [], sharingConsent: true, idempotencyKey: `e2e-${Date.now()}`, latitude: -6.266, longitude: 106.804 });
+    requestId = request.id;
+    // Live updates over a phone's network can lag, so reload the page rather than wait on them.
+    await go('');
+    await go('buddy');
+    // The request arrives as the full-screen takeover or, after a reload, as a card on the Buddy page.
+    const help = screen.getByRole('button', /^(I'll help Nina Rahma|Accept & help)$/);
+    await expect(help).toBeVisible({ timeout: 90_000 });
+    // The takeover's actions ignore touches for the first 600 ms after it appears.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await help.tap();
+    // Accepting from the card asks to confirm sharing location first.
+    const consent = screen.getByRole('button', 'Confirm');
+    if (await consent.count()) await consent.tap();
+
+    // The link indicator says who is helping whom and how far along the session is.
+    // VoiceOver reads it as one line, so it is one node.
+    await expect(screen.getByLabel('Nina Rahma. Linked · you are helping. Step 1 of 4 · On the way').first()).toBeVisible({ timeout: 30_000 });
+
+    await agent.act('tap "Simulate walking to a safe house (300 m)" in the Prototype card, scrolling the panel if needed');
+    await expect(screen.getByLabel('Nina Rahma. Linked · you are helping. Step 3 of 4 · Heading to the gathering point together').first()).toBeVisible({ timeout: 15_000 });
+    await agent.assert('the map shows a route line, a destination pin, and two person markers next to each other');
+    // About 36 s of simulated walking.
+    await expect(screen.getByText('You have reached the gathering point')).toBeVisible({ timeout: 90_000 });
+    await expect(screen.getByLabel('Nina Rahma. Linked · you are helping. Step 4 of 4 · At the gathering point').first()).toBeVisible();
+    await expect(screen.getByText('Waiting for Nina to confirm they are safe')).toBeVisible();
+    // Only the friend can confirm: the helper never gets that button.
+    await expect(screen.getByRole('button', 'Confirm I am safe')).toBeHidden();
+
+    // The friend confirms from their own phone, played through the API.
+    await call(friend, `/requests/${requestId}/confirm-complete`, 'POST', {});
+    await expect(screen.getByText('Nina confirmed they are safe')).toBeVisible({ timeout: 30_000 });
+    await expect(screen.getByText('Assistance is complete. Location is no longer shared.')).toBeVisible();
+    requestId = undefined;
+  } finally {
+    if (requestId) await call(friend, `/requests/${requestId}/interrupt`, 'POST', {}).catch(() => {});
+    const contacts: { id: string }[] = await call(friend, '/contacts').catch(() => []);
+    for (const contact of contacts) await call(friend, `/contacts/${contact.id}`, 'DELETE').catch(() => {});
+  }
+});

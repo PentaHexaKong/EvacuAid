@@ -3,7 +3,8 @@ import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-libr
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { CommandHeaderActions } from '@/components/app/app-shell'
+import { MemoryRouter } from 'react-router'
+import { AppShell } from '@/components/app/app-shell'
 import { DataModeProvider, useDataMode } from '@/app/data-mode'
 import { api, allRegions } from './api'
 import * as queries from './queries'
@@ -153,12 +154,12 @@ test('connection status reports a failed overlay load', async () => {
   await waitFor(() => { expect(result.current).toMatchObject({ text: 'Connection unavailable', tone: 'error' }) })
 })
 
-test('header refresh invalidates all command data and keeps identical status text unchanged', async () => {
+test('sidebar refresh invalidates all command data and keeps identical status text unchanged', async () => {
   const { client, wrapper } = setup()
   fetchMock.mockImplementation(() => Promise.resolve(respond([])))
   client.setQueryData(['command', 'reports'], [])
   const invalidate = vi.spyOn(client, 'invalidateQueries')
-  render(createElement(CommandHeaderActions), { wrapper })
+  render(createElement(MemoryRouter, null, createElement(AppShell, null, null)), { wrapper })
   const status = screen.getByRole('status')
   expect(status).toHaveAttribute('aria-live', 'polite')
   await waitFor(() => { expect(status).toHaveTextContent('Connected · no regions in this scope') })
@@ -167,13 +168,13 @@ test('header refresh invalidates all command data and keeps identical status tex
   observer.observe(status, { childList: true, characterData: true, subtree: true })
   const finish: (() => void)[] = []
   fetchMock.mockImplementation(() => new Promise<Response>(resolve => { finish.push(() => { resolve(respond([])) }) }))
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
-  await waitFor(() => { expect(finish).toHaveLength(3) })
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh data' }))
+  await waitFor(() => { expect(finish).toHaveLength(4) })
   expect(screen.getByText('Loading projections…')).toBeInTheDocument()
   expect(status).toHaveTextContent('Connected · no regions in this scope')
   await act(async () => { finish.forEach(resolve => { resolve() }); await Promise.resolve() })
   await waitFor(() => { expect(screen.queryByText('Loading projections…')).not.toBeInTheDocument() })
-  expect(fetchMock).toHaveBeenCalledTimes(6)
+  expect(fetchMock).toHaveBeenCalledTimes(8)
   expect(changes).not.toHaveBeenCalled()
   observer.disconnect()
   expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: ['command'] })

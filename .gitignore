@@ -3,6 +3,7 @@ data/
 
 # Local Markdown documentation
 *.md
+!README.md
 !docs/ble-beacon.md
 *.markdown
 !backend/AUTHENTICATION.md

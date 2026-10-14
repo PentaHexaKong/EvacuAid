@@ -31,5 +31,5 @@ test('a helper sees Bluetooth status when opening Auto search', { timeout: 300_0
   test.skip(Boolean(await screen.getByText('Need help now?').count()), 'Auto search requires a helper profile with no support needs');
   await agent.act('open Auto search on the Buddy screen');
   await agent.assert('the Bluetooth scan status is visible, including an unavailable, off, denied, starting or searching state');
-  await expect(screen.getByText('Active only while this screen is open. Range depends on devices and surroundings.')).toBeVisible();
+  await expect(screen.getByText('Only while this screen is open')).toBeVisible();
 });

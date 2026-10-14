@@ -6,7 +6,8 @@ import { useDataMode } from '@/app/data-mode'
 import { MapView } from '@/map/MapView'
 import { useMap } from '@/map/MapProvider'
 import { boundsOf, type Feature, type FeatureStyle } from '@/map/glMap'
-import { Card, CardContent, CardTitle } from '@/components/app/primitives/card'
+import { RiStackLine } from '@remixicon/react'
+import { CardTitle } from '@/components/app/primitives/card'
 import { Alert } from '@/components/app/primitives/alert'
 import { Button } from '@/components/base/buttons/button'
 import { CloseButton } from '@/components/base/buttons/close-button'
@@ -15,7 +16,7 @@ import { Checkbox } from '@/components/base/checkbox/checkbox'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/base/popover/popover'
 import { Kpis } from './Kpis'
 import { orderedRegions, PriorityRegions } from './PriorityRegions'
-import { RegionPanel, severity, Signal, titleCase, readable, Metrics, groupHazards, hazardName, hazardKind, sourceName, provenanceName } from './RegionPanel'
+import { RegionPanel, severity, Signal, titleCase, readable, number, groupHazards, hazardName, hazardKind, sourceName, provenanceName } from './RegionPanel'
 import { Shelters } from './Shelters'
 import { Needs } from './Needs'
 import { Sources } from './Sources'
@@ -70,7 +71,7 @@ export default function Page() {
   const region = useRegion(selected)
   const detail = region.data
   const geo = useMemo(() => geography(rows), [rows])
-  const hero = useRef<HTMLDivElement>(null)
+  const hero = useRef<HTMLElement>(null)
   const frameScope = useRef<string | null>(null)
   const refresh = useCallback(() => client.invalidateQueries({ queryKey: ['command'] }), [client])
   useEffect(() => { document.title = 'Regional overview · EvacuAid Command Center' }, [])
@@ -134,12 +135,12 @@ export default function Page() {
   const errors = [regions.error, parents.error, region.error, routes.error].filter(Boolean)
   const stale = rows.filter(r => r.snapshotStale).length
   const explanation = (dataMode === 'SIMULATION' ? 'Simulation data. Synthetic administrative boundaries and population; not real operational statistics. ' : 'Operational data. ') + String(rows.length) + ' regions in the current filter scope. ' + String(stale) + ' unavailable/stale projections. Signal counts show known evidence only; numeric totals become Unknown when a contributing metric is missing. ' + (!rows.length ? 'Import administrative GeoJSON using the command importer.' : 'Hazard and shelter overlays load when a region is selected.')
-  const layers = <Popover><PopoverTrigger><Button variant="secondary">Layers</Button></PopoverTrigger><PopoverContent align="end">{(Object.keys(layerLabels) as (keyof typeof layerLabels)[]).map(key => <Checkbox key={key} isSelected={visible[key]} onChange={value => { setVisible(current => ({ ...current, [key]: value })); }}>{layerLabels[key]}</Checkbox>)}<p>Hazard and shelter overlays show the selected region. Baseline outlines indicate susceptibility, not an active warning.</p></PopoverContent></Popover>
+  const layers = <Popover><PopoverTrigger><Button size="small" variant="secondary" leadingIcon={RiStackLine}>Layers</Button></PopoverTrigger><PopoverContent align="end" className="flex w-72 flex-col gap-2">{(Object.keys(layerLabels) as (keyof typeof layerLabels)[]).map(key => <Checkbox key={key} isSelected={visible[key]} onChange={value => { setVisible(current => ({ ...current, [key]: value })); }}>{layerLabels[key]}</Checkbox>)}<p className="mt-1 border-t border-border-default pt-2.5 text-caption-1-regular text-text-secondary">Hazard and shelter overlays show the selected region. Baseline outlines indicate susceptibility, not an active warning.</p></PopoverContent></Popover>
   const filters = <>
-    <Select aria-label="Level" className="w-full md:w-44" value={level} onChange={key => { setLevel(key as AdministrativeLevel); setParent('') }}><SelectItem id="VILLAGE">Kelurahan / Desa</SelectItem><SelectItem id="DISTRICT">Kecamatan</SelectItem><SelectItem id="CITY_REGENCY">City / Regency</SelectItem><SelectItem id="PROVINCE">Province</SelectItem></Select>
-    <Select aria-label="Parent region" className="w-full md:w-40" value={parent || 'all'} onChange={key => { setParent(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All parents</SelectItem>{parentLevels[level] && (parents.data ?? []).map(r => <SelectItem key={r.id} id={r.id}>{titleCase(r.name)}</SelectItem>)}</Select>
-    <Select aria-label="Hazard" className="w-full md:w-40" value={hazard || 'all'} onChange={key => { setHazard(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All types</SelectItem>{hazardTypes.map(type => <SelectItem id={type} key={type}>{hazardName(type)}</SelectItem>)}</Select>
-    <Select aria-label="Signal" className="w-full md:w-40" value={signal || 'all'} onChange={key => { setSignal(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All signals</SelectItem>{(['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN'] as const).map(value => <SelectItem id={value} key={value}>{readable(value)}</SelectItem>)}</Select>
+    <Select aria-label="Level" className="w-full" value={level} onChange={key => { setLevel(key as AdministrativeLevel); setParent('') }}><SelectItem id="VILLAGE">Kelurahan / Desa</SelectItem><SelectItem id="DISTRICT">Kecamatan</SelectItem><SelectItem id="CITY_REGENCY">City / Regency</SelectItem><SelectItem id="PROVINCE">Province</SelectItem></Select>
+    <Select aria-label="Parent region" className="w-full" value={parent || 'all'} onChange={key => { setParent(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All parents</SelectItem>{parentLevels[level] && (parents.data ?? []).map(r => <SelectItem key={r.id} id={r.id}>{titleCase(r.name)}</SelectItem>)}</Select>
+    <Select aria-label="Hazard" className="w-full" value={hazard || 'all'} onChange={key => { setHazard(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All types</SelectItem>{hazardTypes.map(type => <SelectItem id={type} key={type}>{hazardName(type)}</SelectItem>)}</Select>
+    <Select aria-label="Signal" className="w-full" value={signal || 'all'} onChange={key => { setSignal(key === 'all' ? '' : String(key)); }}><SelectItem id="all">All signals</SelectItem>{(['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN'] as const).map(value => <SelectItem id={value} key={value}>{readable(value)}</SelectItem>)}</Select>
   </>
   const fresh = detail ? groupHazards(detail.hazards).filter(h => h.active && h.freshness === 'FRESH') : []
   function closeCard() { setSelection({ scope, id: null, updatedAt: regions.dataUpdatedAt }); hero.current?.focus({ preventScroll: true }) }
@@ -147,16 +148,30 @@ export default function Page() {
     <h1 className="sr-only">Regional overview</h1>
     {errors.map((error, i) => <Alert key={i} variant="destructive">{error?.message}</Alert>)}
     {!regions.isPending && !regions.error && (dataMode === 'SIMULATION' || !rows.length) && <Alert role="status">{explanation}</Alert>}
-    <Card ref={hero} tabIndex={-1} className="relative flex flex-col overflow-hidden" onKeyDown={event => { if (event.key === 'Escape' && detail && !busy) { event.preventDefault(); closeCard() } }}>
-      <div className="relative"><MapView />
-      <Card size="sm" aria-label="Map legend" className="absolute bottom-8 left-3 z-10"><CardContent className="grid grid-cols-3 gap-x-3 gap-y-1">{(['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN', 'SIMULATION'] as const).map(value => {
-        const count = rows.filter(r => value === 'SIMULATION' ? r.simulation : (r.simulation?.signalLevel || r.signalLevel) === value).length
-        return <span key={value} className="flex items-center gap-1" style={{ opacity: count ? 1 : .5 }}><i className="h-2.5 w-2.5" style={{ backgroundColor: value === 'SIMULATION' ? '#EEF2FE' : severity[value].fill, border: '1px ' + (value === 'SIMULATION' ? 'dashed #2E54E6' : 'solid ' + severity[value].stroke) }} />{readable(value) + ' ' + String(count)}</span>
-      })}</CardContent></Card>
-      </div>
-      <MockMode filters={filters} layers={layers} refresh={refresh} onBusyChange={setBusy} />
-      {detail && <Card size="sm" aria-live="polite" className="m-3 md:absolute md:bottom-36 md:left-3 md:z-10 md:m-0 md:w-80 md:max-w-[calc(100%-24px)] md:max-h-[max(0px,calc(100%-var(--overview-tools-height,150px)-168px))] md:overflow-auto"><CardContent className="flex flex-col gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><CardTitle>{titleCase(detail.name)}</CardTitle><Signal level={detail.signalLevel} />{detail.simulation && <Signal level={detail.simulation.signalLevel} simulation />}<CloseButton aria-label="Close region summary" size="sm" onClick={closeCard} /></div><p>{detail.hierarchy.map(r => titleCase(r.name)).join(' / ')}</p><Metrics columns={2} values={[[ 'Estimated exposed', detail.estimatedExposedPopulation ], ['Reference population', detail.population], ['Active hazards', fresh.length || 'None'], ['Shelters', detail.recordedShelterCount]]} /><p>{fresh[0] ? hazardName(fresh[0].hazardType) + ' ' + hazardKind(fresh[0].evidenceType) + ' · ' + sourceName(fresh[0].source) : 'No active warning'}</p><Button variant="secondary" onClick={() => { const heading = document.getElementById('selected-name'); heading?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'instant' : 'smooth' }); heading?.focus({ preventScroll: true }) }}>View details</Button></CardContent></Card>}
-    </Card>
+    <section ref={hero} tabIndex={-1} aria-label="Regional map" className="flex min-w-0 flex-col rounded-2xl border border-border-button-white bg-background-secondary-default p-1 pt-3 shadow-sidebar outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring" onKeyDown={event => { if (event.key === 'Escape' && detail && !busy) { event.preventDefault(); closeCard() } }}>
+      <MockMode filters={filters} layers={layers} refresh={refresh} onBusyChange={setBusy}>
+        <MapView />
+        <div aria-label="Map legend" role="group" className="absolute bottom-8 left-3 z-10 grid grid-cols-3 gap-x-4 gap-y-1.5 rounded-xl bg-background-primary-default px-3 py-2.5 text-caption-1-regular text-text-primary shadow-sidebar">{(['CRITICAL', 'ELEVATED', 'WATCH', 'NORMAL', 'UNKNOWN', 'SIMULATION'] as const).map(value => {
+          const count = rows.filter(r => value === 'SIMULATION' ? r.simulation : (r.simulation?.signalLevel || r.signalLevel) === value).length
+          return <span key={value} className={'flex items-center gap-1.5 whitespace-nowrap' + (count ? '' : ' text-text-tertiary')}><i aria-hidden className="size-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: value === 'SIMULATION' ? '#EEF2FE' : severity[value].fill, border: '1px ' + (value === 'SIMULATION' ? 'dashed #2E54E6' : 'solid ' + severity[value].stroke), opacity: count ? 1 : .5 }} />{readable(value)}<span className="tabular-nums text-text-secondary">{count}</span></span>
+        })}</div>
+        {detail && <div aria-live="polite" className="m-3 flex flex-col gap-2.5 rounded-xl bg-background-primary-default p-3 shadow-sidebar md:absolute md:left-3 md:top-3 md:z-10 md:m-0 md:max-h-[calc(100%-120px)] md:w-64 md:max-w-[calc(100%-24px)] md:overflow-auto">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5"><CardTitle className="truncate">{titleCase(detail.name)}</CardTitle><Signal level={detail.signalLevel} />{detail.simulation && <Signal level={detail.simulation.signalLevel} simulation />}</div>
+              <p className="truncate text-caption-1-regular text-text-secondary" title={detail.hierarchy.map(r => titleCase(r.name)).join(' / ')}>{detail.hierarchy.filter(r => r.name !== detail.name).map(r => titleCase(r.name)).join(' / ')}</p>
+            </div>
+            <CloseButton aria-label="Close region summary" size="xs" onClick={closeCard} />
+          </div>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-border-default pt-2.5">{([['Exposed (est.)', detail.estimatedExposedPopulation], ['Population', detail.population], ['Active hazards', fresh.length || 'None'], ['Shelters', detail.recordedShelterCount]] as const).map(([name, value]) => <div key={name} className="flex min-w-0 flex-col">
+            <dt className="truncate text-caption-1-regular text-text-secondary">{name}</dt>
+            <dd className="text-body-2-medium tabular-nums text-text-primary" aria-label={value == null ? 'Unknown' : undefined}>{typeof value === 'string' ? value : number(value)}</dd>
+          </div>)}</dl>
+          {fresh[0] && <p className="text-caption-1-regular text-text-secondary-strong">{hazardName(fresh[0].hazardType) + ' ' + hazardKind(fresh[0].evidenceType) + ' · ' + sourceName(fresh[0].source)}</p>}
+          <button type="button" className="cursor-pointer self-start rounded-sm text-caption-1-medium text-text-secondary-strong underline-offset-2 outline-none transition-colors duration-150 hover:text-text-primary hover:underline focus-visible:ring-2 focus-visible:ring-border-focus-ring" onClick={() => { const heading = document.getElementById('selected-name'); heading?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'instant' : 'smooth' }); heading?.focus({ preventScroll: true }) }}>View details</button>
+        </div>}
+      </MockMode>
+    </section>
     <Kpis rows={rows} cases={cases.data} loading={regions.isPending} error={regions.error} />
     <div className="grid gap-4 lg:grid-cols-[minmax(360px,5fr)_7fr]"><PriorityRegions rows={orderedRegions(rows)} selected={selected} onSelect={select} loading={regions.isPending} error={regions.error} /><div className="flex min-w-0 flex-col gap-4"><RegionPanel detail={detail} loading={selected !== null && region.isPending} error={region.error} /><Shelters detail={detail} loading={selected !== null && region.isPending} error={region.error} /><Needs detail={detail} loading={selected !== null && region.isPending} error={region.error} /><Sources detail={detail} loading={selected !== null && region.isPending} error={region.error} /></div></div>
   </div>

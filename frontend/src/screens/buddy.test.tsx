@@ -126,8 +126,8 @@ test('the requester sees the partner labelled by their role, and no empty name w
   expect(view.queryByText('Name not provided')).toBeNull();
   mockSession = { ...(mockSession as object), helperUserId: 'other', helperName: 'Buddy Helper', status: 'ACCEPTED' };
   view.rerender(<BuddyScreen />);
-  expect(view.getByText('Helper')).toBeTruthy();
-  expect(view.getByText('Buddy Helper')).toBeTruthy();
+  // The link indicator names the partner and their role in one VoiceOver line.
+  expect(view.getByLabelText('Buddy Helper. Linked · helping you. Step 1 of 4 · On the way')).toBeTruthy();
   expect(view.queryByText('Requester')).toBeNull();
 });
 
@@ -151,7 +151,7 @@ test('the helper session shows one primary action for the current status', () =>
   const base = { id: 'live', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina Rahma', helperName: 'Me', message: '', supportNeeds: [], attempts: [], meetingConfirmed: false };
   mockSession = { ...base, status: 'ACCEPTED' };
   const view = render(<BuddyScreen />);
-  expect(view.getByText('Nina Rahma needs help')).toBeTruthy();
+  expect(view.getByLabelText('Nina Rahma. Linked · you are helping. Step 1 of 4 · On the way')).toBeTruthy();
   expect(view.getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
   expect(view.queryByRole('button', { name: 'I have arrived' })).toBeNull();
   mockSession = { ...base, status: 'EN_ROUTE' };
@@ -495,16 +495,16 @@ test.each(['help', 'nearby', 'complete'])('voice Buddy %s shares or completes on
 
 
 test.each([
-  ['ARRIVED', 'Confirm we have met', 'confirm-meeting'],
-  ['COMPLETION_PENDING', 'Confirm assistance completed', 'confirm-complete'],
-])('voice Buddy requester retains the required touch action at %s', async (status, label, transition) => {
+  ['ARRIVED', 'Confirm we have met', 'Confirm we have met', 'confirm-meeting'],
+  ['COMPLETION_PENDING', 'Confirm I am safe', 'The help session ends and your location stops being shared.', 'confirm-complete'],
+])('voice Buddy requester retains the required touch action at %s', async (status, label, body, transition) => {
   mockVoiceHome = true;
   mockSession = { id: 'live', requesterUserId: 'helper', status, meetingConfirmed: false, attempts: [] };
   mockRun.mockResolvedValue({ id: 'live' });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const view = render(<BuddyScreen />);
   fireEvent.press(view.getByRole('button', { name: label }));
-  expect(alert).toHaveBeenCalledWith(label, label, expect.any(Array));
+  expect(alert).toHaveBeenCalledWith(label, body, expect.any(Array));
   expect(mockRun).not.toHaveBeenCalled();
   await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
   expect(mockRun).toHaveBeenCalledWith(`/requests/live/${transition}`, {});

@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.db.models.buddySession import BuddyAttempt
 from app.routers.buddy_dev import router as dev_router
+from app.services.valhallaProvider import RoutingUnavailable, ValhallaRoutingProvider
 from tests.test_buddy import api, guest
 
 
@@ -54,3 +55,51 @@ async def test_simulate_nearby_requires_opt_in(dbSession):
         _, helper = await guest(client)
         response = await client.post('/v1/buddy/dev/simulate-nearby', headers=helper)
         assert response.status_code == 409 and response.json()['detail'] == 'opt in to Nearby first'
+
+
+@pytest.mark.asyncio
+async def test_simulate_safe_completes_the_session_after_the_walk(dbSession, monkeypatch):
+    async def offline(*args, **kwargs):
+        raise RoutingUnavailable('offline')
+    monkeypatch.setattr(ValhallaRoutingProvider, 'route', offline)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=dev_api(dbSession, True)), base_url='http://test') as client:
+        _, helper = await guest(client)
+        await opt_in(client, helper)
+        session = (await client.post('/v1/buddy/dev/simulate-nearby', headers=helper)).json()
+        path = '/v1/buddy/dev/requests/' + session['id']
+        assert (await client.post(path + '/simulate-safe', headers=helper)).status_code == 403
+        await client.post('/v1/buddy/requests/' + session['id'] + '/accept', headers=helper, json={'attemptId': session['attempts'][0]['id'], 'sharingConsent': True})
+        assert (await client.post(path + '/simulate-safe', headers=helper)).status_code == 409
+        arrived = await client.post(path + '/simulate-walk', headers=helper, json={'progress': 1})
+        assert arrived.status_code == 200, arrived.text
+        assert arrived.json()['status'] == 'COMPLETION_PENDING' and arrived.json()['meetingConfirmed'] is True
+        safe = await client.post(path + '/simulate-safe', headers=helper)
+        assert safe.status_code == 200 and safe.json()['status'] == 'COMPLETED'
+        assert (await client.post(path + '/simulate-walk', headers=helper, json={'progress': 1})).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_simulate_walk_moves_both_people_to_the_safe_house(dbSession, monkeypatch):
+    async def offline(*args, **kwargs):
+        raise RoutingUnavailable('offline')
+    monkeypatch.setattr(ValhallaRoutingProvider, 'route', offline)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=dev_api(dbSession, True)), base_url='http://test') as client:
+        _, helper = await guest(client)
+        await opt_in(client, helper)
+        session = (await client.post('/v1/buddy/dev/simulate-nearby', headers=helper)).json()
+        path = '/v1/buddy/dev/requests/' + session['id'] + '/simulate-walk'
+        assert (await client.post(path, headers=helper, json={'progress': 0})).status_code == 403
+        await client.post('/v1/buddy/requests/' + session['id'] + '/accept', headers=helper, json={'attemptId': session['attempts'][0]['id'], 'sharingConsent': True})
+        half = await client.post(path, headers=helper, json={'progress': 0.5})
+        assert half.status_code == 200, half.text
+        walk = half.json()['walk']
+        assert half.json()['status'] == 'EVACUATING' and half.json()['meetingConfirmed'] is True
+        assert 295 <= walk['distanceM'] <= 305
+        positions = (await client.get('/v1/buddy/requests/' + session['id'] + '/location', headers=helper)).json()['locations']
+        assert len(positions) == 2 and all(abs(item['latitude'] - walk['latitude']) < 1e-9 for item in positions)
+        done = await client.post(path, headers=helper, json={'progress': 1, **walk['origin']})
+        assert done.json()['walk']['geometry'] == walk['geometry']
+        assert done.json()['status'] == 'COMPLETION_PENDING'
+        assert done.json()['walk']['longitude'] == done.json()['walk']['destination']['longitude']
+        assert (await client.post(path, headers=helper, json={'progress': 1})).status_code == 409
+        assert (await client.post(path, headers=helper, json={'progress': 2})).status_code == 422
