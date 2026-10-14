@@ -20,7 +20,7 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds
 export function HelpRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token, user } = useGuestSession();
-  const state = useBuddy(token);
+  const state = useBuddy(token, user?.id);
   const a = useBuddyActions({ token: token ?? '', userId: user?.id ?? '', state, manageBackground: false });
   const router = useRouter();
   const { t } = useTranslation();
@@ -49,7 +49,7 @@ export function HelpRequestScreen() {
   const fill = Math.min(100, Math.max(0, (expires - now) / total * 100));
   const palette = sky[attempt ? friend ? 'awas' : 'siaga' : 'normal'];
   const contact = state.incomingContacts.find(item => item.userId === session?.requesterUserId);
-  const detail = [...(session?.supportNeeds ?? []).map(a.support), friend ? relationLabel(contact?.relation, a.c) : a.c('gpsSystemLine', { name })].filter(Boolean).join(' · ');
+  const detail = [...(session?.supportNeeds ?? []).map(a.support), friend ? relationLabel(contact?.relation, a.c) : a.c(attempt?.source === 'BLE' ? 'bluetoothSystemLine' : 'gpsSystemLine', { name })].filter(Boolean).join(' · ');
   // The shared error is cleared by the next background refresh, so a refused answer is kept here until the next try.
   const [refused, setRefused] = useState(false);
   const armed = useArmed();

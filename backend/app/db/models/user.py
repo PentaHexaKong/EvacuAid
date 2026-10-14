@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geography
@@ -17,6 +17,7 @@ class User(Base):
         CheckConstraint("role IN ('CITIZEN','RESPONDER','GOVERNMENT','ADMIN')", name="ck_users_role"),
         CheckConstraint("(email IS NULL) = (password_hash IS NULL)", name="ck_users_credentials_pair"),
         CheckConstraint("email IS NULL OR email = lower(trim(email))", name="ck_users_email_normalized"),
+        CheckConstraint("beacon_id BETWEEN 1 AND 4294967295", name="ck_users_beacon_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -26,6 +27,7 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     buddy_code: Mapped[str | None] = mapped_column(String(9), nullable=True, unique=True)
+    beacon_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[object | None] = mapped_column(Geography(geometry_type='POINT', srid=4326), nullable=True)

@@ -28,6 +28,8 @@ let mockAvailability = { optedIn: false, enrolled: true };
 let mockLocation: { latitude: number; longitude: number; accuracyM?: number; observedAt?: string } | null = null;
 const mockBuddyRequest = jest.fn();
 let mockCommand: (command: string) => void;
+jest.mock('@/features/buddy/use-beacons', () => ({ useBeacons: () => ({ status: 'unavailable', advertising: false, people: [], offline: false }) }));
+jest.mock('@react-native-community/netinfo', () => ({ __esModule: true, default: { fetch: jest.fn().mockResolvedValue({ isConnected: true, isInternetReachable: true }), addEventListener: jest.fn(() => () => {}) } }));
 jest.mock('expo-router', () => {
   const { Pressable, View } = jest.requireActual('react-native');
   const { useEffect } = jest.requireActual('react');
@@ -60,11 +62,11 @@ jest.mock('@/features/buddy/use-buddy', () => ({ useBuddyCode: jest.requireActua
   messages: [], locations: mockLocations, dismissSession: mockDismissSession, error: null, loading: false, busy: false, run: mockRun, refresh: mockRefresh,
 }) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockListening = false; mockLocations = []; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
+beforeEach(() => { Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true }); jest.clearAllMocks(); mockListening = false; mockLocations = []; mockSession = null; mockContacts = []; mockInvitations = []; mockReceived = []; mockIncomingContacts = []; mockAccessibility = [{ type: 'VISUAL_IMPAIRMENT' }]; mockBuddyRequest.mockReset(); mockBuddyRequest.mockResolvedValue({ code: 'K7Q2-M9XD' }); mockParams = {}; mockAvailability = { optedIn: false, enrolled: true }; mockLocation = null; mockRun.mockResolvedValue(undefined); });
 
 test('a person with no Buddy can search nearby, add a Buddy or call 112, with no helper controls', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-  mockRun.mockResolvedValueOnce({ id: 'new-request' });
+  mockRun.mockResolvedValueOnce({ id: 'new-request' }).mockResolvedValueOnce({ id: 'new-request' });
   const view = render(<BuddyScreen />);
   expect(view.getByText('You have no Buddy yet. Look for a helper nearby, or add someone you trust.')).toBeTruthy();
   expect(view.getByRole('link', { name: 'Call 112' })).toBeTruthy();
@@ -75,7 +77,7 @@ test('a person with no Buddy can search nearby, add a Buddy or call 112, with no
   expect(mockPush).toHaveBeenCalledWith('/buddy-add');
   fireEvent.press(view.getByRole('button', { name: 'Find help nearby' }));
   expect(mockRun).not.toHaveBeenCalled();
-  expect(alert).toHaveBeenCalledWith('Find help nearby?', 'We look for registered helpers near you. Your precise location is shared only after someone accepts.', expect.any(Array));
+  expect(alert).toHaveBeenCalledWith('Find help nearby?', 'We look for registered helpers near you. While this screen is open, Bluetooth broadcasts your need for help, device ID, and precise location if available to nearby phones, including people who are not your Buddies. Without internet, your request is sent to the server when connected again.', expect.any(Array));
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
   await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests/new-request/nearby', expect.objectContaining({ latitude: -6.2 })));
   expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: null, sharingConsent: true }));
@@ -297,13 +299,15 @@ test('a received invitation says which way the help goes', async () => {
   expect(view.getByText('Offerer is offering to be your Buddy and will receive your help requests.')).toBeTruthy();
 });
 
-test('helper GPS offers force Auto search and use Skip and confirmed Help this person', async () => {
+test.each(['GPS', 'BLE'])('a helper with no Buddy relationship can accept a nearby %s offer after confirmation', async source => {
   mockAccessibility = [];
-  mockSession = { ...helperOffer(true), message: 'Please hurry' };
+  mockAvailability = { optedIn: true, enrolled: false };
+  const offer = helperOffer(true);
+  mockSession = { ...offer, message: 'Please hurry', attempts: offer.attempts.map(attempt => ({ ...attempt, source })) };
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const view = render(<BuddyScreen />);
   expect(view.getByRole('tab', { name: 'Auto search' })).toHaveProp('accessibilityState', { selected: true });
-  expect(view.getByText('The system found Test friend in an emergency area with no Buddy helping yet.')).toBeTruthy();
+  expect(view.getByText(source === 'BLE' ? "Test friend's phone is broadcasting a need for help nearby by Bluetooth." : 'The system found Test friend in an emergency area with no Buddy helping yet.')).toBeTruthy();
   expect(view.getByText('“Please hurry”')).toBeTruthy();
   fireEvent.press(view.getByRole('button', { name: 'Help this person' }));
   expect(mockRun).not.toHaveBeenCalled();
@@ -339,13 +343,18 @@ test('helper friend decline requires confirmation', async () => {
   alert.mockRestore();
 });
 
-test('a helper who is nobody\'s Buddy yet sees how auto search turns on instead of the availability switch', async () => {
+test('a helper with no Buddy relationship can opt in to nearby help', async () => {
   mockAccessibility = [];
   mockAvailability = { optedIn: false, enrolled: false };
   const view = render(<BuddyScreen />);
   fireEvent.press(await view.findByRole('tab', { name: 'Auto search' }));
-  expect(view.getByText('Become a Buddy first')).toBeTruthy();
-  expect(view.queryByRole('switch', { name: 'I am available to help' })).toBeNull();
+  expect(view.queryByText('Become a Buddy first')).toBeNull();
+  expect(view.getByText(/You can help nearby people without adding each other as Buddies/)).toBeTruthy();
+  const availability = view.getByRole('switch', { name: 'I am available to help' });
+  expect(availability.props.value).toBe(false);
+  expect(mockRun).not.toHaveBeenCalled();
+  fireEvent(availability, 'valueChange', true);
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/availability', expect.objectContaining({ optedIn: true, latitude: -6.2 }), 'PUT'));
 });
 
 test('a person with support needs accepts a helper\'s offer and cancels an invitation they sent', () => {
@@ -473,7 +482,7 @@ test.each(['help', 'nearby', 'complete'])('voice Buddy %s shares or completes on
   render(<BuddyScreen />);
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
   act(() => mockCommand(command));
-  const question = command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : command === 'nearby' ? 'Search for helpers nearby and share your location? Say yes or no.' : 'Confirm you are safe and finished? Say yes or no.';
+  const question = command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : command === 'nearby' ? 'Search for helpers and broadcast your device ID and precise location if available to nearby phones by Bluetooth while this screen is open? Say yes or no.' : 'Confirm you are safe and finished? Say yes or no.';
   await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(question, expect.any(Object)));
   expect(mockRun).not.toHaveBeenCalled();
   await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
@@ -629,7 +638,7 @@ test.each(['COMPLETED', 'INTERRUPTED', 'UNANSWERED'])('help and nearby can resta
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
   for (const command of ['help', 'nearby']) {
     act(() => mockCommand(command));
-    await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : 'Search for helpers nearby and share your location? Say yes or no.', expect.any(Object)));
+    await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(command === 'help' ? 'Ask Sari for help and share your location? Say yes or no.' : 'Search for helpers and broadcast your device ID and precise location if available to nearby phones by Bluetooth while this screen is open? Say yes or no.', expect.any(Object)));
     expect(mockDismissSession).toHaveBeenCalledTimes(command === 'help' ? 1 : 2);
     await act(async () => { jest.mocked(Speech.speak).mock.calls.at(-1)?.[1]?.onDone?.(); });
     await act(async () => mockCommand('yes'));

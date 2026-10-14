@@ -12,7 +12,7 @@ from app.auth import current_user
 from app.db.session import get_session
 from app.db.models import BuddyRelationship, User, UserAccessibility
 from app.db.models.buddySession import BuddyAttempt, BuddyAvailability, BuddyInbox, BuddyInvitation, BuddyLocation, BuddyMessage, BuddyPushToken, BuddyRequest
-from app.models.buddyRequest import AttemptAction, AvailabilityUpdate, InviteDirect, InviteRedeem, MessageCreate, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
+from app.models.buddyRequest import AttemptAction, AvailabilityUpdate, BeaconSearch, InviteDirect, InviteRedeem, MessageCreate, NearbyHelperSelection, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
 from app.services import alertService
 from app.services import buddyRequestService as service
 from app.services.buddyService import relationshipResponse
@@ -74,6 +74,13 @@ async def personal_code(db: AsyncSession = Depends(get_session), actor=Depends(c
             pass
     await db.commit()
     return {'code': code}
+
+
+@router.get('/me/beacon')
+async def personal_beacon(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    value = await service.beacon_id(db, actor.id)
+    await db.commit()
+    return {'beaconId': value}
 
 
 @router.post('/invitations/direct', status_code=201)
@@ -202,7 +209,9 @@ async def decline_invitation(invitation_id: uuid.UUID, db: AsyncSession = Depend
 async def contacts(db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
     rows = (await db.execute(select(BuddyRelationship, User.name, BuddyAvailability.opted_in, BuddyAvailability.observed_at).join(User, User.id == BuddyRelationship.buddyUserId).outerjoin(BuddyAvailability, BuddyAvailability.user_id == User.id).where(BuddyRelationship.userId == actor.id, BuddyRelationship.status == 'ACTIVE'))).all()
     cutoff = service.now() - timedelta(minutes=2)
-    return [{**relationshipResponse(row).model_dump(), 'name': name, 'available': bool(opted_in and observed_at and observed_at >= cutoff), 'observedAt': observed_at, 'relation': row.relation} for row, name, opted_in, observed_at in rows]
+    beacons = {user_id: await service.beacon_id(db, user_id) for user_id in sorted({row.buddyUserId for row, name, opted_in, observed_at in rows})}
+    await db.commit()
+    return [{**relationshipResponse(row).model_dump(), 'name': name, 'beaconId': beacons[row.buddyUserId], 'available': bool(opted_in and observed_at and observed_at >= cutoff), 'observedAt': observed_at, 'relation': row.relation} for row, name, opted_in, observed_at in rows]
 
 
 @router.get('/contacts/incoming')
@@ -210,7 +219,9 @@ async def incoming_contacts(db: AsyncSession = Depends(get_session), actor=Depen
     rows = (await db.execute(select(BuddyRelationship, User.name).join(User, User.id == BuddyRelationship.userId).where(BuddyRelationship.buddyUserId == actor.id, BuddyRelationship.status == 'ACTIVE'))).all()
     needs = await user_needs(db, [row.userId for row, name in rows])
     responses = await alertService.latestResponses(db, [row.userId for row, name in rows])
-    return [{**relationshipResponse(row).model_dump(), 'name': name, 'needs': needs[row.userId], 'relation': row.relation, 'latestAlertResponse': responses.get(row.userId)} for row, name in rows]
+    beacons = {user_id: await service.beacon_id(db, user_id) for user_id in sorted({row.userId for row, name in rows})}
+    await db.commit()
+    return [{**relationshipResponse(row).model_dump(), 'name': name, 'beaconId': beacons[row.userId], 'needs': needs[row.userId], 'relation': row.relation, 'latestAlertResponse': responses.get(row.userId)} for row, name in rows]
 
 
 @router.delete('/contacts/{contact_id}')
@@ -330,13 +341,65 @@ async def nearby(request_id: uuid.UUID, payload: NearbySearch, db: AsyncSession 
     row.latitude, row.longitude = payload.latitude, payload.longitude
     if row.status != 'FALLBACK_REQUIRED':
         raise HTTPException(409, 'fallback and search location required')
-    availability = (await db.execute(select(BuddyAvailability).where(service.is_buddy(BuddyAvailability.user_id), BuddyAvailability.opted_in.is_(True), BuddyAvailability.observed_at > service.now() - timedelta(minutes=2), BuddyAvailability.user_id != actor.id))).scalars()
+    availability = (await db.execute(select(BuddyAvailability).where(BuddyAvailability.opted_in.is_(True), BuddyAvailability.observed_at > service.now() - timedelta(minutes=2), BuddyAvailability.user_id != actor.id))).scalars()
     candidates = [(calculate_distance_meters(row.latitude, row.longitude, a.latitude, a.longitude), a.user_id) for a in availability if a.latitude is not None and a.longitude is not None and not await service.occupied(db, a.user_id)]
     row.candidates = [str(user) for distance, user in sorted(candidates) if distance <= 5000][:5]
     row.nearby = True
+    row.nearby_started_at = service.now()
     await service.advance(db, row)
     await db.commit()
     return await service.response(db, row, actor.id)
+
+
+@router.post('/requests/{request_id}/nearby/helper')
+async def nearby_helper(request_id: uuid.UUID, payload: NearbyHelperSelection, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    row = await service.get_request(db, request_id, actor.id)
+    if row.requester_id != actor.id:
+        raise HTTPException(403, 'requester only')
+    if not row.nearby or row.status != 'WAITING' or row.helper_id is not None or not row.sharing_consent or (row.nearby_started_at or row.created_at) <= service.now() - timedelta(minutes=10):
+        raise HTTPException(409, 'nearby request unavailable')
+    helper = (await db.execute(select(User.id).where(User.beacon_id == payload.beaconId))).scalar_one_or_none()
+    if helper is None or helper == actor.id:
+        raise HTTPException(409, 'nearby helper unavailable')
+    await service.lock_users(db, [row.requester_id, helper])
+    eligibility = await db.get(BuddyAvailability, helper, populate_existing=True)
+    if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2) or await service.occupied(db, helper, row.id):
+        raise HTTPException(409, 'nearby helper unavailable')
+    attempt = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == row.id, BuddyAttempt.helper_id == helper).order_by(BuddyAttempt.created_at.desc()).limit(1))).scalar_one_or_none()
+    if attempt:
+        if attempt.status != 'PENDING' or attempt.expires_at <= service.now():
+            raise HTTPException(409, 'nearby helper unavailable')
+    else:
+        attempt = await service.offer(db, row, helper, 30, source='BLE')
+    await db.commit()
+    response = await service.response(db, row, actor.id)
+    response['selectedAttemptId'] = attempt.id
+    return response
+
+
+@router.post('/nearby/beacons')
+async def nearby_beacons(payload: BeaconSearch, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    eligibility = await db.get(BuddyAvailability, actor.id)
+    if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2):
+        raise HTTPException(409, 'helper availability expired')
+    rows = (await db.execute(select(BuddyRequest).join(User, User.id == BuddyRequest.requester_id).where(User.beacon_id.in_(payload.beaconIds), BuddyRequest.requester_id != actor.id, BuddyRequest.buddy_flow.is_(True), BuddyRequest.nearby.is_(True), BuddyRequest.status == 'WAITING', BuddyRequest.helper_id.is_(None), func.coalesce(BuddyRequest.nearby_started_at, BuddyRequest.created_at) > service.now() - timedelta(minutes=10)).order_by(BuddyRequest.created_at, BuddyRequest.id).limit(10).with_for_update(of=BuddyRequest))).scalars().all()
+    for row in rows:
+        await service.lock_users(db, [row.requester_id, actor.id])
+        eligibility = await db.get(BuddyAvailability, actor.id, populate_existing=True)
+        if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2):
+            raise HTTPException(409, 'helper availability expired')
+        if await service.occupied(db, actor.id, row.id):
+            raise HTTPException(409, 'helper already occupied')
+        attempt = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == row.id, BuddyAttempt.helper_id == actor.id).order_by(BuddyAttempt.created_at.desc()).limit(1))).scalar_one_or_none()
+        if attempt:
+            if attempt.status != 'PENDING' or attempt.expires_at <= service.now():
+                continue
+        else:
+            await service.offer(db, row, actor.id, 30, source='BLE')
+        await db.commit()
+        return [await service.response(db, row, actor.id)]
+    await db.commit()
+    return []
 
 
 @router.post('/requests/{request_id}/accept')
@@ -351,11 +414,11 @@ async def accept(request_id: uuid.UUID, payload: AttemptAction, db: AsyncSession
     if await service.occupied(db, actor.id, row.id):
         raise HTTPException(409, 'helper already occupied')
     if row.nearby:
+        if (row.nearby_started_at or row.created_at) <= service.now() - timedelta(minutes=10):
+            raise HTTPException(409, 'nearby request expired')
         eligibility = await db.get(BuddyAvailability, actor.id)
         if not eligibility or not eligibility.opted_in or not eligibility.observed_at or eligibility.observed_at <= service.now() - timedelta(minutes=2):
             raise HTTPException(409, 'helper availability expired')
-        if not await db.scalar(select(service.is_buddy(actor.id))):
-            raise HTTPException(409, 'helper is not a buddy')
     else:
         relationship = (await db.execute(select(BuddyRelationship.id).where(BuddyRelationship.userId == row.requester_id, BuddyRelationship.buddyUserId == actor.id, BuddyRelationship.status == 'ACTIVE').with_for_update())).first()
         if not relationship:
@@ -364,6 +427,7 @@ async def accept(request_id: uuid.UUID, payload: AttemptAction, db: AsyncSession
     row.latitude = row.longitude = None
     row.candidates = []
     attempt.status = 'ACCEPTED'
+    await db.execute(update(BuddyAttempt).where(BuddyAttempt.request_id == row.id, BuddyAttempt.id != attempt.id, BuddyAttempt.status == 'PENDING').values(status='CANCELLED'))
     await service.session_event(db, row)
     await db.commit()
     return await service.response(db, row, actor.id)

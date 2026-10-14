@@ -219,6 +219,7 @@ export function useBuddySpeech({ language, onCommand, stopSpeechOnUnmount = true
 Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
 
 const NOTIFY_KINDS = new Set(['OFFER', 'INVITATION_REDEEMED']);
+const notifiedInbox = new Set<string>();
 type InboxEntry = { id: string; kind: string; read: boolean; requestId: string | null };
 
 // One local notification per new unread incoming request or friend request; items present on first load are history, not news.
@@ -226,9 +227,10 @@ export function useInboxNotifications(inbox: InboxEntry[], title: (kind: string)
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!seen.current) { seen.current = new Set(inbox.map(item => item.id)); return; }
-    const fresh = inbox.filter(item => !seen.current!.has(item.id) && !item.read && NOTIFY_KINDS.has(item.kind));
+    const fresh = inbox.filter(item => !seen.current!.has(item.id) && !notifiedInbox.has(item.id) && !item.read && NOTIFY_KINDS.has(item.kind));
     inbox.forEach(item => seen.current!.add(item.id));
     if (!fresh.length) return;
+    fresh.forEach(item => notifiedInbox.add(item.id));
     void (async () => {
       const permission = await Notifications.getPermissionsAsync();
       if (!permission.granted) return;

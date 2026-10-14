@@ -32,17 +32,19 @@ export const tabEnter = (from: number) => () => {
 export function HelperContent({ token, userId, state }: { token: string; userId: string; state: ReturnType<typeof useBuddy> }) {
   const { soundFree } = useAccess();
   const { t } = useTranslation();
-  const a = useBuddyActions({ token, userId, state });
+  const [chosenTab, setTab] = useState<Tab>('friends');
+  const incomingOffer = state.session?.status === 'WAITING' && state.session.attempts.some(item => item.helperUserId === userId && item.status === 'PENDING' && Date.parse(item.expiresAt) > Date.now());
+  const autoSearch = incomingOffer ? state.session?.nearby === true : chosenTab === 'auto';
+  const a = useBuddyActions({ token, userId, state, autoSearch: autoSearch && !state.session?.helperUserId });
   const { c, session, requester, attempt, active, issue, voice, native, catchNative, setLocalError } = a;
   const router = useRouter();
   const pathname = usePathname();
   useEffect(() => {
-    if (!attempt || !session || pathname.startsWith('/help-request/') || presentedAttempts.has(attempt.id)) return;
+    if (!attempt || !session || a.beaconBusy || pathname.startsWith('/help-request/') || presentedAttempts.has(attempt.id)) return;
     presentedAttempts.add(attempt.id);
     router.push(`/help-request/${session.id}`);
-  }, [attempt, session, pathname, router]);
+  }, [attempt, session, a.beaconBusy, pathname, router]);
   const code = useBuddyCode(token);
-  const [chosenTab, setTab] = useState<Tab>('friends');
   const reduceMotion = useContext(SystemReduceMotionContext);
   const [switched, setSwitched] = useState(false);
   useInboxNotifications(state.inbox, a.event);
@@ -50,7 +52,7 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
   const inSession = Boolean(session && (requester || session.helperUserId === userId));
   const simulate = __DEV__ ? () => catchNative(async () => { await buddyRequest(token, '/dev/simulate-nearby', 'POST', {}); await state.refresh(); }) : undefined;
   const bar = <>
-    <TabHeader><AppText variant="eyebrow" style={{ color: colors.muted }}>{c('helpOthers')}</AppText><AppText variant="title" accessibilityRole="header">{c('title')}</AppText></TabHeader>
+    <TabHeader><AppText variant="title" accessibilityRole="header">{c('title')}</AppText></TabHeader>
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Button icon="plus" accessibilityLabel={c('addBuddy')} onPress={() => router.push('/buddy-add')} />
       <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={c('more')}>

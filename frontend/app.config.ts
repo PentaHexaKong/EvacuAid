@@ -18,6 +18,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     infoPlist: {
       CFBundleAllowMixedLocalizations: true,
+      NSBluetoothAlwaysUsageDescription: 'EvacuAid uses Bluetooth to find nearby Buddies and share your location during a nearby help search.',
       ...(usesLocalHttpApi ? {
         NSLocalNetworkUsageDescription: 'EvacuAid connects to your development API server on the local network.',
         NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
@@ -26,6 +27,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: process.env.ANDROID_PACKAGE || 'dev.evacuaid.foundation',
+    permissions: ['android.permission.BLUETOOTH_SCAN', 'android.permission.BLUETOOTH_ADVERTISE', 'android.permission.BLUETOOTH_CONNECT', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION'],
     adaptiveIcon: {
       foregroundImage: './assets/brand/app-icon/android-foreground.png',
       backgroundImage: './assets/brand/app-icon/android-background.png',

@@ -22,3 +22,14 @@ test('a person with support needs can ask for help and open Add Buddy', { timeou
   await expect(screen.getByText('Your code')).toBeVisible();
   await expect(screen.getByText('Enter the code of someone you trust. They have to accept first.')).toBeVisible();
 });
+
+test('a helper sees Bluetooth status when opening Auto search', { timeout: 300_000 }, async ({ app, agent, screen }) => {
+  await app.open();
+  await expect(screen.getByRole('tab', 'Buddy')).toBeVisible({ timeout: 180_000 });
+  if (await screen.getByRole('tab', 'Peringatan').count()) await agent.act('change the app language to English in the settings, then go back to the home screen');
+  await screen.getByRole('tab', 'Buddy').tap();
+  test.skip(Boolean(await screen.getByText('Need help now?').count()), 'Auto search requires a helper profile with no support needs');
+  await agent.act('open Auto search on the Buddy screen');
+  await agent.assert('the Bluetooth scan status is visible, including an unavailable, off, denied, starting or searching state');
+  await expect(screen.getByText('Active only while this screen is open. Range depends on devices and surroundings.')).toBeVisible();
+});

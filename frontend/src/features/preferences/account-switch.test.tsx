@@ -40,3 +40,15 @@ test('existing account settings are preserved on a first login on this device',a
  expect(apiRequest).toHaveBeenCalledWith('/v1/users/user-a/preferences','token-a');
  expect(jest.mocked(apiRequest).mock.calls.every(call=>call[2]?.method!=='PUT')).toBe(true);
 });
+
+test('signing in keeps the language picked on this phone instead of the account default',async()=>{
+ const {selectLanguage}=jest.requireMock('@/localization');
+ await AsyncStorage.setItem(PREFERENCES_KEY,'{"completed":true}');
+ await AsyncStorage.setItem('evacuaid.language','en');
+ mockSession={token:'token-a',user:{id:'user-a'},account:{id:'user-a'}};
+ jest.mocked(apiRequest).mockImplementation((_path,_token,init)=>Promise.resolve(init?.method==='PUT'?JSON.parse(String(init.body)):remote));
+ const {result}=renderHook(usePreferences,{wrapper:PreferencesProvider});
+ await waitFor(()=>expect(result.current.preferences.language).toBe('en'));
+ expect(JSON.parse(String(jest.mocked(apiRequest).mock.calls.find(call=>call[2]?.method==='PUT')?.[2]?.body))).toMatchObject({language:'en',larger_text:true});
+ expect(selectLanguage).toHaveBeenLastCalledWith('en');
+});

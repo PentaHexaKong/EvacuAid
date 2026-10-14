@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -69,3 +69,11 @@ class SessionRoute(BaseModel):
 
 class NearbySearch(NavigationOrigin):
     pass
+
+
+class BeaconSearch(BaseModel):
+    beaconIds: list[Annotated[int, Field(strict=True, ge=1, le=4294967295)]] = Field(max_length=10)
+
+
+class NearbyHelperSelection(BaseModel):
+    beaconId: int = Field(strict=True, ge=1, le=4294967295)

@@ -143,6 +143,29 @@ test('inbox notifications fire once per new incoming item and never for history'
   expect(schedule).toHaveBeenCalledWith({ content: { title: 'title:OFFER', body: 'EvacuAid Buddy', data: { requestId: 'r1' } }, trigger: null });
 });
 
+test.each(['remounted', 'simultaneous'])('the same incoming request is not notified again by %s inbox consumers', async mode => {
+  const schedule = jest.mocked(Notifications.scheduleNotificationAsync);
+  schedule.mockClear();
+  const offer = { id: `${mode}-offer`, kind: 'OFFER', read: false, requestId: `${mode}-request` };
+  const useNotifications = ({ inbox }: { inbox: typeof offer[] }) => useInboxNotifications(inbox, kind => `title:${kind}`);
+  const first = renderHook(useNotifications, { initialProps: { inbox: [] as typeof offer[] } });
+  const second = mode === 'simultaneous' ? renderHook(useNotifications, { initialProps: { inbox: [] as typeof offer[] } }) : null;
+  first.rerender({ inbox: [offer] });
+  if (second) second.rerender({ inbox: [offer] });
+  await act(async () => {});
+  first.unmount();
+  second?.unmount();
+  const remounted = renderHook(useNotifications, { initialProps: { inbox: [] as typeof offer[] } });
+  remounted.rerender({ inbox: [offer] });
+  await act(async () => {});
+  expect(schedule).toHaveBeenCalledTimes(1);
+  const next = { ...offer, id: `${mode}-next-offer`, requestId: `${mode}-next-request` };
+  remounted.rerender({ inbox: [next, offer] });
+  await act(async () => {});
+  expect(schedule).toHaveBeenCalledTimes(2);
+  expect(schedule).toHaveBeenLastCalledWith({ content: { title: 'title:OFFER', body: 'EvacuAid Buddy', data: { requestId: `${mode}-next-request` } }, trigger: null });
+});
+
 
 test('cancelling speech aborts only recognition owned by this hook and ignores late results', async () => {
   const onCommand = jest.fn();

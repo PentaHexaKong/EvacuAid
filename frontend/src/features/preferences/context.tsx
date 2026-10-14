@@ -59,6 +59,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         });
       } else {
         remote = await apiRequest<ApiPreferences>('/v1/users/' + user.id + '/preferences', token);
+        // The language picked on this phone before signing in is what the person reads; the account's saved one must not replace it.
+        if (syncedUserId !== user.id && isLanguage(oldLanguage) && oldLanguage !== remote.language) {
+          remote = await apiRequest<ApiPreferences>('/v1/users/' + user.id + '/preferences', token, {
+            method: 'PUT', body: JSON.stringify(preferencesToApi({ ...preferencesFromApi(remote), language: oldLanguage })),
+          });
+        }
       }
       if (currentUser.current !== user.id) return;
       const value = { ...preferencesFromApi(remote), completed: local.completed };

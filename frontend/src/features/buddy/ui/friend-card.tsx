@@ -33,13 +33,13 @@ export function FriendCard({ a }: { a: BuddyActions }) {
   return <FriendMotion><Card tint={session.nearby ? 'caution' : 'critical'}>
     <View style={[buddyStyles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
       <StatusChip dot tone={session.nearby ? 'caution' : 'critical'} label={session.nearby ? c('nearbyEmergency') : c('needsHelpChip')} />
-      {session.nearby ? <StatusChip tone="info" label={c('foundViaGps')} /> : <AppText variant="small" style={{ color: colors.muted }}>{t(time.key, { count: time.count })}</AppText>}
+      {session.nearby ? <StatusChip tone="info" label={c(attempt.source === 'BLE' ? 'foundViaBluetooth' : 'foundViaGps')} /> : <AppText variant="small" style={{ color: colors.muted }}>{t(time.key, { count: time.count })}</AppText>}
     </View>
     <View style={buddyStyles.row}>
       <PersonAvatar name={name} size={48} />
       <View style={[buddyStyles.grow, { gap: 4 }]}><AppText variant="section">{name}</AppText>{!!detail && <AppText style={{ color: colors.muted }}>{detail}</AppText>}</View>
     </View>
-    {session.nearby && <AppText variant="small" style={{ color: colors.muted }}>{c('gpsSystemLine', { name })}</AppText>}
+    {session.nearby && <AppText variant="small" style={{ color: colors.muted }}>{c(attempt.source === 'BLE' ? 'bluetoothSystemLine' : 'gpsSystemLine', { name })}</AppText>}
     {!!session.message && <View style={buddyStyles.quote}><AppText selectable>“{session.message}”</AppText></View>}
     <View style={buddyStyles.actions}>
       <View style={buddyStyles.grow}><ActionButton variant="secondary" label={session.nearby ? c('skip') : c('declineShort')} loading={state.busy} onPress={() => {
