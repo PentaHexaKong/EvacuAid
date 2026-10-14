@@ -25,9 +25,13 @@ def mapConfig():
     return 'window.EVACUAID_MAP = ' + json.dumps(config) + '\n'
 
 
+# command-center/ here is the Vite build of dashboard/ (the Docker image builds it; locally run npm run build).
+STATIC_ROOT = Path(__file__).parent
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=Path(__file__).parent, **kwargs)
+        super().__init__(*args, directory=STATIC_ROOT, **kwargs)
 
     def end_headers(self):
         if not self.path.startswith(('/api/', '/health', '/route')):
@@ -80,7 +84,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
             return
-        if self.path in ('/command-center', '/command-center/') or (self.path == '/' and os.getenv('DASHBOARD_HOME') == 'true'):
+        if self.path == '/' and os.getenv('DASHBOARD_HOME') == 'true':
+            # Redirect rather than rewrite so the page's relative config.js and assets resolve under /command-center/.
+            self.send_response(302)
+            self.send_header('Location', '/command-center/')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        if self.path in ('/command-center', '/command-center/'):
             self.path = '/command-center/index.html'
         if self.path.startswith('/api/external/'):
             self.forward(self.externalUrl())

@@ -587,6 +587,37 @@ def testDashboardProxyUsesSharedComposeServices(monkeypatch):
     assert calls.pop()==('http://valhalla:8002/route',b'{}')
 
 
+def testDashboardServesTheBuiltCommandCenter(monkeypatch,tmp_path):
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.request import urlopen
+    from mapshit.server import Handler
+    (tmp_path/'command-center'/'assets').mkdir(parents=True)
+    (tmp_path/'command-center'/'index.html').write_text('<script src="config.js"></script><script type="module" src="/command-center/assets/index-abc.js"></script>')
+    (tmp_path/'command-center'/'assets'/'index-abc.js').write_text('export {}')
+    monkeypatch.setattr('mapshit.server.STATIC_ROOT',tmp_path)
+    monkeypatch.setenv('MAPBOX_TOKEN','sk.secret')
+    monkeypatch.setenv('DASHBOARD_HOME','true')
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    base=f'http://127.0.0.1:{server.server_port}'
+    try:
+        for path in ('/command-center/','/'):
+            with urlopen(base+path) as response:
+                # / redirects so the relative config.js resolves to /command-center/config.js.
+                assert response.url==base+'/command-center/'
+                assert 'src="config.js"' in response.read().decode()
+        with urlopen(base+'/command-center/assets/index-abc.js') as response:
+            assert response.status==200
+            assert 'javascript' in response.headers['Content-Type']
+        with urlopen(base+'/command-center/config.js') as response:
+            body=response.read().decode()
+            assert body.startswith('window.EVACUAID_MAP')
+            assert 'sk.secret' not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
 @pytest.mark.asyncio
 async def testMockDisastersReachPhonesAndStaySeparate(commandSession,monkeypatch):
     import math
