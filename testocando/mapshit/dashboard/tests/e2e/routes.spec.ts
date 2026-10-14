@@ -144,3 +144,8 @@ test('invalid route fields and a missing shelter never POST', async ({ page }) =
   await page.waitForTimeout(300)
   expect(posts).toBe(0)
 })
+
+test('a cold load into Route setter selects the first region like the legacy boot', async ({ page }) => {
+  await page.goto('./#/operations/routes')
+  await expect(page.locator('#route-form strong')).toHaveText('REGION ALPHA')
+})

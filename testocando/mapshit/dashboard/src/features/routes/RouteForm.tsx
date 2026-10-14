@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { useCreateRoute, useRegion } from '@/lib/queries'
+import { useDataMode } from '@/app/data-mode'
+import { useCreateRoute, useRegion, useRegions } from '@/lib/queries'
 import { useMap, useMapHost } from '@/map/MapProvider'
 import { Button } from '@/components/base/buttons/button'
 import { TextField, InputBase } from '@/components/base/input/input'
@@ -11,10 +13,15 @@ import { Skeleton } from '@/components/app/primitives/skeleton'
 import { pickAssembly } from './pick'
 import { isMockMode } from './formState'
 import { label } from '@/features/operations/OperationsPage'
-import { useRouteFields, updateRouteFields, resetRouteFields } from './formState'
+import { useRouteFields, updateRouteFields, resetRouteFields, selectRouteRegion } from './formState'
 
 export function RouteForm() {
   const fields = useRouteFields()
+  const { dataMode } = useDataMode()
+  const regions = useRegions()
+  // Legacy selected the first loaded region at boot, so a cold load into Route setter already has one.
+  const first = dataMode === 'REFERENCE' ? regions.data?.[0]?.id : undefined
+  useEffect(() => { if (!fields.regionId && first) selectRouteRegion(first) }, [fields.regionId, first])
   const region = useRegion(fields.regionId || null)
   const create = useCreateRoute()
   const map = useMap()
