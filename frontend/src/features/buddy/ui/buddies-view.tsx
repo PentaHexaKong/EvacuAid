@@ -10,6 +10,7 @@ import { relativeTime } from '@/features/hazards/time';
 import { relationLabel } from '../copy';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, Group, PersonAvatar, Row, StatusChip } from './parts';
+import { BeaconWaiting } from './beacon-panel';
 import { ReceivedInvites, SentInvites } from './friend-card';
 
 // The Buddy page of someone who may need help: who can come, and how to reach them now.
@@ -20,6 +21,7 @@ export function BuddiesView({ a }: { a: BuddyActions }) {
   // One-time links shared before personal codes existed still end here, waiting for the owner to confirm the person.
   const redeemed = state.invitations.filter(item => item.status === 'REDEEMED');
   const first = state.contacts.find(item => item.level === 'PRIMARY') ?? state.contacts[0];
+  if (a.localSos) return <BeaconWaiting a={a} />;
   return <View style={styles.content}>
     <View style={styles.ask}>
       <AppText variant="section" accessibilityRole="header">{c('requestNearbyTitle')}</AppText>

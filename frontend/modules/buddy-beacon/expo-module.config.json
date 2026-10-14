@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["BuddyBeaconModule"] },
+  "android": { "modules": ["expo.modules.buddybeacon.BuddyBeaconModule"] }
+}

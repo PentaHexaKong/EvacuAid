@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,11 +34,12 @@ class BuddyAvailability(Base):
 
 class BuddyAttempt(Base):
     __tablename__ = 'pilot_attempts'
-    __table_args__ = (Index('uq_pilot_pending_attempt', 'request_id', unique=True, postgresql_where=text("status = 'PENDING'")), Index('ix_pilot_pending_attempt_helper', 'helper_id', postgresql_where=text("status = 'PENDING'")))
+    __table_args__ = (Index('uq_pilot_pending_attempt', 'request_id', 'helper_id', unique=True, postgresql_where=text("status = 'PENDING'")), Index('ix_pilot_pending_attempt_helper', 'helper_id', postgresql_where=text("status = 'PENDING'")), CheckConstraint("source IN ('GPS','BLE')", name='ck_pilot_attempt_source'))
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('assistance_requests.id', ondelete='CASCADE'))
     helper_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
     status: Mapped[str] = mapped_column(String(24), default='PENDING')
+    source: Mapped[str] = mapped_column(String(3), default='GPS', server_default='GPS')
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

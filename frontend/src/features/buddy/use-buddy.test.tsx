@@ -118,3 +118,48 @@ test('permanent codes load once per token and a late previous user response is i
   rerender({ token: 'new' });
   expect(request.mock.calls.filter(([token]) => token === 'new')).toHaveLength(1);
 });
+
+test('offline reopening restores account availability and cached Buddies before the network responds', async () => {
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  await AsyncStorage.setItem('evacuaid.buddy.offline.v1:offline-helper', JSON.stringify({ contacts: [{ id: 'buddy', userId: 'offline-helper', buddyUserId: 'friend', name: 'Synthetic Buddy', beaconId: 42, status: 'ACTIVE' }], incomingContacts: [], availability: { enrolled: true, optedIn: true, observedAt: null } }));
+  request.mockImplementation(() => new Promise(() => {}));
+  const view = renderHook(() => useBuddy('offline-token', 'offline-helper'));
+  await waitFor(() => expect(view.result.current.loading).toBe(false));
+  expect(view.result.current.availability).toEqual({ enrolled: true, optedIn: true, observedAt: null }); expect(view.result.current.contacts[0].name).toBe('Synthetic Buddy'); expect(view.result.current.contactsReady).toBe(false);
+});
+
+test('authoritative online revocation overrides cached helper availability', async () => {
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  await AsyncStorage.setItem('evacuaid.buddy.offline.v1:revoked-helper', JSON.stringify({ contacts: [], incomingContacts: [], availability: { enrolled: true, optedIn: true, observedAt: null } }));
+  const view = renderHook(() => useBuddy('token', 'revoked-helper'));
+  await waitFor(() => expect(view.result.current.contactsReady).toBe(true));
+  expect(view.result.current.availability?.optedIn).toBe(false); expect(view.result.current.availability?.enrolled).toBe(false);
+  expect(JSON.parse(await AsyncStorage.getItem('evacuaid.buddy.offline.v1:revoked-helper') ?? '{}').availability.optedIn).toBe(false);
+});
+
+test('offline opt-out is persisted and sent before reading availability on reconnect', async () => {
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  await AsyncStorage.setItem('evacuaid.buddy.offline.v1:choice-helper', JSON.stringify({ contacts: [], incomingContacts: [], availability: { enrolled: true, optedIn: true, observedAt: null } }));
+  request.mockRejectedValue(new Error('offline'));
+  const view = renderHook(() => useBuddy('token', 'choice-helper'));
+  await waitFor(() => expect(view.result.current.availability?.optedIn).toBe(true));
+  await act(async () => { await view.result.current.setOfflineAvailability(false); });
+  expect(view.result.current.availability?.optedIn).toBe(false);
+  expect(JSON.parse(await AsyncStorage.getItem('evacuaid.buddy.offline.v1:choice-helper') ?? '{}').pendingOptOut).toBe(true);
+  request.mockImplementation(async (_token, path) => path === '/availability' ? { enrolled: true, optedIn: false, observedAt: null } : path === '/requests/current' ? null : []);
+  request.mockClear();
+  await act(async () => { await view.result.current.refresh(); });
+  expect(request.mock.calls[0]).toEqual(['token', '/availability', 'PUT', { optedIn: false }, expect.any(AbortSignal)]);
+  expect(view.result.current.availability?.optedIn).toBe(false);
+  expect(JSON.parse(await AsyncStorage.getItem('evacuaid.buddy.offline.v1:choice-helper') ?? '{}').pendingOptOut).toBe(false);
+});
+
+test('offline availability cannot implicitly opt in', async () => {
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  await AsyncStorage.setItem('evacuaid.buddy.offline.v1:never-helper', JSON.stringify({ contacts: [], incomingContacts: [], availability: { enrolled: true, optedIn: false, observedAt: null } }));
+  request.mockRejectedValue(new Error('offline'));
+  const view = renderHook(() => useBuddy('token', 'never-helper'));
+  await waitFor(() => expect(view.result.current.availability?.optedIn).toBe(false));
+  await act(async () => { await view.result.current.setOfflineAvailability(true); });
+  expect(view.result.current.availability?.optedIn).toBe(false);
+});

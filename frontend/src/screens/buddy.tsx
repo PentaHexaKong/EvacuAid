@@ -19,7 +19,7 @@ import { colors } from '@/theme';
 
 export function BuddyScreen() {
   const { token, user } = useGuestSession();
-  const state = useBuddy(token);
+  const state = useBuddy(token, user?.id);
   const { accessibility, ready } = useProfile();
   const refresh = state.refresh;
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));

@@ -3,6 +3,7 @@ data/
 
 # Local Markdown documentation
 *.md
+!docs/ble-beacon.md
 *.markdown
 !backend/AUTHENTICATION.md
 !VPS_DEPLOYMENT.md

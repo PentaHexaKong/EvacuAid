@@ -21,6 +21,7 @@ import { distanceM, formatDistance } from '../navigation';
 import type { BuddyActions } from '../use-buddy-actions';
 import { buddyStyles, Card, initials, StatStrip, StatusChip } from './parts';
 import { RouteView } from './route-view';
+import { BeaconWaiting } from './beacon-panel';
 import { SessionRequesterActions } from './session-requester-actions';
 import { ManeuverBanner, RecenterPill, TripBar } from './navigation-view';
 
@@ -131,6 +132,8 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
       {active && <StatStrip items={stats} />}
       {state.locations.some(item => item.stale) && <AppText accessibilityRole="alert" variant="small" style={{ color: colors.caution }}>{c('stale')}</AppText>}
     </Card>
+
+    {requester && session.nearby && session.status === 'WAITING' && <BeaconWaiting a={a} />}
 
     {requester && ['FALLBACK_REQUIRED', 'UNANSWERED'].includes(session.status) && <Card tint="caution">
       <AppText>{c('requestFailed')}</AppText>

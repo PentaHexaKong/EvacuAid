@@ -4,6 +4,12 @@ dist/
 coverage/
 android/
 ios/
+!modules/buddy-beacon/ios/
+!modules/buddy-beacon/ios/*.swift
+!modules/buddy-beacon/ios/*.podspec
+!modules/buddy-beacon/android/
+!modules/buddy-beacon/android/build.gradle
+!modules/buddy-beacon/android/src/**
 .env*
 !.env.example
 *.tsbuildinfo

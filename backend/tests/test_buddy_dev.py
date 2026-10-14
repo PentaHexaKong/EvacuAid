@@ -34,6 +34,7 @@ async def test_simulate_nearby_offers_to_opted_in_helper(dbSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=dev_api(dbSession, True)), base_url='http://test') as client:
         helper_id, helper = await guest(client)
         await opt_in(client, helper)
+        assert (await client.get('/v1/buddy/availability', headers=helper)).json()['enrolled'] is False
         response = await client.post('/v1/buddy/dev/simulate-nearby', headers=helper)
         assert response.status_code == 201, response.text
         session = response.json()
@@ -42,6 +43,9 @@ async def test_simulate_nearby_offers_to_opted_in_helper(dbSession):
         statuses = [a.status for a in attempts]
         await dbSession.rollback()
         assert statuses == ['PENDING']
+        accepted = await client.post('/v1/buddy/requests/' + session['id'] + '/accept', headers=helper, json={'attemptId': session['attempts'][0]['id'], 'sharingConsent': True})
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()['helperUserId'] == helper_id and accepted.json()['status'] == 'ACCEPTED'
 
 
 @pytest.mark.asyncio

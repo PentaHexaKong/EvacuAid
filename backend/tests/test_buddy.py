@@ -121,7 +121,6 @@ async def test_expiry_explicit_fallback_and_interrupt(dbSession, monkeypatch):
         assert (await client.get('/v1/buddy/requests/current', headers=helper)).json() is None
         assert (await client.post(path + '/accept', headers=helper, json={'attemptId': str(attempt.id), 'sharingConsent': True})).status_code in (403, 409)
         point = {'latitude': -6.2, 'longitude': 106.8, 'accuracyM': 5, 'observedAt': datetime.now(timezone.utc).isoformat()}
-        await trusted(client, (await guest(client))[1], volunteer)
         assert (await client.put('/v1/buddy/availability', headers=volunteer, json={'optedIn': True, **point})).status_code == 200
         nearby = await client.post(path + '/nearby', headers=owner, json=point)
         assert nearby.status_code == 200, nearby.text

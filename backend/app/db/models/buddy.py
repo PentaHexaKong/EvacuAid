@@ -53,6 +53,7 @@ class AssistanceRequest(Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True)
     sharing_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
     nearby: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
+    nearby_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
     candidates: Mapped[list] = mapped_column(JSONB, default=list, server_default='[]')
