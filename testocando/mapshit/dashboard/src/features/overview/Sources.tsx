@@ -1,6 +1,7 @@
 import type { RegionDetail } from '@/lib/types'
 import { Empty } from '@/components/app/primitives/empty'
-import { DataState, Evidence, groupHazards, hazardName, number, Panel, provenanceName, readable, sourceName, time } from './RegionPanel'
+import { DataState, Evidence, groupHazards, hazardName, number, Panel, provenanceName, readable, sourceName } from './RegionPanel'
+import { time } from '@/lib/format'
 
 export function Sources({ detail, loading, error }: { detail?: RegionDetail; loading: boolean; error: Error | null }) {
   const routing = detail ? 'Responders available: ' + number(detail.availableResponderCount) + ' · assigned: ' + number(detail.assignedResponderCount) + '. Routes feasible: ' + number(detail.feasibleRouteCount) + ' · blocked: ' + number(detail.blockedRouteCount) + ' · no feasible route: ' + number(detail.noFeasibleRouteCount) + '. ' + detail.limitations.join(' ') : 'Responder inventory and regional routing status: Unknown.'

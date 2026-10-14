@@ -16,7 +16,7 @@ export const severity = {
 export const readable = (value: string | null | undefined): string => value == null || value === 'UNKNOWN' ? 'Unknown' : value.toLowerCase().replaceAll('_', ' ').replace(/^./u, letter => letter.toUpperCase())
 export const titleCase = (value: string) => value.replace(/\p{L}+/gu, word => word.length > 3 && word === word.toUpperCase() ? (word[0] ?? '') + word.slice(1).toLowerCase() : word)
 export const number = (value: number | null | undefined) => value == null ? '—' : new Intl.NumberFormat('en-US').format(value)
-export const time = (value: string | null) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Unknown'
+import { time } from '@/lib/format'
 export const shortTime = (value: string | null) => value ? new Date(value).toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : 'Unknown'
 export const hazardName = (value: string) => ({ FLOOD: 'Flood', EARTHQUAKE: 'Earthquake', TSUNAMI: 'Tsunami', WILDFIRE: 'Wildfire', LANDSLIDE: 'Landslide', EXTREME_WEATHER: 'Extreme weather' }[value] || readable(value))
 export const sourceName = (value: string | null) => ({ INARISK: 'InaRISK (BNPB)', BMKG_CAP: 'BMKG', BMKG_EARTHQUAKE: 'BMKG', PETABENCANA: 'PetaBencana', FIRMS: 'NASA FIRMS', DEMO_SIMULATION: 'EvacuAid simulation' }[value ?? ''] || (value == null || value === 'UNKNOWN' ? 'Unknown' : value))

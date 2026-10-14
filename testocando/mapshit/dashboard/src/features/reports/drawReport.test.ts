@@ -13,5 +13,5 @@ test('Show on map draws exactly one report point, shows the layer and frames it'
   expect(map.setVisible).toHaveBeenCalledWith('report', true)
   await new Promise(requestAnimationFrame)
   const [[west, south], [east, north]] = map.fit.mock.calls[0]?.[0] as [[number, number], [number, number]]
-  for (const [actual, expected] of [[west, 106.798], [south, -6.202], [east, 106.802], [north, -6.198]]) expect(actual).toBeCloseTo(expected!, 6)
+  expect([west, south, east, north].map(v => v.toFixed(6))).toEqual(["106.798000", "-6.202000", "106.802000", "-6.198000"])
 })

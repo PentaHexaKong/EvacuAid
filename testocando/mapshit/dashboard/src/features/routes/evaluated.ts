@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { DataMode, Geometry, OperationalRoute } from '@/lib/types'
 import type { Feature } from '@/map/glMap'
-import { time } from '@/features/overview/RegionPanel'
+import { time } from '@/lib/format'
 export type Evaluated = { geometry: Geometry; usable: boolean }
 let value: Evaluated | null = null
 const listeners = new Set<() => void>()
