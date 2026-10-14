@@ -114,12 +114,12 @@ Created:
 | `command/importer.py`, `cli.py`, `jakartaBoundaries.py` | Validated transactional import, manual refresh, and official Jakarta boundary adapter |
 | `command/api.py`, `main.py` | Protected command API and periodic projection worker |
 | `command/migrations/env.py`, `command/migrations/versions/20261005_07_command_regions.py`, `20261005_08_boundary_precision.py`, `alembic.ini` | Combined Alembic graph, additive command schema, and precision tolerance |
-| `mapshit/command-center/index.html`, `styles.css`, `dashboard.js`, `mapTools.js` | Responsive command-center page, mock editor, and safe-house placement |
+| `mapshit/dashboard/` | React command center (Vite, BoardUI). `npm run dev` proxies to `server.py`; `npm run build` writes the untracked `mapshit/command-center/` that `server.py` serves |
 | `command/safeHouses.py` | Validated safe-house creation, replay handling, and public map listing |
 | `fixtures/regions.simulation.geojson` | Explicitly synthetic development fixture |
 | `tests/conftest.py`, `tests/test_command.py` | Unit, PostGIS, automatic access, privacy, and API tests |
 | `start-command-center.ps1`, `docker-compose.test.yml` | Existing-backend startup and disposable test infrastructure |
-| `mapshit/Dockerfile`, `mapshit/.dockerignore` | Dashboard image used by the root Compose service |
+| `mapshit/Dockerfile`, `mapshit/.dockerignore` | Dashboard image used by the root Compose service; a Node stage builds `dashboard/` |
 | `.gitignore`, `README.md` | Ignore local artifacts; implementation and run instructions |
 
 Modified: `mapshit/server.py` adds the command-center page alias and JSON proxy to the existing backend at port 8000. Root `docker-compose.yml` loads the command module, combined migrations into the existing backend service. The existing sandbox's external-data, navigation, and Valhalla proxy routes remain intact.

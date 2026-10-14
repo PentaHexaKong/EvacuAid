@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+command-center/
+dashboard/node_modules/
+dashboard/dist/
+dashboard/output/
+dashboard/test-results/

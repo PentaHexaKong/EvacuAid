@@ -8,6 +8,8 @@ export default defineConfig({
   base: '/command-center/',
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  // server.py serves /command-center/ from this folder, next to the generated config.js.
+  build: { outDir: '../command-center', emptyOutDir: true },
   server: { proxy: { '/api': server, '/command-center/config.js': server } },
   test: { include: ['src/**/*.test.{ts,tsx}'], environment: 'jsdom', setupFiles: ['./src/test/setup.ts'], testTimeout: 20_000 },
 })
