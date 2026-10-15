@@ -49,7 +49,7 @@ export function FieldOperationsScreen() {
     if (cachedRegions) setRegions(JSON.parse(cachedRegions));
     if (cachedRoutes) setRoutes(JSON.parse(cachedRoutes));
     try {
-      const [available, mine, published, assistance] = await Promise.all([discoverRegions(), apiRequest<Report[]>('/v1/field-reports/mine', token), apiRequest<Route[]>('/v1/command/operations/routes?limit=200'), apiRequest<Case[]>('/v1/operations/my-assistance', token)]);
+      const [available, mine, published, assistance] = await Promise.all([discoverRegions(), apiRequest<Report[]>('/v1/field-reports/mine', token), apiRequest<Route[]>('/v1/operations/routes?limit=200', token), apiRequest<Case[]>('/v1/operations/my-assistance', token)]);
       setRegions(available); setReports(mine); setRoutes(published.filter(item => item.usable)); setCases(assistance);
       await AsyncStorage.multiSet([['operations.regions', JSON.stringify(available)], ['operations.routes', JSON.stringify(published.filter(item => item.usable))]]);
       setError('');

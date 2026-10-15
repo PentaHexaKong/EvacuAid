@@ -149,6 +149,7 @@ async def test_route_publication_rechecks_and_refuses_infeasible(client,dbSessio
     assert not draft.json()['usable']
     published=await client.post('/v1/command/operations/routes/'+payload['id']+'/publish')
     assert published.status_code==200 and published.json()['usable'] and not published.json()['result']['safetyVerified']
+    assert [item['id'] for item in (await client.get('/v1/operations/routes')).json()]==[payload['id']]
     request=AssistanceRequest(userId=client.actor.id,status='EVACUATING')
     dbSession.add(request);await dbSession.commit()
     action={'status':'DISPATCHED','note':'Assembly route assigned','assignedRouteId':payload['id']}
@@ -162,6 +163,7 @@ async def test_route_publication_rechecks_and_refuses_infeasible(client,dbSessio
     await dbSession.rollback()
     withdrawn=await client.post('/v1/command/operations/routes/'+payload['id']+'/withdraw')
     assert withdrawn.status_code==200 and not withdrawn.json()['usable']
+    assert (await client.get('/v1/operations/routes')).json()==[]
     action['expectedUpdatedAt']=assigned.json()['updatedAt']
     assert (await client.patch(f"/v1/command/operations/assistance/{own[0]['requestId']}",json=action)).status_code==409
 

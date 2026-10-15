@@ -109,6 +109,13 @@ async def routes(session=Depends(get_session), limit: int=Query(50, ge=1, le=200
     return [service.route_response(row) for row in rows]
 
 
+@router.get('/v1/operations/routes')
+async def published_routes(actor=Depends(current_user), session=Depends(get_session), limit: int=Query(50, ge=1, le=200)):
+    # Citizens only see routes the command center published and that are still fresh.
+    rows = (await session.execute(select(OperationalRoute).where(OperationalRoute.status == 'PUBLISHED').order_by(OperationalRoute.updatedAt.desc(), OperationalRoute.id).limit(limit))).scalars()
+    return [route for route in map(service.route_response, rows) if route['usable']]
+
+
 @router.post('/v1/command/operations/routes/{route_id}/publish', dependencies=[Depends(requireCommandKey)])
 async def publish(route_id: UUID, session=Depends(get_session)):
     row = await session.get(OperationalRoute, route_id)
