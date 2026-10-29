@@ -3,10 +3,11 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { PreferencesProvider, usePreferences } from './context';
 import { PREFERENCES_KEY } from './storage';
 import { apiRequest } from '@/features/profile/api';
+import { authSession } from '@/features/profile/auth-session';
 let mockSession:{token:string;user:{id:string};account?:{id:string}}={token:'token-a',user:{id:'user-a'}};
 jest.mock('@/features/profile/session',()=>({useGuestSession:()=>mockSession}));
 jest.mock('@/features/profile/api',()=>({...jest.requireActual('@/features/profile/api'),apiRequest:jest.fn()}));
-jest.mock('@/localization',()=>({selectLanguage:jest.fn().mockResolvedValue(undefined)}));
+jest.mock('@/localization',()=>({i18n:{language:'en'},selectLanguage:jest.fn().mockResolvedValue(undefined)}));
 const remote={voice_enabled:true,vibration_enabled:true,text_enabled:true,language:'id',larger_text:true,stronger_contrast:false};
 beforeEach(async()=>{jest.clearAllMocks();await AsyncStorage.clear();mockSession={token:'token-a',user:{id:'user-a'}};});
 test('signing into another account reads its settings without overwriting them with device defaults',async()=>{
@@ -50,5 +51,16 @@ test('signing in keeps the language picked on this phone instead of the account 
  const {result}=renderHook(usePreferences,{wrapper:PreferencesProvider});
  await waitFor(()=>expect(result.current.preferences.language).toBe('en'));
  expect(JSON.parse(String(jest.mocked(apiRequest).mock.calls.find(call=>call[2]?.method==='PUT')?.[2]?.body))).toMatchObject({language:'en',larger_text:true});
+ expect(selectLanguage).toHaveBeenLastCalledWith('en');
+});
+
+test('a new account starts in the language on screen, not the server default',async()=>{
+ const {selectLanguage}=jest.requireMock('@/localization');
+ mockSession={token:'token-a',user:{id:'user-a'},account:{id:'user-a'}};
+ jest.spyOn(authSession,'takeFreshProfile').mockReturnValue(true);
+ jest.mocked(apiRequest).mockImplementation((_path,_token,init)=>Promise.resolve(init?.method==='PUT'?JSON.parse(String(init.body)):remote));
+ const {result}=renderHook(usePreferences,{wrapper:PreferencesProvider});
+ await waitFor(()=>expect(result.current.preferences.language).toBe('en'));
+ expect(JSON.parse(String(jest.mocked(apiRequest).mock.calls.find(call=>call[2]?.method==='PUT')?.[2]?.body))).toMatchObject({language:'en'});
  expect(selectLanguage).toHaveBeenLastCalledWith('en');
 });

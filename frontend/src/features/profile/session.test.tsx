@@ -115,7 +115,14 @@ test('only a newly created guest is marked fresh, once',async()=>{
  keyStore();const manager=createAuthSession();
  jest.mocked(apiRequest).mockResolvedValueOnce({access_token:'guest-secret',user:{id:'guest-1',name:null}});
  await manager.startGuest();
- expect(manager.takeFreshGuest('other')).toBe(false);expect(manager.takeFreshGuest('guest-1')).toBe(true);expect(manager.takeFreshGuest('guest-1')).toBe(false);
+ expect(manager.takeFreshProfile('other')).toBe(false);expect(manager.takeFreshProfile('guest-1')).toBe(true);expect(manager.takeFreshProfile('guest-1')).toBe(false);
+});
+test('a newly registered account is marked fresh, a login is not',async()=>{
+ memoryStorage();jest.mocked(apiRequest).mockResolvedValue(pair());
+ const registered=createAuthSession();await registered.authenticate('register','new@example.com','a-long-password');
+ expect(registered.takeFreshProfile('user-1')).toBe(true);
+ const loggedIn=createAuthSession();await loggedIn.authenticate('login','citizen@example.com','a-long-password');
+ expect(loggedIn.takeFreshProfile('user-1')).toBe(false);
 });
 const memoryStorage=()=>{ const data=new Map<string,string>();
  jest.mocked(AsyncStorage.getItem).mockImplementation(async k=>data.get(k)??null);

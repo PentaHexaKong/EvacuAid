@@ -25,7 +25,8 @@ const signedOut = () => Object.assign(new Error('Please sign in again.'), { stat
 export function createAuthSession() {
   let tokens: AuthTokens | null = null;
   let guest = false;
-  let freshGuest: string | null = null;
+  // A guest or account created on this phone just now: its first sync carries this phone's settings and language.
+  let freshProfile: string | null = null;
   let expiresAt = 0;
   let generation = 0;
   let refreshPending: Promise<AuthTokens | null> | null = null;
@@ -138,7 +139,7 @@ export function createAuthSession() {
       throw cause;
     }
     if (version !== generation) throw signedOut();
-    freshGuest = created.user.id;
+    freshProfile = created.user.id;
     return adoptGuest(created.access_token, created.user);
   };
   const authenticate = async (mode: 'login' | 'register', email: string, password: string, name?: string, upgradeGuest = false) => {
@@ -156,6 +157,7 @@ export function createAuthSession() {
     knownTokens.clear();
     const result = await accept(value, version);
     await SecureStore.deleteItemAsync(GUEST_TOKEN_KEY);
+    if (mode === 'register') freshProfile = value.user.id;
     return result;
   };
   const signOut = async () => {
@@ -187,7 +189,7 @@ export function createAuthSession() {
     get: () => tokens,
     isGuest: () => guest,
     // True once for a guest this device just created, so its preferences can start from the choices made before it existed.
-    takeFreshGuest: (userId: string) => { const fresh = freshGuest === userId; if (fresh) freshGuest = null; return fresh; },
+    takeFreshProfile: (userId: string) => { const fresh = freshProfile === userId; if (fresh) freshProfile = null; return fresh; },
     subscribe: (listener: (value: AuthTokens | null) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     recover: async (rejected: string) => {
       if (!tokens || !knownTokens.has(rejected)) throw signedOut();

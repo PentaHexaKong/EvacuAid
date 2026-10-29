@@ -51,9 +51,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       try { parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {}; } catch {}
       const hasLegacyValues = ['largerText', 'strongerContrast', 'voiceEnabled', 'vibrationEnabled', 'textEnabled', 'language']
         .some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
-      const needsMigration = (!account && !syncedUserId && (hasLegacyValues || isLanguage(oldLanguage))) || authSession.takeFreshGuest(user.id);
+      const needsMigration = (!account && !syncedUserId && (hasLegacyValues || isLanguage(oldLanguage))) || authSession.takeFreshProfile(user.id);
       if (needsMigration) {
-        const selectedLanguage = isLanguage(parsed.language) ? parsed.language : isLanguage(oldLanguage) ? oldLanguage : local.language;
+        // Without an explicit pick, the person reads the language on screen (the device's), not the stored default.
+        const shown = (await import('@/localization')).i18n?.language;
+        const selectedLanguage = isLanguage(parsed.language) ? parsed.language : isLanguage(oldLanguage) ? oldLanguage : isLanguage(shown) ? shown : local.language;
         remote = await apiRequest<ApiPreferences>('/v1/users/' + user.id + '/preferences', token, {
           method: 'PUT', body: JSON.stringify(preferencesToApi({ ...local, language: selectedLanguage })),
         });
