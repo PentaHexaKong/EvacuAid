@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SIM="B48703C7-F2F4-4FF9-8E3E-D25EF4E75A77" # "EvacuAid iPhone 17"
+SIM_NAME="${SIM_NAME:-EvacuAid iPhone 17}" # created on first run if missing
 MODE=sim BUILD=
 for arg in "$@"; do
   case $arg in
@@ -16,10 +16,10 @@ for arg in "$@"; do
 done
 
 if ! docker info >/dev/null 2>&1; then
-  echo "Starting Docker Desktop..."
-  open -a Docker
+  echo "Starting Docker (OrbStack, or Docker Desktop)..."
+  open -a OrbStack 2>/dev/null || open -a Docker
   for _ in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
-  docker info >/dev/null 2>&1 || { echo "Docker didn't start in 2 min. Quit Docker Desktop fully (menu bar whale → Quit) and rerun." >&2; exit 1; }
+  docker info >/dev/null 2>&1 || { echo "Docker didn't start in 2 min. Quit OrbStack / Docker Desktop fully and rerun." >&2; exit 1; }
 fi
 
 echo "Starting backend..."
@@ -33,9 +33,14 @@ if [ "$MODE" = phone ]; then
   API="http://$IP:8000"
 else
   API="http://localhost:8000"
+  SIM=$(xcrun simctl list devices available | grep -F "$SIM_NAME (" | grep -oE '[0-9A-F-]{36}' | head -1 || true)
+  if [ -z "$SIM" ]; then
+    echo "Creating simulator \"$SIM_NAME\" (iPhone 17, newest iOS)..."
+    SIM=$(xcrun simctl create "$SIM_NAME" com.apple.CoreSimulator.SimDeviceType.iPhone-17)
+  fi
   echo "Booting simulator..."
   xcrun simctl bootstatus "$SIM" -b >/dev/null # boots if needed and waits until it's fully up
-  open /Applications/Xcode.app/Contents/Applications/DeviceHub.app
+  open "$(xcode-select -p)/../Applications/DeviceHub.app" 2>/dev/null || open -a Simulator # Xcode 27 renamed Simulator.app
   xcrun simctl location "$SIM" set -6.2,106.8 # Jakarta, where the demo shelters are
 fi
 
