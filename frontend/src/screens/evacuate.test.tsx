@@ -25,6 +25,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, va
 jest.mock('@/features/navigation/use-evacuation-route', () => ({ useEvacuationRoute: () => ({ phase: mockPhase, route: { response: mockResponse }, findRoute: mockFind }) }));
 jest.mock('@/features/navigation/use-evacuation-guidance', () => ({ useEvacuationGuidance: jest.fn(() => ({ instruction: 'Turn left', upcoming: 'Continue straight', remainingM: 800, minutes: 9, nextManeuverM: 40, caption: 'Use the east entrance', arrived: mockArrived })) }));
 jest.mock('@/components/discover-map', () => ({ DiscoverMap: () => { const { Text } = require('react-native'); return <Text>map</Text>; } }));
+jest.mock('@/features/buddy/use-primary-buddy', () => ({ usePrimaryBuddy: () => 'Andi' }));
 jest.mock('@/features/buddy/ui/navigation-view', () => ({ ManeuverBanner: () => { const { Text } = require('react-native'); return <Text>banner</Text>; }, RecenterPill: () => null }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: jest.fn().mockResolvedValue(undefined), deactivateKeepAwake: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest' }) }));
@@ -33,8 +34,12 @@ jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn().mockResolv
 let mockActive: string[] = [];
 jest.mock('@/features/alerts/use-alerts', () => ({ applyResponse: jest.fn(), activeAlertIds: () => mockActive }));
 jest.mock('@/features/feedback/speech', () => ({ speak: jest.fn().mockResolvedValue(undefined) }));
+let mockPermission: { granted: boolean; canAskAgain: boolean } | null;
+const mockRequestCamera = jest.fn();
+let mockCamera: { onCameraReady?: () => void; onMountError?: () => void } | null;
+jest.mock('expo-camera', () => ({ useCameraPermissions: () => [mockPermission, mockRequestCamera], CameraView: (props: object) => { mockCamera = props; const { Text } = require('react-native'); return <Text>camera</Text>; } }));
 
-beforeEach(() => { jest.clearAllMocks(); mockVoice = true; mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
+beforeEach(() => { jest.clearAllMocks(); mockVoice = true; mockParams = { shelterId: 'hall' }; mockPhase = 'ready'; mockFocused = true; mockSoundFree = false; mockArrived = false; mockPermission = { granted: false, canAskAgain: false }; mockCamera = null; mockRouter.canGoBack.mockReturnValue(true); jest.spyOn(Alert, 'alert').mockImplementation(() => {}); });
 
 test('READY shows destination, instruction, remaining distance, entrance and caption, and speaks once', () => {
   const view = render(<EvacuateScreen />);
@@ -59,6 +64,13 @@ test.each([undefined, 'rain'])('arrival posts SAFE when an alert is given and le
   mockParams.alertId = alertId;
   const view = render(<EvacuateScreen />);
   fireEvent.press(view.getByRole('button', { name: "I've arrived, I'm safe" }));
+  // A warning that was answered gets a confirmation first; with nothing to answer the screen just closes.
+  if (alertId) {
+    await waitFor(() => expect(view.getByRole('header', { name: "You're marked safe" })).toBeTruthy());
+    expect(view.getByText('Andi can see this in EvacuAid.')).toBeTruthy();
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    fireEvent.press(view.getByRole('button', { name: 'Done' }));
+  }
   await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
   expect(mockRouter.replace).not.toHaveBeenCalled();
   if (alertId) {
@@ -120,7 +132,7 @@ test('arrival also closes other warnings the person was acting on', async () => 
   try {
     const view = render(<EvacuateScreen />);
     fireEvent.press(view.getByRole('button', { name: "I've arrived, I'm safe" }));
-    await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(view.getByRole('header', { name: "You're marked safe" })).toBeTruthy());
     expect(jest.mocked(respondToAlert).mock.calls.map(call => call[1])).toEqual(['rain', 'flood']);
   } finally { mockActive = []; }
 });
@@ -189,4 +201,46 @@ test('sighted walkers get the map with the turn banner, and can still arrive or 
   expect(view.getByText('To Town Hall')).toBeTruthy();
   expect(view.getByText("I've arrived, I'm safe")).toBeTruthy();
   expect(view.getByLabelText('Stop guidance')).toBeTruthy();
+});
+
+test('voice guidance asks for the camera once, and shows it behind the directions only once it runs', () => {
+  mockPermission = { granted: false, canAskAgain: true };
+  const view = render(<EvacuateScreen />);
+  expect(mockRequestCamera).toHaveBeenCalledTimes(1);
+  expect(view.queryByText('camera', { includeHiddenElements: true })).toBeNull();
+  mockPermission = { granted: true, canAskAgain: true };
+  view.rerender(<EvacuateScreen />);
+  expect(mockRequestCamera).toHaveBeenCalledTimes(1);
+  // A simulator has no camera, so it never becomes ready and the screen stays as it was.
+  expect(view.getByText('camera', { includeHiddenElements: true })).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Turn off camera' })).toBeNull();
+  act(() => mockCamera!.onCameraReady!());
+  expect(view.getByRole('header', { name: 'Turn left' })).toBeTruthy();
+  expect(view.getByText('800 m · about 9 min')).toBeTruthy();
+  expect(view.getByText('Then: Continue straight · 40 m')).toBeTruthy();
+  expect(view.getByText("I've arrived, I'm safe")).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Turn off camera' }));
+  expect(view.queryByText('camera', { includeHiddenElements: true })).toBeNull();
+  expect(view.getByText('Continue straight · 40 m')).toBeTruthy();
+  fireEvent.press(view.getByRole('button', { name: 'Turn on camera' }));
+  expect(view.getByText('camera', { includeHiddenElements: true })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Turn off camera' })).toBeTruthy();
+});
+
+test('a camera that fails keeps the plain directions', () => {
+  mockPermission = { granted: true, canAskAgain: true };
+  const view = render(<EvacuateScreen />);
+  act(() => mockCamera!.onCameraReady!());
+  act(() => mockCamera!.onMountError!());
+  expect(view.queryByRole('button', { name: 'Turn off camera' })).toBeNull();
+  expect(view.getByText('Continue straight · 40 m')).toBeTruthy();
+});
+
+test.each([['a refused camera', true, 'ready'], ['the map', false, 'ready'], ['a route still loading', true, 'routing']])('%s never asks for or opens the camera', (_name, voice, phase) => {
+  mockVoice = voice as boolean;
+  mockPhase = phase as string;
+  mockPermission = voice && phase === 'ready' ? { granted: false, canAskAgain: false } : { granted: false, canAskAgain: true };
+  const view = render(<EvacuateScreen />);
+  expect(mockRequestCamera).not.toHaveBeenCalled();
+  expect(view.queryByText('camera', { includeHiddenElements: true })).toBeNull();
 });

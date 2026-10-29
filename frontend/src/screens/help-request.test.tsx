@@ -10,17 +10,23 @@ let mockIssue: string | null = null;
 let mockSession: any;
 let mockAttempt: any;
 jest.mock('@/components/use-armed', () => ({ useArmed: () => true }));
+const mockLocation = { granted: true };
+const mockBuddyRequest = jest.fn();
+jest.mock('expo-location', () => ({ Accuracy: { Balanced: 3 }, getForegroundPermissionsAsync: jest.fn(async () => ({ granted: mockLocation.granted })), getLastKnownPositionAsync: jest.fn(async () => ({ coords: { latitude: -6.1975, longitude: 106.8016 } })), getCurrentPositionAsync: jest.fn() }));
+jest.mock('@/features/buddy/api', () => ({ buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
+jest.mock('@/features/access/use-access', () => ({ useAccess: () => ({ voiceHome: false }) }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: 'request' }), useRouter: () => ({ back: mockBack, replace: mockReplace }), Stack: { Screen: ({ options }: { options: unknown }) => { mockOptions(options); return null; } } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 10 }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest', user: { id: 'helper' } }) }));
 jest.mock('@/features/feedback/haptics', () => ({ useHaptics: () => ({ alert: mockAlert, tap: jest.fn() }) }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, params?: Record<string, string>) => jest.requireActual('@/localization/en.json')[key]?.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => params?.[name] ?? '') ?? key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' }, t: (key: string, params?: Record<string, string>) => jest.requireActual('@/localization/en.json')[key]?.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => params?.[name] ?? '') ?? key }) }));
 jest.mock('@/features/buddy/use-buddy', () => ({ useBuddy: () => ({ loading: false, error: mockError, busy: false, refresh: mockRefresh, incomingContacts: [{ userId: 'requester', relation: 'TEMAN' }] }) }));
 jest.mock('@/features/buddy/use-buddy-actions', () => ({ useBuddyActions: () => ({ session: mockSession, attempt: mockAttempt, transition: mockTransition, confirm: mockConfirm, support: (value: string) => value, c: (key: string) => key, issue: mockIssue }) }));
 
 beforeEach(() => {
   jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-10T00:00:00Z')); jest.clearAllMocks(); mockTransition.mockResolvedValue(true);
   mockError = null; mockIssue = null;
+  mockLocation.granted = true; mockBuddyRequest.mockResolvedValue({ approxDistanceM: 350 });
   mockAttempt = { id: 'attempt', expiresAt: '2026-10-10T00:02:00Z' };
   mockSession = { id: 'request', requesterUserId: 'requester', requesterName: 'Ari', status: 'WAITING', nearby: false, supportNeeds: ['Mobility'], message: 'Please walk with me' };
 });
@@ -58,7 +64,7 @@ test('countdown ticks, shrinks and coarsens its accessible label until expiry', 
   act(() => jest.advanceTimersByTime(14000));
   expect(view.getByText('Answer in 1:45')).toBeTruthy();
   expect(view.getByRole('timer')).toHaveProp('accessibilityLabel', 'Answer in 1:45');
-  const fills = view.UNSAFE_getAllByType(View).map(node => StyleSheet.flatten(node.props.style)).filter(style => style?.height === 4 && style?.backgroundColor === sky.awas.ink);
+  const fills = view.UNSAFE_getAllByType(View).map(node => StyleSheet.flatten(node.props.style)).filter(style => style?.height === 6 && style?.backgroundColor === sky.awas.ink);
   expect(fills[0].width).toBe('87.5%');
   act(() => jest.advanceTimersByTime(105000));
   expect(view.getByText('This request has moved on')).toBeTruthy();
@@ -73,7 +79,8 @@ test.each(['missing', 'expired', 'accepted', 'wrong-session'])('ended state for 
   const view = render(<HelpRequestScreen />);
   expect(view.getByText('This request has moved on')).toBeTruthy();
   expect(view.queryByRole('button', { name: "I'll help Ari" })).toBeNull();
-  expect(view.UNSAFE_getByType(LinearGradient).props.colors).toEqual(sky.normal.stops);
+  const [top, middle, bottom] = sky.normal.stops;
+  expect(view.UNSAFE_getByType(LinearGradient).props.colors).toEqual([top, top, middle, bottom, bottom]);
   expect(mockAlert).not.toHaveBeenCalled();
   fireEvent.press(view.getByRole('button', { name: 'Close' }));
   expect(mockBack).toHaveBeenCalled();
@@ -129,4 +136,15 @@ test('a refused nearby decline stays on the takeover and says so', async () => {
   fireEvent.press(view.getByRole('button', { name: "I can't right now" }));
   await waitFor(() => expect(view.getByRole('alert')).toHaveTextContent("That didn't go through. Check your connection and location, then try again."));
   expect(mockBack).not.toHaveBeenCalled();
+});
+
+test('says roughly how far away the person is, only when this phone may read its location', async () => {
+  const view = render(<HelpRequestScreen />);
+  expect(await view.findByText('About 350 m from you')).toBeTruthy();
+  expect(mockBuddyRequest).toHaveBeenCalledWith('guest', '/requests/request/distance', 'POST', { latitude: -6.1975, longitude: 106.8016 });
+  mockLocation.granted = false; mockBuddyRequest.mockClear();
+  const denied = render(<HelpRequestScreen />);
+  await act(async () => { await Promise.resolve(); });
+  expect(denied.queryByText(/from you/)).toBeNull();
+  expect(mockBuddyRequest).not.toHaveBeenCalled();
 });

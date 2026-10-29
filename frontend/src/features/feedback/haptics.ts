@@ -27,6 +27,8 @@ export function useHaptics() {
     }
   }, [enabled, soundFree]);
   return {
+    // Whether a warning will actually vibrate, so the screen can say so only when it is true.
+    vibrates: enabled,
     alert,
     tap: () => { if (enabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); },
     selection: () => { if (enabled) void Haptics.selectionAsync().catch(() => {}); },

@@ -41,6 +41,7 @@ const config: ExpoConfig = {
     'expo-secure-store',
     ['expo-location', { locationWhenInUsePermission: 'EvacuAid uses your location to show warnings for where you are, and to share it with your helper only during a help request.', locationAlwaysAndWhenInUsePermission: 'Allow Always so warnings follow you when you move. EvacuAid updates your area only after you move about 500 m.', isIosBackgroundLocationEnabled: true, isAndroidBackgroundLocationEnabled: true, isAndroidForegroundServiceEnabled: true }],
     'expo-notifications',
+    ['expo-camera', { cameraPermission: 'EvacuAid shows the street ahead behind your walking directions. Nothing is recorded or sent.', recordAudioAndroid: false, barcodeScannerEnabled: false }],
     ['expo-speech-recognition', { microphonePermission: 'Allow EvacuAid to hear a command when you tap the microphone.', speechRecognitionPermission: 'Allow EvacuAid to transcribe your spoken Buddy commands.' }],
     ['./plugins/with-splash-gradient', { image: './assets/brand/splash-gradient.png' }],
     ['expo-splash-screen', { backgroundColor: '#3A60F4', image: './assets/brand/logo-lockup-white.png', imageWidth: 220 }],

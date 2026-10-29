@@ -345,3 +345,18 @@ declare module '@tabler/icons-react-native/IconShieldCheck' {
   const Icon: typeof import('@tabler/icons-react-native').IconShieldCheck;
   export default Icon;
 }
+
+declare module '@tabler/icons-react-native/IconWalk' {
+  const Icon: typeof import('@tabler/icons-react-native').IconWalk;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCamera' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCamera;
+  export default Icon;
+}
+
+declare module '@tabler/icons-react-native/IconCameraOff' {
+  const Icon: typeof import('@tabler/icons-react-native').IconCameraOff;
+  export default Icon;
+}

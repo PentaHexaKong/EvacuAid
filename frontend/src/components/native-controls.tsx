@@ -2,10 +2,11 @@ import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useContext, useState, type ComponentType } from 'react';
 import Animated from 'react-native-reanimated';
 import { Button, HStack, Host, Image as SwiftImage, Menu, Picker, Text as SwiftText, VStack } from '@expo/ui/swift-ui';
-import { accessibilityLabel, buttonStyle, contentShape, disabled as disabledModifier, font, foregroundStyle, frame, glassEffect, padding, shapes, tag } from '@expo/ui/swift-ui/modifiers';
+import { accessibilityLabel, buttonBorderShape, buttonStyle, contentShape, controlSize, disabled as disabledModifier, font, foregroundStyle, frame, glassEffect, padding, shapes, tag } from '@expo/ui/swift-ui/modifiers';
 import IconDots from '@tabler/icons-react-native/IconDots';
 import IconSelector from '@tabler/icons-react-native/IconSelector';
 import IconWorld from '@tabler/icons-react-native/IconWorld';
+import IconX from '@tabler/icons-react-native/IconX';
 import { LANGUAGES, languageName, type Language } from '@/localization/language';
 import { AppText } from '@/components/ui';
 import { colors, corner, radius, SystemReduceMotionContext } from '@/theme';
@@ -84,6 +85,16 @@ export function ValueMenu<T extends string>({ label, value, options, onChange }:
   </Pressable>;
 }
 
+// The system close button: on iOS 26 the Liquid Glass circle with an xmark that Apple's own sheets use. Android gets a token-styled 48pt target.
+export function CloseButton({ label, color = colors.ink, onPress }: { label: string; color?: string; onPress: () => void }) {
+  if (Platform.OS === 'ios') return <Host matchContents>
+    <Button role="close" onPress={onPress} modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), controlSize('large'), accessibilityLabel(label)]}>
+      <SwiftImage systemName="xmark" modifiers={[font({ size: 17, weight: 'semibold' }), foregroundStyle(color), frame({ width: 28, height: 28 })]} />
+    </Button>
+  </Host>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={styles.close}><IconX size={26} strokeWidth={2.5} color={color} /></Pressable>;
+}
+
 export type MapControl = { label: string; symbol: NonNullable<Parameters<typeof SwiftImage>[0]['systemName']>; icon: ComponentType<{ size?: number; color?: string }>; onPress: () => void };
 
 // A vertical stack of map buttons. iOS: one Liquid Glass capsule, like Maps. Elsewhere: a token-styled surface pill.
@@ -103,6 +114,7 @@ export function MapControls({ controls }: { controls: MapControl[] }) {
 }
 
 const styles = StyleSheet.create({
+  close: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
   value: { flexDirection: 'row', alignItems: 'center', minHeight: 52, paddingHorizontal: Platform.OS === 'ios' ? 0 : 16, ...corner(radius.md), backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   mapStack: { borderRadius: radius.pill, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: '0 2px 8px rgba(18, 40, 75, 0.16)' },
   mapButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },

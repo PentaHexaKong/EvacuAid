@@ -11,14 +11,14 @@ import { askAlwaysAndStart } from '@/features/location/alert-area';
 
 let mockItem: typeof alertItems[number] | undefined;
 let mockNeeds: string[] = [];
-let mockAccess = { voiceHome: false, listen: false, autoRead: false, soundFree: false };
+let mockAccess: { voiceHome: boolean; listen: boolean; autoRead: boolean; soundFree: boolean; stepFree?: boolean } = { voiceHome: false, listen: false, autoRead: false, soundFree: false };
 let mockBuddy: string | null = null;
 let mockIncoming: { name: string }[] = [];
 let mockFocused = true;
 let mockStale = false;
 const mockRouter = { canGoBack: jest.fn(), replace: jest.fn(), back: jest.fn() };
 const mockReload = jest.fn().mockResolvedValue(undefined);
-const mockHaptics = { tap: jest.fn(), alert: jest.fn() };
+const mockHaptics = { tap: jest.fn(), alert: jest.fn(), vibrates: true };
 const mockVoice = { listening: false, startListening: jest.fn(), stopListening: jest.fn(), cancelListening: jest.fn() };
 let mockCommand: (text: string) => void;
 jest.mock('@/components/use-armed', () => ({ useArmed: () => true }));
@@ -33,7 +33,7 @@ jest.mock('@/features/alerts/use-alerts', () => ({ useAlerts: () => ({ items: mo
 jest.mock('@/features/alerts/api', () => ({ respondToAlert: jest.fn() }));
 jest.mock('@/features/alerts/alert-gate', () => ({ markAlertPresented: jest.fn() }));
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
-jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockNeeds }) }));
+jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: mockNeeds.map(type => ({ type, severity: null })) }) }));
 jest.mock('@/features/profile/session', () => ({ useGuestSession: () => ({ token: 'guest', user: { id: 'user' } }) }));
 jest.mock('@/features/buddy/use-primary-buddy', () => ({ usePrimaryBuddy: () => mockBuddy }));
 jest.mock('@/features/buddy/use-incoming-contacts', () => ({ useIncomingContacts: () => mockIncoming }));
@@ -61,7 +61,7 @@ beforeEach(async () => {
 });
 
 test.each([
-  ['Start evacuation', 'EVACUATING', '/discover', 'route'],
+  ['Go to Town Hall. 250 m away · Route on the map', 'EVACUATING', '/discover', 'route'],
   ['I need help', 'NEEDS_HELP', '/buddy', 'help'],
 ] as const)('%s posts and immediately navigates', async (label, response, pathname, param) => {
   jest.mocked(respondToAlert).mockReturnValue(new Promise(() => {}));
@@ -70,6 +70,27 @@ test.each([
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', response);
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname, params: { [param]: expect.any(String), ...(pathname === '/discover' ? { alertId: 'rain' } : {}) } });
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+test('mobility: Buddy first, then a step-free route, with steps reworded for moving with an aid', () => {
+  mockNeeds = ['MOBILITY_LIMITATION'];
+  mockAccess = { ...mockAccess, stepFree: true };
+  const view = render(<EmergencyScreen />);
+  const rows = view.getAllByRole('button').map(button => button.props.accessibilityLabel).filter(Boolean);
+  expect(rows.indexOf('Find a helper nearby. Shares your location with helpers nearby')).toBeLessThan(rows.indexOf('Step-free route to the nearest gathering point. 250 m away · Avoids stairs'));
+  expect(view.getByRole('button', { name: "I'm safe" })).toBeTruthy();
+  expect(view.queryByText('Route on the map', { exact: false })).toBeNull();
+  expect(view.getByText('Tell your Buddy you may need help moving')).toBeTruthy();
+  expect(view.getByText('Be ready to leave')).toBeTruthy();
+});
+test.each([
+  [{}, 'Help neighbours who need it, only if it is safe'],
+  [{ stepFree: true }, 'Keep your phone on so your Buddy can find you'],
+  [{ soundFree: true }, 'Watch for officials and follow their signals'],
+])('Danger: the last step fits who is reading (%o)', (access, last) => {
+  mockItem = { ...alertItems[0], level: 'awas', myResponse: null };
+  mockAccess = { ...mockAccess, ...access };
+  const view = render(<EmergencyScreen />);
+  expect(view.getByText(last)).toBeTruthy();
 });
 test.each([null, 'Sari'])('buddy action shares caption and goes to help (%s)', async buddy => {
   mockNeeds = ['MOBILITY_LIMITATION'];
@@ -108,7 +129,8 @@ test.each([false, true])('blind evacuation opens guidance with listening enabled
   mockNeeds = ['VISUAL_IMPAIRMENT'];
   mockAccess = { voiceHome: true, listen, autoRead: false, soundFree: false };
   const view = render(<EmergencyScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Start evacuation' }));
+  // Blind mode names the nearest gathering point on the one main action.
+  fireEvent.press(view.getByRole('button', { name: /^Guide me to Town Hall\. 250/ }));
   await act(async () => {});
   expect(respondToAlert).toHaveBeenCalledWith('guest', 'rain', 'EVACUATING');
   expect(mockRouter.back).not.toHaveBeenCalled();
@@ -158,7 +180,7 @@ test.each(['close', 'safe', 'blind evacuate', 'ended'] as const)('%s returns Hom
   }
   const view = render(<EmergencyScreen />);
   if (action === 'ended') await waitFor(() => expect(view.getByText('This warning has ended.')).toBeTruthy());
-  fireEvent.press(view.getByRole('button', { name: action === 'safe' ? "I'm safe" : action === 'blind evacuate' ? 'Start evacuation' : 'Close' }));
+  fireEvent.press(view.getByRole('button', { name: action === 'safe' ? "I'm safe" : action === 'blind evacuate' ? /^Guide me to Town Hall/ : 'Close' }));
   await act(async () => {});
   expect(mockRouter.replace).toHaveBeenCalledWith(action === 'blind evacuate' ? { pathname: '/evacuate', params: { alertId: 'rain' } } : '/');
   expect(mockRouter.back).not.toHaveBeenCalled();
@@ -168,7 +190,7 @@ test.each(['close', 'safe', 'blind evacuate', 'ended'] as const)('%s returns Hom
 test('response retries once then swallows failures', async () => {
   jest.mocked(respondToAlert).mockRejectedValue(new Error('offline'));
   const view = render(<EmergencyScreen />);
-  fireEvent.press(view.getByRole('button', { name: 'Start evacuation' }));
+  fireEvent.press(view.getByRole('button', { name: 'Go to Town Hall. 250 m away · Route on the map' }));
   // Counted locally the moment it is tapped, so the gate cannot offer a lesser warning while the request is in flight or after it fails.
   expect(applyResponse).toHaveBeenCalledWith('rain', 'EVACUATING');
   await waitFor(() => expect(respondToAlert).toHaveBeenCalledTimes(2));
@@ -181,6 +203,21 @@ test('404 reloads without retry or extra navigation', async () => {
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
   expect(respondToAlert).toHaveBeenCalledTimes(1);
   expect(mockRouter.back).toHaveBeenCalledTimes(1);
+});
+// A blind user cannot see which word runs which button, so every prompt says what each word does and where "go" leads.
+test('blind prompts tie each spoken word to what it does', async () => {
+  mockNeeds = ['VISUAL_IMPAIRMENT'];
+  mockAccess = { voiceHome: true, listen: true, autoRead: true, soundFree: false };
+  const view = render(<EmergencyScreen />);
+  const prompt = 'To be guided to Town Hall, say go. To call a helper, say help. If you are safe, say safe.';
+  await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(1));
+  expect(jest.mocked(Speech.speak).mock.calls[0][0]).toMatch(new RegExp(`${prompt.replace(/\./g, '\\.')}$`));
+  expect(view.getByRole('button', { name: 'Speak. Go: guide me · Help: call a helper · Safe: I\'m safe' })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Reading aloud…' })).toBeTruthy();
+  await act(async () => { jest.mocked(Speech.speak).mock.calls[0][1]?.onDone?.(); });
+  expect(view.getByRole('button', { name: 'Hear again' })).toBeTruthy();
+  await act(async () => mockCommand('hello'));
+  expect(jest.mocked(Speech.speak).mock.calls[1][0]).toBe(`Sorry, I didn't catch that. ${prompt}`);
 });
 test('blind narration finishes before listening, with only one unknown retry', async () => {
   mockNeeds = ['VISUAL_IMPAIRMENT'];
@@ -218,4 +255,24 @@ test('leaving cancels narration and prevents late speech completion from listeni
   await act(async () => finish?.());
   expect(mockVoice.cancelListening).toHaveBeenCalled();
   expect(mockVoice.startListening).not.toHaveBeenCalled();
+});
+
+// Each warning says whose profile shaped it, so it is clear why the same warning looks different on another phone.
+test.each([[[], 'Profile: Standard'], [['VISUAL_IMPAIRMENT'], 'Profile: Blind or low vision'], [['HEARING_IMPAIRMENT', 'MOBILITY_LIMITATION'], 'Profile: Deaf or hard of hearing, Limited mobility']])('profile label for %p', (needs, label) => {
+  mockNeeds = needs;
+  mockAccess = { voiceHome: needs.includes('VISUAL_IMPAIRMENT'), listen: false, autoRead: false, soundFree: needs.includes('HEARING_IMPAIRMENT') };
+  expect(render(<EmergencyScreen />).getByText(label)).toBeTruthy();
+});
+test('the vibration cue shows only when a sound-free warning really vibrates', () => {
+  mockNeeds = ['HEARING_IMPAIRMENT'];
+  mockAccess = { voiceHome: false, listen: false, autoRead: false, soundFree: true };
+  const view = render(<EmergencyScreen />);
+  expect(view.getByText('Vibration alert · no sound needed')).toBeTruthy();
+  mockHaptics.vibrates = false;
+  view.rerender(<EmergencyScreen />);
+  expect(view.queryByText('Vibration alert · no sound needed')).toBeNull();
+  mockHaptics.vibrates = true;
+  mockAccess = { voiceHome: false, listen: false, autoRead: false, soundFree: false };
+  view.rerender(<EmergencyScreen />);
+  expect(view.queryByText('Vibration alert · no sound needed')).toBeNull();
 });

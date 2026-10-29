@@ -2,18 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import IconX from '@tabler/icons-react-native/IconX';
-import { ActionButton, AppText, Enter, Tap } from '@/components/ui';
+import IconUsers from '@tabler/icons-react-native/IconUsers';
+import { AppText, Enter } from '@/components/ui';
+import { CloseButton } from '@/components/native-controls';
 import { useArmed } from '@/components/use-armed';
+import { useAccess } from '@/features/access/use-access';
 import { useGuestSession } from '@/features/profile/session';
 import { useBuddy } from '@/features/buddy/use-buddy';
 import { useBuddyActions } from '@/features/buddy/use-buddy-actions';
+import { buddyRequest } from '@/features/buddy/api';
 import { relationLabel } from '@/features/buddy/copy';
-import { PersonAvatar, StatusChip } from '@/features/buddy/ui/parts';
 import { useHaptics } from '@/features/feedback/haptics';
-import { radius, sky } from '@/theme';
+import { formatDistance } from '@/features/navigation/distance';
+import { ActionRow, largeType, regularType } from '@/screens/emergency-layout';
+import { colors, gutter, radius, sky } from '@/theme';
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
@@ -23,7 +28,7 @@ export function HelpRequestScreen() {
   const state = useBuddy(token, user?.id);
   const a = useBuddyActions({ token: token ?? '', userId: user?.id ?? '', state, manageBackground: false });
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
   const [now, setNow] = useState(Date.now);
@@ -56,48 +61,86 @@ export function HelpRequestScreen() {
   const accept = async () => { if (!attempt || !armed) return; setRefused(false); if (await a.transition('accept', { attemptId: attempt.id, sharingConsent: true })) router.replace({ pathname: '/buddy', params: { requestId: id } }); else setRefused(true); };
   const decline = async () => { if (!attempt || !armed) return; setRefused(false); if (await a.transition('decline', { attemptId: attempt.id })) router.back(); else setRefused(true); };
   const back = () => { haptics.tap(); router.back(); };
-  return <LinearGradient colors={palette.stops as [string, string, ...string[]]} style={styles.fill}>
-    <ScrollView accessibilityViewIsModal contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
-      {state.loading ? <ActivityIndicator accessibilityLabel={a.c('checking')} /> : attempt ? <>
-        <View style={styles.top}><StatusChip dot tone={friend ? 'critical' : 'caution'} label={a.c(friend ? 'needsHelpChip' : 'nearbyEmergency')} /><Tap accessibilityLabel={t('helpRequestLater')} onPress={back} style={styles.close}><IconX size={24} color={palette.ink} /></Tap></View>
-        <Enter index={0} style={styles.center}><PersonAvatar name={name} size={88} /></Enter>
-        <Enter index={1}><AppText variant="title" accessibilityRole="header" style={[styles.text, { color: palette.ink }]}>{t(friend ? 'helpRequestTitle' : 'helpRequestTitleNearby', { name })}</AppText></Enter>
-        <Enter index={2}><AppText style={[styles.text, { color: palette.ink, opacity: 0.85 }]}>{detail}</AppText></Enter>
-        {!!session?.message && <Enter index={3} style={styles.quote}><AppText style={{ color: palette.ink }}>“{session.message}”</AppText></Enter>}
-        <Enter index={4} style={{ gap: 12 }}>
-          <AppText accessibilityRole="timer" accessibilityLiveRegion="none" accessibilityLabel={t('helpRequestCountdown', { time: clock(Math.ceil(seconds / 15) * 15) })} style={[styles.text, { color: palette.ink, fontVariant: ['tabular-nums'] }]}>{t('helpRequestCountdown', { time: clock(seconds) })}</AppText>
-          <View style={styles.track}><View style={[StyleSheet.absoluteFill, { backgroundColor: palette.ink, opacity: 0.15 }]} /><View style={{ height: 4, width: `${fill}%`, backgroundColor: palette.ink }} /></View>
+  const access = useAccess();
+  const type = access.voiceHome ? largeType : regularType;
+  const { stops, ink } = palette;
+  // Before answering, the helper gets a rounded distance from their own position; the requester's position stays on the server.
+  const [distance, setDistance] = useState<{ attemptId: string; meters: number } | null>(null);
+  const attemptId = attempt?.id;
+  useEffect(() => {
+    if (!attemptId || !token || !id) return;
+    let cancelled = false;
+    void (async () => {
+      if (!(await Location.getForegroundPermissionsAsync()).granted) return;
+      const here = await Location.getLastKnownPositionAsync({ maxAge: 120000 }) ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { approxDistanceM } = await buddyRequest<{ approxDistanceM: number | null }>(token, `/requests/${id}/distance`, 'POST', { latitude: here.coords.latitude, longitude: here.coords.longitude });
+      if (!cancelled && approxDistanceM != null) setDistance({ attemptId, meters: approxDistanceM });
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, [attemptId, token, id]);
+  const [pending, setPending] = useState<'accept' | 'decline' | null>(null);
+  const busy = (kind: 'accept' | 'decline') => state.busy && pending === kind;
+  const title = t(friend ? 'helpRequestTitle' : 'helpRequestTitleNearby', { name });
+  const away = distance && distance.attemptId === attempt?.id ? t('helpRequestDistance', { distance: formatDistance(distance.meters, i18n.language) }) : null;
+  const gradient = [stops[0], stops[0], stops[1], stops[2], stops[2]] as [string, string, ...string[]];
+  // Same language as a warning: the level sky, ink type at 4.5:1 or more, one filled next step and one outlined fallback.
+  return <View style={styles.fill}>
+    <LinearGradient pointerEvents="none" colors={gradient} locations={[0, 0.62, 0.78, 0.92, 1]} style={StyleSheet.absoluteFill} />
+    <ScrollView accessibilityViewIsModal contentInsetAdjustmentBehavior="never" contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
+      {state.loading ? <ActivityIndicator color={ink} accessibilityLabel={a.c('checking')} /> : attempt ? <>
+        <View style={styles.top}>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.initial}><AppText style={[styles.initialText, { color: ink }]}>{name.trim().charAt(0).toLocaleUpperCase()}</AppText></View>
+          <CloseButton label={t('helpRequestLater')} color={ink} onPress={back} />
+        </View>
+        <Enter index={0} style={styles.message}>
+          <AppText accessibilityRole="header" style={[type.headline, { color: ink }]}>{title}</AppText>
+          {!!away && <AppText style={[type.guidance, { color: ink }]}>{away}</AppText>}
+          {!!detail && <AppText style={[type.meta, { color: ink }]}>{detail}</AppText>}
+        </Enter>
+        {!!session?.message && <Enter index={1} style={styles.quote}><AppText style={{ color: ink }}>“{session.message}”</AppText></Enter>}
+        <Enter index={2} style={styles.countdown}>
+          <AppText accessibilityRole="timer" accessibilityLiveRegion="none" accessibilityLabel={t('helpRequestCountdown', { time: clock(Math.ceil(seconds / 15) * 15) })} style={[type.label, { color: ink, fontVariant: ['tabular-nums'] }]}>{t('helpRequestCountdown', { time: clock(seconds) })}</AppText>
+          <View style={styles.track}><View style={[StyleSheet.absoluteFill, { backgroundColor: ink, opacity: 0.2 }]} /><View style={[styles.bar, { width: `${fill}%`, backgroundColor: ink }]} /></View>
         </Enter>
         <View style={styles.fill} />
-        {(a.issue || refused) && <AppText accessibilityRole="alert" style={[styles.text, { color: palette.ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>}
-        <View style={{ gap: 12 }}>
-          <View style={{ gap: 6 }}><ActionButton variant="gradient" label={t('helpRequestAccept', { name })} loading={state.busy} onPress={() => { haptics.tap(); void accept(); }} /><AppText variant="small" style={[styles.text, { color: palette.ink }]}>{t('helpRequestConsent', { name })}</AppText></View>
-          <ActionButton variant="secondary" label={t('helpRequestDecline')} loading={state.busy} onPress={() => { if (!armed) return; haptics.tap(); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
+        {(a.issue || refused) && <AppText accessibilityRole="alert" style={[type.meta, { color: ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>}
+        <View style={styles.actions}>
+          <ActionRow filled ink={ink} type={type} icon={<IconUsers size={26} strokeWidth={2.25} color={colors.surface} />} label={t('helpRequestAccept', { name })} detail={t('helpRequestConsent', { name })} busy={busy('accept')}
+            onPress={() => { haptics.tap(); setPending('accept'); void accept(); }} />
+          <ActionRow ink={ink} type={type} label={t('helpRequestDecline')} busy={busy('decline')}
+            onPress={() => { if (!armed) return; haptics.tap(); setPending('decline'); if (friend) a.confirm(a.c('declineTitle', { name }), () => { void decline(); }, a.c('declineBody', { name })); else void decline(); }} />
         </View>
       </> : !session && state.error ? <>
         <View style={styles.fill} />
-        <AppText accessibilityRole="alert" style={[styles.text, { color: palette.ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>
+        <AppText accessibilityRole="alert" style={[type.guidance, { color: ink }]}>{a.issue ?? t('helpRequestRefused')}</AppText>
         <View style={styles.fill} />
-        <ActionButton variant="gradient" label={t('tryAgain')} onPress={() => { void refresh(id); }} />
-        <ActionButton variant="secondary" label={t('helpRequestClose')} onPress={back} />
+        <View style={styles.actions}>
+          <ActionRow filled ink={ink} type={type} label={t('tryAgain')} onPress={() => { void refresh(id); }} />
+          <ActionRow ink={ink} type={type} label={t('helpRequestClose')} onPress={back} />
+        </View>
       </> : <>
         <View style={styles.fill} />
-        <AppText variant="title" accessibilityRole="header" style={[styles.text, { color: palette.ink }]}>{t('helpRequestEnded')}</AppText>
-        <AppText style={[styles.text, { color: palette.ink }]}>{t(session && friend ? 'helpRequestEndedBody' : 'helpRequestEndedBodyNearby', { name })}</AppText>
+        <View style={styles.message}>
+          <AppText accessibilityRole="header" style={[type.headline, { color: ink }]}>{t('helpRequestEnded')}</AppText>
+          <AppText style={[type.guidance, { color: ink }]}>{t(session && friend ? 'helpRequestEndedBody' : 'helpRequestEndedBodyNearby', { name })}</AppText>
+        </View>
         <View style={styles.fill} />
-        <ActionButton variant="secondary" label={t('helpRequestClose')} onPress={back} />
+        <ActionRow ink={ink} type={type} label={t('helpRequestClose')} onPress={back} />
       </>}
     </ScrollView>
-  </LinearGradient>;
+  </View>;
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: 24, gap: 20 },
-  top: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  close: { width: 44, height: 44 },
-  center: { alignItems: 'center' },
-  text: { textAlign: 'center' },
+  content: { flexGrow: 1, paddingHorizontal: gutter, gap: 28, maxWidth: 680, width: '100%', alignSelf: 'center' },
+  top: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  initial: { width: 56, height: 56, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  initialText: { fontSize: 24, lineHeight: 30, fontWeight: '600' },
+  message: { gap: 12 },
   quote: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: radius.md, borderCurve: 'continuous', padding: 16 },
-  track: { height: 4, width: '100%', borderRadius: radius.pill, overflow: 'hidden' },
+  countdown: { gap: 10 },
+  track: { height: 6, width: '100%', borderRadius: radius.pill, overflow: 'hidden' },
+  bar: { height: 6, borderRadius: radius.pill },
+  actions: { gap: 12 },
 });
