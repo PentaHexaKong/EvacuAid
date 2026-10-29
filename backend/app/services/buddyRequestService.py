@@ -146,6 +146,7 @@ async def terminate(db, request):
     request.selected_shelter_id = None
     request.requester_phone_shared = request.helper_phone_shared = False
     await db.execute(delete(BuddyLocation).where(BuddyLocation.request_id == request.id))
+    await db.execute(update(BuddyAttempt).where(BuddyAttempt.request_id == request.id).values(approx_distance_m=None))
     attempts = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == request.id, BuddyAttempt.status == 'PENDING'))).scalars()
     for attempt in attempts:
         attempt.status = 'CANCELLED'

@@ -10,7 +10,7 @@ from app.db.models.auth import AuthRateLimit
 
 async def enforce(session, action, ip, email=None):
     now = datetime.now(timezone.utc)
-    limits = [(ip, {'register':10, 'login':20, 'refresh':60, 'logout':60, 'delete':20}[action])]
+    limits = [(ip, {'register':10, 'login':20, 'refresh':60, 'logout':60, 'delete':20, 'offerDistance':10}[action])]
     if email and action in ('login', 'delete'):
         limits.append(('email:'+email, 5))
     blocked = None
@@ -27,4 +27,4 @@ async def enforce(session, action, ip, email=None):
     await session.execute(delete(AuthRateLimit).where(AuthRateLimit.expires_at < now-timedelta(days=1)))
     await session.commit()
     if blocked:
-        raise HTTPException(429, 'Too many authentication attempts', headers={'Retry-After':str(blocked), 'Cache-Control':'no-store'})
+        raise HTTPException(429, 'Too many attempts' if action == 'offerDistance' else 'Too many authentication attempts', headers={'Retry-After':str(blocked), 'Cache-Control':'no-store'})

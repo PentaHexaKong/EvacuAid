@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, func, or_, select, update
@@ -12,8 +12,9 @@ from app.auth import current_user
 from app.db.session import get_session
 from app.db.models import BuddyRelationship, User, UserAccessibility
 from app.db.models.buddySession import BuddyAttempt, BuddyAvailability, BuddyInbox, BuddyInvitation, BuddyLocation, BuddyMessage, BuddyPushToken, BuddyRequest
-from app.models.buddyRequest import AttemptAction, AvailabilityUpdate, BeaconSearch, InviteDirect, InviteRedeem, MessageCreate, NearbyHelperSelection, NearbySearch, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
+from app.models.buddyRequest import AttemptAction, AvailabilityUpdate, BeaconSearch, InviteDirect, InviteRedeem, MessageCreate, NearbyHelperSelection, NearbySearch, OfferPosition, PhoneSharing, PushToken, RequestCreate, SessionLocation, SessionRoute
 from app.services import alertService
+from app.services import authRateLimit as rateLimit
 from app.services import buddyRequestService as service
 from app.services.buddyService import relationshipResponse
 from app.utils.geo import calculate_distance_meters
@@ -309,6 +310,27 @@ async def create_request(payload: RequestCreate, db: AsyncSession = Depends(get_
         await service.offer(db, row, payload.helperUserId, 120)
     await db.commit()
     return await service.response(db, row, actor.id)
+
+
+@router.post('/requests/{request_id}/distance')
+async def offer_distance(request_id: uuid.UUID, payload: OfferPosition, db: AsyncSession = Depends(get_session), actor=Depends(current_user)):
+    # Lets a helper weigh an open offer by how far away the person is, without ever seeing where they are.
+    # The first answer is stored on the offer and repeated, so asking again from other positions cannot narrow the requester down.
+    await rateLimit.enforce(db, 'offerDistance', str(actor.id))
+    request = await service.get_request(db, request_id, actor.id)
+    attempt = (await db.execute(select(BuddyAttempt).where(BuddyAttempt.request_id == request.id, BuddyAttempt.helper_id == actor.id, BuddyAttempt.status == 'PENDING', BuddyAttempt.expires_at > datetime.now(timezone.utc)).with_for_update())).scalar_one_or_none()
+    # Without a stored position there is nothing to measure; refusing the same way keeps it from telling the helper that.
+    if attempt is None or request.status != 'WAITING' or request.latitude is None or request.longitude is None:
+        raise HTTPException(409, 'no open offer')
+    if attempt.approx_distance_m is None:
+        # A re-offer to the same helper for the same request repeats the first answer rather than computing a new one.
+        shown = (await db.execute(select(BuddyAttempt.approx_distance_m).where(BuddyAttempt.request_id == request.id, BuddyAttempt.helper_id == actor.id, BuddyAttempt.approx_distance_m.is_not(None)).limit(1))).scalar_one_or_none()
+        if shown is None:
+            meters = calculate_distance_meters(request.latitude, request.longitude, payload.latitude, payload.longitude)
+            shown = max(50, round(meters / 50) * 50)
+        attempt.approx_distance_m = shown
+        await db.commit()
+    return {'approxDistanceM': attempt.approx_distance_m}
 
 
 @router.get('/requests/current')

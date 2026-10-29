@@ -619,3 +619,91 @@ async def test_concurrent_personal_code_direct_send_and_accept(dbSession):
         assert len((await dbSession.execute(select(BuddyInvitation))).scalars().all()) == 1
         events = (await dbSession.execute(select(BuddyInbox.kind))).scalars().all()
         assert sorted(events) == ['INVITATION_ACCEPTED', 'INVITATION_RECEIVED']
+
+
+@pytest.mark.asyncio
+async def test_offered_helper_sees_rounded_distance_never_the_position(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        _, stranger = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-distance', 'latitude': -6.2, 'longitude': 106.8})).json()
+        assert 'latitude' not in request and 'longitude' not in request
+        path = '/v1/buddy/requests/' + request['id'] + '/distance'
+        about_330m = {'latitude': -6.1975, 'longitude': 106.8016}
+        answer = await client.post(path, headers=helper, json=about_330m)
+        assert answer.status_code == 200 and answer.json() == {'approxDistanceM': 350}
+        # Computed once per offer: asking again from the requester's exact spot cannot narrow it down.
+        assert (await client.post(path, headers=helper, json={'latitude': -6.2, 'longitude': 106.8})).json() == {'approxDistanceM': 350}
+        assert (await client.post(path, headers=owner, json=about_330m)).status_code == 409
+        assert (await client.post(path, headers=stranger, json=about_330m)).status_code == 403
+        attempt_id = request['attempts'][0]['id']
+        assert (await client.post('/v1/buddy/requests/' + request['id'] + '/accept', headers=helper, json={'attemptId': attempt_id, 'sharingConsent': True})).status_code == 200
+        assert (await client.post(path, headers=helper, json=about_330m)).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_expired_offer_gets_no_distance(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-expired', 'latitude': -6.2, 'longitude': 106.8})).json()
+        await dbSession.execute(update(BuddyAttempt).where(BuddyAttempt.request_id == uuid.UUID(request['id'])).values(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+        await dbSession.commit()
+        answer = await client.post('/v1/buddy/requests/' + request['id'] + '/distance', headers=helper, json={'latitude': -6.1975, 'longitude': 106.8016})
+        # The expired helper is no longer a participant, so the request itself is refused.
+        assert answer.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_new_offer_to_the_same_helper_repeats_the_first_distance(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-again', 'latitude': -6.2, 'longitude': 106.8})).json()
+        path = '/v1/buddy/requests/' + request['id'] + '/distance'
+        assert (await client.post(path, headers=helper, json={'latitude': -6.1975, 'longitude': 106.8016})).json() == {'approxDistanceM': 350}
+        # The offer lapses and the same helper is offered the request again (as a nearby or Bluetooth re-offer would).
+        await dbSession.execute(update(BuddyAttempt).where(BuddyAttempt.request_id == uuid.UUID(request['id'])).values(status='EXPIRED'))
+        dbSession.add(BuddyAttempt(request_id=uuid.UUID(request['id']), helper_id=uuid.UUID(helper_id), status='PENDING', expires_at=datetime.now(timezone.utc) + timedelta(seconds=30)))
+        await dbSession.commit()
+        assert (await client.post(path, headers=helper, json={'latitude': -6.2, 'longitude': 106.8})).json() == {'approxDistanceM': 350}
+
+
+@pytest.mark.asyncio
+async def test_distance_is_rate_limited(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-limit', 'latitude': -6.2, 'longitude': 106.8})).json()
+        path = '/v1/buddy/requests/' + request['id'] + '/distance'
+        codes = [(await client.post(path, headers=helper, json={'latitude': -6.1975, 'longitude': 106.8016})).status_code for _ in range(11)]
+        assert codes[:10] == [200] * 10 and codes[10] == 429
+
+@pytest.mark.asyncio
+async def test_no_stored_position_is_refused_like_any_closed_offer(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-no-position'})).json()
+        answer = await client.post('/v1/buddy/requests/' + request['id'] + '/distance', headers=helper, json={'latitude': -6.1975, 'longitude': 106.8016})
+        assert answer.status_code == 409 and answer.json()['detail'] == 'no open offer'
+
+
+@pytest.mark.asyncio
+async def test_ending_a_session_wipes_the_shown_distance(dbSession):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api(dbSession)), base_url='http://test') as client:
+        _, owner = await guest(client)
+        helper_id, helper = await guest(client)
+        await trusted(client, owner, helper)
+        request = (await client.post('/v1/buddy/requests', headers=owner, json={'helperUserId': helper_id, 'sharingConsent': True, 'idempotencyKey': 'offer-wipe', 'latitude': -6.2, 'longitude': 106.8})).json()
+        assert (await client.post('/v1/buddy/requests/' + request['id'] + '/distance', headers=helper, json={'latitude': -6.1975, 'longitude': 106.8016})).status_code == 200
+        assert (await client.post('/v1/buddy/requests/' + request['id'] + '/interrupt', headers=owner)).status_code == 200
+        dbSession.expire_all()
+        stored = (await dbSession.execute(select(BuddyAttempt.approx_distance_m).where(BuddyAttempt.request_id == uuid.UUID(request['id'])))).scalars().all()
+        assert stored == [None]

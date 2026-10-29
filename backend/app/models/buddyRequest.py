@@ -36,6 +36,11 @@ class RequestCreate(BaseModel):
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
+class OfferPosition(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
 class AttemptAction(BaseModel):
     attemptId: uuid.UUID
     sharingConsent: bool = False
