@@ -1,10 +1,11 @@
 import { useAccess } from '@/features/access/use-access';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import { AccessibilityInfo, Alert, AppState, Linking } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { confirmCommand } from '@/features/voice/confirm-command';
 import { useVoicePrompt } from '@/features/voice/use-voice-prompt';
-import { useIsFocused, useLocalSearchParams } from 'expo-router';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
 import { useBeacons } from './use-beacons';
 import { useProfile } from '@/features/profile/context';
@@ -13,11 +14,19 @@ import { buddyRequest, sharingStatuses, terminalStatuses, type BuddyRoute, type 
 import type { useBuddy } from '@/features/buddy/use-buddy';
 import type { ApiError } from '@/features/profile/api';
 import { useBuddyNative, useBuddySpeech } from '@/features/buddy/native';
-import { readableIssue, useBuddyCopy } from '@/features/buddy/copy';
+import { readableIssue, statusSentence, useBuddyCopy } from '@/features/buddy/copy';
 import type { Shelter } from '@/features/navigation/api';
 import { distanceM } from '@/features/buddy/navigation';
 import { usesMapbox } from '@/components/map-engine';
 import { CUE_M, useRouteGuidance } from '@/features/buddy/use-route-guidance';
+
+async function lastKnownPosition() {
+  try {
+    if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
+    const known = await Location.getLastKnownPositionAsync({ maxAge: 600000 });
+    return known ? { latitude: known.coords.latitude, longitude: known.coords.longitude } : null;
+  } catch { return null; }
+}
 
 export function useBuddyActions({ token, userId, state, manageBackground = true, autoSearch = false }: { token: string; userId: string; state: ReturnType<typeof useBuddy>; manageBackground?: boolean; autoSearch?: boolean }) {
   const { c, status, language, support, event } = useBuddyCopy();
@@ -78,7 +87,11 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
     : session?.status === 'COMPLETION_PENDING' ? requester ? c('arrivedSpoken', { name: firstName }) : c('waitingSafe', { name: firstName })
     : session?.status === 'COMPLETED' ? requester ? c('safeTitleSelf') : c('safeTitleOther', { name: firstName })
     : session ? status(session.status) : c('empty');
-  const statusText = [sessionStatus, partner, partnerLocation ? `${c('updated')}: ${new Date(partnerLocation.observedAt).toLocaleTimeString(language)}. ${partnerLocation.stale ? c('stale') : native.location ? `${Math.round(distanceM(native.location, partnerLocation))} m` : ''}` : session && active ? c('locationMissing') : ''].filter(Boolean).join('. ');
+  const partnerName = partner ?? c('name');
+  const partnerLine = partnerLocation
+    ? statusSentence([c('partnerUpdated', { name: partnerName, time: new Date(partnerLocation.observedAt).toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit' }) }), partnerLocation.stale ? c('stale') : native.location ? c('partnerAway', { distance: String(Math.round(distanceM(native.location, partnerLocation))) }) : ''])
+    : session && active ? c('partnerLocationMissing', { name: partnerName }) : '';
+  const statusText = statusSentence([sessionStatus, partnerLine]);
   const confirm = (label: string, action: () => void, body = label, yes = c('yes')) => Alert.alert(label, body, [{ text: c('cancel'), style: 'cancel' }, { text: yes, onPress: action }]);
   const catchNative = (action: () => Promise<unknown>) => { setLocalError(null); void action().catch(cause => setLocalError(cause instanceof Error ? cause.message : c('requestFailed'))); };
   const openBeaconRequest = async (beaconId: number) => {
@@ -114,13 +127,12 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
   const autoShared = useRef<string | null>(null);
   const sessionId = session?.id;
   const shareOnAccept = useEffectEvent(() => { if (!native.tracking) catchNative(native.enableLocation); });
-  // The helper's position is read once on this phone so the session map can show; it is shared only when they start travelling.
-  const locateOnAccept = useEffectEvent(() => { if (!native.location) catchNative(native.obtainLocation); });
   useEffect(() => {
     if (!active || !sessionId || autoShared.current === sessionId) return;
     autoShared.current = sessionId;
-    if (requester) shareOnAccept(); else locateOnAccept();
-  }, [requester, active, sessionId]);
+    // Both people share from the moment the session connects; the helper's accept button promises it.
+    shareOnAccept();
+  }, [active, sessionId]);
   const [approach, setApproach] = useState<{ sessionId: string; value: BuddyRoute } | null>(null);
   const approaching = Boolean(requester && active && (session?.status === 'ACCEPTED' || session?.status === 'EN_ROUTE'));
   useEffect(() => {
@@ -237,7 +249,10 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
 
   const sendRequest = async (target: string) => {
     idempotency.current ??= `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    const result = await state.run<Session>('/requests', { helperUserId: target, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current });
+    // The asked Buddy sees only a rounded distance to this point before answering, never the point itself.
+    // Only a position the phone already has: asking for help never waits on a GPS fix or a permission prompt.
+    const point = native.location ?? await lastKnownPosition();
+    const result = await state.run<Session>('/requests', { helperUserId: target, message: '', supportNeeds: accessibility.map(item => item.type), sharingConsent: true, idempotencyKey: idempotency.current, ...(point ? { latitude: point.latitude, longitude: point.longitude } : {}) });
     if (result) { idempotency.current = null; await state.refresh(result.id); }
   };
   const askNearby = () => confirm(c('searchNearbyTitle'), () => { void startNearby(true); }, c('searchNearbyBody'), c('searchShort'));
@@ -301,6 +316,8 @@ export function useBuddyActions({ token, userId, state, manageBackground = true,
   useEffect(() => {
     if (!params.help || askedFor.current === params.help || state.loading || state.error || (session && !terminalStatuses.has(session.status))) return;
     askedFor.current = params.help;
+    // Spend the link: a reload remounts the tab with the same URL, and once the session has ended it would ask again.
+    router.setParams({ help: undefined, consented: undefined });
     if (session) state.dismissSession();
     askFromHome();
   }, [params.help, params.consented, state.loading, state.error, session, state.dismissSession]);

@@ -47,7 +47,7 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
   const code = useBuddyCode(token);
   const reduceMotion = useContext(SystemReduceMotionContext);
   const [switched, setSwitched] = useState(false);
-  useInboxNotifications(state.inbox, a.event);
+  useInboxNotifications(state.inbox, a.event, state.contactsReady);
   const tab: Tab = attempt && session ? session.nearby ? 'auto' : 'friends' : chosenTab;
   const inSession = Boolean(session && (requester || session.helperUserId === userId));
   const simulate = __DEV__ ? () => catchNative(async () => { await buddyRequest(token, '/dev/simulate-nearby', 'POST', {}); await state.refresh(); }) : undefined;
@@ -64,7 +64,7 @@ export function HelperContent({ token, userId, state }: { token: string; userId:
   const banner = issue && <Card tint="caution">
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
     {native.settingsBlocked && <ActionButton compact variant="secondary" label={t('openSettings')} onPress={() => void Linking.openSettings()} />}
-    <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
+    <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); native.clearError(); voice.clearError(); void state.refresh(); }} />
   </Card>;
   // While navigating, the turn banner takes the top of the screen, so the bar's title and buttons step aside.
   if (inSession && active && native.location) return <>{!a.navigating && bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;

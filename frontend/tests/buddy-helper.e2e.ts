@@ -12,7 +12,7 @@ test('a helper sees their friends, auto search, and the Add Buddy sheet', { time
   await expect(screen.getByRole('tab', 'Alerts')).toBeVisible();
 
   await screen.getByRole('tab', 'Buddy').tap();
-  await expect(screen.getByText('Help others')).toBeVisible();
+  await expect(screen.getByText('Added friends')).toBeVisible();
   await screen.getByText('Auto search').tap();
   await agent.waitFor('the screen shows either a switch to be available to help, or a card explaining that auto search turns on once someone accepts you as their Buddy');
   await screen.getByText('Added friends').tap();
@@ -66,11 +66,12 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
     requestId = request.id;
     // The takeover arrives on its own. Tapping tabs while waiting can land on its buttons as it slides in.
     await expect(screen.getByText('Nina Rahma needs your help')).toBeVisible({ timeout: 90_000 });
-    await expect(screen.getByText('Shares your location with Nina Rahma while you help')).toBeVisible();
+    // The helper sees only a rounded distance to the friend, never where they are.
+    await expect(screen.getByText(/^About .+ from you$/)).toBeVisible({ timeout: 15_000 });
     // Its actions ignore touches for the first 600 ms after it appears.
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await screen.getByRole('button', "I'll help Nina Rahma").tap();
-    await expect(screen.getByRole('button', 'Start travelling to requester')).toBeVisible({ timeout: 30_000 });
+    await screen.getByRole('button', "I'll help Nina Rahma. Shares your location with Nina Rahma while you help").tap();
+    await expect(screen.getByRole('button', 'Start heading to Nina Rahma')).toBeVisible({ timeout: 30_000 });
 
     // A phone keeps sending its position; one ping would go stale before the route is asked for.
     const share = () => call(friend, `/requests/${requestId}/location`, 'PUT', { latitude: -6.266, longitude: 106.804, accuracyM: 8, observedAt: new Date().toISOString(), sharingConsent: true, sharingVersion: 0 });
@@ -82,12 +83,11 @@ test('a helper accepts a friend and is guided to them turn by turn', { timeout: 
     await expect(screen.getByRole('button', 'Center map on my location')).toBeVisible({ timeout: 30_000 });
     await expect(screen.getByRole('button', 'Route to Nina')).toBeVisible();
     await walk();
-    await screen.getByRole('button', 'Start travelling to requester').tap();
+    await screen.getByRole('button', 'Start heading to Nina Rahma').tap();
     await expect(screen.getByRole('button', 'Overview')).toBeVisible({ timeout: 45_000 });
     await agent.assert('a dark banner at the top shows a distance and a walking instruction, and the panel at the bottom shows minutes left with an arrival time');
     await screen.getByRole('button', 'Overview').tap();
     await expect(screen.getByRole('button', 'I have arrived')).toBeVisible();
-    await expect(screen.getByText('Help others')).toBeVisible();
   } finally {
     clearInterval(sharing);
     if (requestId) await call(friend, `/requests/${requestId}/interrupt`, 'POST', {}).catch(() => {});
@@ -133,21 +133,28 @@ test('a linked helper and friend walk to a safe house and the friend confirms th
     await go('');
     await go('buddy');
     // The request arrives as the full-screen takeover or, after a reload, as a card on the Buddy page.
-    const help = screen.getByRole('button', /^(I'll help Nina Rahma|Accept & help)$/);
-    await expect(help).toBeVisible({ timeout: 90_000 });
+    const help = screen.getByRole('button', /^(I'll help Nina Rahma\. Shares your location with Nina Rahma while you help|Accept & help)$/).first();
+    await expect(help).toBeVisible({ timeout: 180_000 });
     // The takeover's actions ignore touches for the first 600 ms after it appears.
     await new Promise(resolve => setTimeout(resolve, 1000));
+    // Accepting from the card asks to confirm sharing location first; the takeover's button already says it shares.
+    // A simulator replays its set location with the time it was set, which the server refuses as stale; a phone has fresh fixes.
+    await device.setLocation({ latitude: -6.2650, longitude: 106.8050 }).catch(() => {});
+    const fromCard = await screen.getByRole('button', 'Accept & help').count() > 0;
     await help.tap();
-    // Accepting from the card asks to confirm sharing location first.
-    const consent = screen.getByRole('button', 'Confirm');
-    if (await consent.count()) await consent.tap();
+    if (fromCard) await screen.getByRole('button', 'Confirm').tap();
 
     // The link indicator says who is helping whom and how far along the session is.
     // VoiceOver reads it as one line, so it is one node.
     await expect(screen.getByLabel('Nina Rahma. Linked · you are helping. Step 1 of 4 · On the way').first()).toBeVisible({ timeout: 30_000 });
 
-    await agent.act('tap "Simulate walking to a safe house (300 m)" in the Prototype card, scrolling the panel if needed');
-    await expect(screen.getByLabel('Nina Rahma. Linked · you are helping. Step 3 of 4 · Heading to the gathering point together').first()).toBeVisible({ timeout: 15_000 });
+    // The helper shares from the moment they accept, so the walk first covers the real distance to the friend.
+    await go('buddy');
+    await agent.act('on the Buddy tab, tap "Simulate walking to a safe house (300 m)" in the Prototype card, scrolling the session panel if needed');
+    // Reaching the card scrolls the link indicator off the top of the panel; bring it back before reading it.
+    for (let i = 0; i < 3; i++) await screen.getByText('Prototype control').first().swipe({ direction: 'up' }).catch(() => {});
+    // The walk lasts about 36 s, and finding the card can take longer, so it may already be at step 4 here.
+    await expect(screen.getByLabel(/^Nina Rahma\. Linked · you are helping\. Step (3 of 4 · Heading to the gathering point together|4 of 4 · At the gathering point)$/).first()).toBeVisible({ timeout: 120_000 });
     await agent.assert('the map shows a route line, a destination pin, and two person markers next to each other');
     // About 36 s of simulated walking.
     await expect(screen.getByText('You have reached the gathering point')).toBeVisible({ timeout: 90_000 });

@@ -13,17 +13,18 @@ jest.mock('./use-beacons', () => ({ useBeacons: () => ({ status: 'unavailable', 
 jest.mock('@react-native-community/netinfo', () => ({ __esModule: true, default: { fetch: jest.fn().mockResolvedValue({ isConnected: true, isInternetReachable: true }), addEventListener: jest.fn(listener => { mockNetworkListeners.push(listener); return () => {}; }) } }));
 jest.mock('./api', () => ({ ...jest.requireActual('./api'), buddyRequest: jest.fn() }));
 let mockParams: { help?: string; consented?: string } = {};
-jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useLocalSearchParams: () => mockParams }));
+const mockSetParams = jest.fn();
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused, useLocalSearchParams: () => mockParams, router: { setParams: (...args: unknown[]) => mockSetParams(...args) } }));
 jest.mock('@/features/profile/context', () => ({ useProfile: () => ({ accessibility: [{ type: 'MOBILITY_LIMITATION' }] }) }));
 jest.mock('@/features/preferences/context', () => ({ usePreferences: () => ({ preferences: { voiceEnabled: false } }) }));
-jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
+jest.mock('./copy', () => ({ readableIssue: jest.requireActual('./copy').readableIssue, statusSentence: jest.requireActual('./copy').statusSentence, useBuddyCopy: () => ({ c: (key: string) => key, status: (key: string) => key, language: 'en', support: jest.fn(), event: jest.fn() }) }));
 let mockAccess = { soundFree: false, voiceHome: false, listen: false };
 jest.mock('@/features/access/use-access', () => ({ useAccess: () => mockAccess }));
 const mockPrompt = { say: jest.fn(), listen: jest.fn(), cancel: jest.fn(), focused: true };
 jest.mock('@/features/voice/use-voice-prompt', () => ({ useVoicePrompt: () => mockPrompt }));
 let mockSpeech: { onCommand: (transcript: string) => void } | null = null;
 jest.mock('./native', () => ({ useBuddyNative: jest.fn(), useBuddySpeech: (options: { onCommand: (transcript: string) => void }) => { mockSpeech = options; return { speak: jest.fn(), error: null, cancelListening: jest.fn() }; } }));
-jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, tracking: false, foregroundOnly: false, location: null, obtainLocation, enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
+jest.mocked(useBuddyNative).mockImplementation(() => ({ error: null, clearError: jest.fn(), tracking: false, foregroundOnly: false, location: null, obtainLocation, enableLocation, stopLocation: jest.fn(), enableNotifications: jest.fn() }));
 
 const session = (status: string) => ({ id: 'session', status, requesterUserId: 'requester', attempts: [] });
 const state = (status: string) => ({ session: session(status), error: null, locations: [], contacts: [], availability: null, refresh: jest.fn(), run: jest.fn(), dismissSession: jest.fn() }) as never;
@@ -42,13 +43,12 @@ test('requester starts sharing once the session is accepted, and only once', asy
   expect(enableLocation).toHaveBeenCalledTimes(1);
 });
 
-test('helper is not auto-shared on acceptance, but reads its own position once for the map', async () => {
+test('helper shares location once on acceptance, as the accept button promises', async () => {
   const { rerender } = renderHook(({ status }: { status: string }) => useBuddyActions({ token: 'token', userId: 'helper', state: state(status) }), { initialProps: { status: 'ACCEPTED' } });
-  await waitFor(() => expect(obtainLocation).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(enableLocation).toHaveBeenCalledTimes(1));
   rerender({ status: 'EN_ROUTE' });
   await new Promise(resolve => setImmediate(resolve));
-  expect(obtainLocation).toHaveBeenCalledTimes(1);
-  expect(enableLocation).not.toHaveBeenCalled();
+  expect(enableLocation).toHaveBeenCalledTimes(1);
 });
 
 test('requester sees the helper approach route while the helper is on the way', async () => {
@@ -73,6 +73,8 @@ test('asking for help from Home with no Buddy explains and offers 112 once, and 
   const view = renderHook(() => useBuddyActions({ token: 'token', userId: 'me', state: idle }));
   await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
   const [title, body, buttons] = alert.mock.calls[0];
+  // The link is spent once handled: a reload that remounts the tab with the same URL must not ask again.
+  expect(mockSetParams).toHaveBeenCalledWith({ help: undefined, consented: undefined });
   expect([title, body]).toEqual(['emptyTitle', 'noBuddyHelp']);
   expect(buttons!.map(button => button.text)).toEqual(['cancel', 'call112']);
   expect(open).not.toHaveBeenCalled();

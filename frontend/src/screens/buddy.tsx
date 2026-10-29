@@ -36,7 +36,7 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
   const a = useBuddyActions({ token, userId, state });
   const router = useRouter();
   const { c, session, requester, active, issue, voice, native, catchNative, setLocalError } = a;
-  useInboxNotifications(state.inbox, a.event);
+  useInboxNotifications(state.inbox, a.event, state.contactsReady);
   const inSession = Boolean(session && (requester || session.helperUserId === userId));
 
   const bar = <>
@@ -51,7 +51,7 @@ function BuddyContent({ token, userId, state }: { token: string; userId: string;
   </>;
   const banner = issue && <Card tint="caution">
     <AppText accessibilityRole="alert" style={{ color: colors.critical }}>{issue}</AppText>
-    <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); void state.refresh(); }} />
+    <ActionButton compact variant="secondary" label={c('retry')} onPress={() => { setLocalError(null); native.clearError(); voice.clearError(); void state.refresh(); }} />
   </Card>;
   if (voiceHome) return <Page keyboard>{bar}{banner}<VoiceBuddyView a={a} token={token} /></Page>;
   if (inSession && active && native.location) return <>{bar}<SessionMap a={a} token={token} userId={userId} banner={banner} /></>;

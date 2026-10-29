@@ -121,9 +121,9 @@ export function SessionView({ a, token, userId, banner, onPrimaryLayout, onChatF
     </View>}
 
     {active && !requester && <View style={{ gap: 10 }}>
-      {session.status === 'ACCEPTED' && <ActionButton label={c('depart')} loading={state.busy} onPress={() => { void transition('depart'); }} />}
+      {session.status === 'ACCEPTED' && <ActionButton label={c('depart', { name: partner ?? c('name') })} loading={state.busy} onPress={() => { void transition('depart'); }} />}
       {session.status === 'EN_ROUTE' && <ActionButton label={c('arrive')} loading={state.busy} onPress={() => confirm(c('arrive'), () => { void transition('arrive'); })} />}
-      {session.status === 'ARRIVED' && <AppText style={{ color: colors.muted }}>{session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting')}</AppText>}
+      {session.status === 'ARRIVED' && <AppText style={{ color: colors.muted }}>{session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting', { name: partner ?? c('name') })}</AppText>}
       {session.status === 'ARRIVED' && <ActionButton label={c('pickup')} disabled={!session.meetingConfirmed} loading={state.busy} onPress={() => confirm(c('pickup'), () => { void transition('evacuating'); })} />}
       {['ARRIVED', 'EVACUATING'].includes(session.status) && <ActionButton variant="secondary" label={c('complete')} loading={state.busy} onPress={() => confirm(c('complete'), () => { void transition('report-complete'); })} />}
     </View>}
@@ -180,8 +180,8 @@ function HelperSession({ a, token, userId, banner, onPrimaryLayout, onChatFocus,
   const name = partner ?? c('name');
   const stale = state.locations.some(item => item.userId !== userId && item.stale);
   const toRequester = session.status === 'ACCEPTED' || session.status === 'EN_ROUTE';
-  const headline = session.status === 'ACCEPTED' ? c('stepReady', { name }) : session.status === 'EN_ROUTE' ? c('stepEnRoute', { name }) : session.status === 'ARRIVED' ? session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting') : session.status === 'EVACUATING' ? c('stepEvacuating') : status(session.status);
-  const step = session.status === 'ACCEPTED' ? { label: c('depart'), action: 'depart' } : session.status === 'EN_ROUTE' ? { label: c('arrive'), action: 'arrive' } : session.status === 'ARRIVED' ? { label: c('pickup'), action: 'evacuating' } : session.status === 'EVACUATING' ? { label: c('complete'), action: 'report-complete' } : null;
+  const headline = session.status === 'ACCEPTED' ? c('stepReady', { name }) : session.status === 'EN_ROUTE' ? c('stepEnRoute', { name }) : session.status === 'ARRIVED' ? session.meetingConfirmed ? c('meetingConfirmed') : c('waitingMeeting', { name }) : session.status === 'EVACUATING' ? c('stepEvacuating') : status(session.status);
+  const step = session.status === 'ACCEPTED' ? { label: c('depart', { name }), action: 'depart' } : session.status === 'EN_ROUTE' ? { label: c('arrive'), action: 'arrive' } : session.status === 'ARRIVED' ? { label: c('pickup'), action: 'evacuating' } : session.status === 'EVACUATING' ? { label: c('complete'), action: 'report-complete' } : null;
 
   // Leaving for the friend, and leaving with them for the gathering point, are the two moments the walk starts: guidance opens with them.
   // Read through ?. so the compiler's render-time dependency read is safe when no step applies (e.g. COMPLETION_PENDING).

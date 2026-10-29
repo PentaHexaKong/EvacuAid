@@ -76,6 +76,17 @@ test('explicit grant sends the current server revocation version', async () => {
   expect(JSON.parse(grant?.[2]?.body as string)).toEqual(expect.objectContaining({ sharingConsent: true, sharingVersion: 7 }));
 });
 
+test('"While using" only is not an error: sharing goes on in the foreground and Settings stays one tap away', async () => {
+  jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValueOnce({ granted: true } as Awaited<ReturnType<typeof Location.requestForegroundPermissionsAsync>>);
+  jest.mocked(Location.requestBackgroundPermissionsAsync).mockResolvedValueOnce({ granted: false, canAskAgain: false } as Awaited<ReturnType<typeof Location.requestBackgroundPermissionsAsync>>);
+  jest.mocked(Location.getCurrentPositionAsync).mockResolvedValueOnce({ coords: { latitude: 1, longitude: 2, accuracy: 5 }, timestamp: Date.now() } as Location.LocationObject);
+  jest.mocked(apiRequest).mockImplementation(async (_path, _token, init) => init?.method === 'GET' ? { sharingVersion: 1 } : undefined);
+  const { result } = renderHook(() => useBuddyNative({ active: true, sessionId: 'request', token: 'token', onRefresh: jest.fn() }));
+  await act(async () => { await result.current.enableLocation(); });
+  expect(result.current.error).toBeNull();
+  expect(result.current).toEqual(expect.objectContaining({ tracking: true, foregroundOnly: true, settingsBlocked: true }));
+});
+
 test('a stationary sharer keeps uploading fresh positions', async () => {
   jest.useFakeTimers();
   jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as Awaited<ReturnType<typeof Location.requestForegroundPermissionsAsync>>);
@@ -90,6 +101,41 @@ test('a stationary sharer keeps uploading fresh positions', async () => {
   jest.useRealTimers();
 });
 
+
+test('an upload rejected because the session ended stops quietly; other failures still show and Retry can clear them', async () => {
+  jest.useFakeTimers();
+  jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as Awaited<ReturnType<typeof Location.requestForegroundPermissionsAsync>>);
+  jest.mocked(Location.getCurrentPositionAsync).mockImplementation(async () => ({ coords: { latitude: 1, longitude: 2, accuracy: 5 }, timestamp: Date.now() }) as Location.LocationObject);
+  let putError: Error & { status?: number } = Object.assign(new Error('accepted active session required'), { status: 409 });
+  jest.mocked(apiRequest).mockImplementation(async (_path, _token, init) => { if (init?.method === 'GET') return { sharingVersion: 1 }; if (init?.method === 'PUT' && init.body && !String(init.body).includes('sharingConsent')) throw putError; return undefined; });
+  const { result } = renderHook(() => useBuddyNative({ active: true, sessionId: 'request', token: 'token', onRefresh: jest.fn() }));
+  await act(async () => { await result.current.enableLocation(); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(10000); });
+  expect(result.current.error).toBeNull();
+  putError = Object.assign(new Error('Buddy connection timed out. Please retry.'), { status: 500 });
+  await act(async () => { await jest.advanceTimersByTimeAsync(10000); });
+  expect(result.current.error).toBe('Buddy connection timed out. Please retry.');
+  act(() => { result.current.clearError(); });
+  expect(result.current.error).toBeNull();
+  jest.useRealTimers();
+});
+
+test('a fix the server refuses as stale is skipped quietly and sharing goes on', async () => {
+  jest.useFakeTimers();
+  jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as Awaited<ReturnType<typeof Location.requestForegroundPermissionsAsync>>);
+  jest.mocked(Location.getCurrentPositionAsync).mockImplementation(async () => ({ coords: { latitude: 1, longitude: 2, accuracy: 5 }, timestamp: Date.now() }) as Location.LocationObject);
+  jest.mocked(apiRequest).mockImplementation(async (_path, _token, init) => { if (init?.method === 'GET') return { sharingVersion: 1 }; if (init?.method === 'PUT' && init.body && !String(init.body).includes('sharingConsent')) throw Object.assign(new Error('Request failed (422)'), { status: 422 }); return undefined; });
+  const { result } = renderHook(() => useBuddyNative({ active: true, sessionId: 'request', token: 'token', onRefresh: jest.fn() }));
+  await act(async () => { await result.current.enableLocation(); });
+  const puts = () => jest.mocked(apiRequest).mock.calls.filter(([, , init]) => init?.method === 'PUT').length;
+  await act(async () => { await jest.advanceTimersByTimeAsync(10000); });
+  const before = puts();
+  await act(async () => { await jest.advanceTimersByTimeAsync(10000); });
+  expect(result.current.error).toBeNull();
+  expect(result.current.tracking).toBe(true);
+  expect(puts()).toBe(before + 1);
+  jest.useRealTimers();
+});
 
 function speechHarness(onCommand = jest.fn()) {
   const { useSpeechRecognitionEvent, ExpoSpeechRecognitionModule } = jest.requireMock('expo-speech-recognition') as { useSpeechRecognitionEvent: jest.Mock; ExpoSpeechRecognitionModule: Record<string, jest.Mock> };
@@ -209,4 +255,29 @@ test.each([true, false])('speech cleanup can leave the emergency shelter announc
   const view = renderHook(() => useBuddySpeech({ language: 'en', onCommand: jest.fn(), stopSpeechOnUnmount }));
   view.unmount();
   expect(Speech.stop).toHaveBeenCalledTimes(stopSpeechOnUnmount ? 1 : 0);
+});
+
+// iOS keeps the last tapped notification across launches; reopening it every time would bring back a long-finished session.
+test.each([[1, true], [60, false]])('a notification tapped %i min ago reopens its request: %s', async (minutes, reopens) => {
+  jest.mocked(Notifications.getLastNotificationResponseAsync).mockResolvedValueOnce({ notification: { date: Date.now() - minutes * 60_000, request: { content: { data: { requestId: 'old' } } } } } as never);
+  const onRefresh = jest.fn();
+  renderHook(() => useBuddyNative({ active: false, sessionId: null, token: 'token', onRefresh }));
+  await act(async () => {});
+  if (reopens) expect(onRefresh).toHaveBeenCalledWith('old'); else expect(onRefresh).not.toHaveBeenCalled();
+});
+
+// The inbox starts empty before it loads; seeding from that empty list made every old unread offer look new on launch.
+test('history that arrives with the first load is never notified', async () => {
+  const schedule = jest.mocked(Notifications.scheduleNotificationAsync);
+  schedule.mockClear();
+  const old = { id: 'history-offer', kind: 'OFFER', read: false, requestId: 'finished' };
+  const { rerender } = renderHook(({ inbox, ready }: { inbox: typeof old[]; ready: boolean }) => useInboxNotifications(inbox, kind => `title:${kind}`, ready), { initialProps: { inbox: [] as typeof old[], ready: false } });
+  rerender({ inbox: [old], ready: true });
+  await act(async () => {});
+  expect(schedule).not.toHaveBeenCalled();
+  const fresh = { id: 'fresh-offer', kind: 'OFFER', read: false, requestId: 'live' };
+  rerender({ inbox: [fresh, old], ready: true });
+  await act(async () => {});
+  expect(schedule).toHaveBeenCalledTimes(1);
+  expect(schedule).toHaveBeenCalledWith({ content: { title: 'title:OFFER', body: 'EvacuAid Buddy', data: { requestId: 'live' } }, trigger: null });
 });

@@ -58,6 +58,9 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
   useEffect(() => { refresh.current = onRefresh; }, [onRefresh]);
   const message = (en: string, id: string) => language === 'id' ? id : en;
   const fail = (cause: unknown) => { setError(cause instanceof Error ? cause.message : 'Native service unavailable.'); };
+  // A rejected upload after the session closed or changed is expected, not something to show; tracking just stops.
+  // A fix refused as too old (422, a cached position) is skipped; the next one is sent as usual.
+  const failUpload = (cause: unknown) => { if (![404, 409, 410, 422].includes((cause as ApiError).status ?? 0)) fail(cause); };
 
   const obtainLocation = async () => {
     setError(null);
@@ -98,7 +101,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
         if (Date.now() - sentAt.current < UPLOAD_GAP_MS) return;
         sentAt.current = Date.now();
         void buddyRequest(token, path(sessionId), 'PUT', next).catch(cause => {
-          fail(cause);
+          failUpload(cause);
           if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) {
             watch.current?.remove(); watch.current = null; setTracking(false); if (manageBackground) void stopBackground().catch(fail);
           }
@@ -115,7 +118,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       ensureCurrent();
       setForegroundOnly(permission !== 'granted');
       setSettingsBlocked(permission === 'blocked');
-      if (permission === 'blocked') setError(message('Location permission is required. You can enable it in Settings.', 'Izin lokasi diperlukan. Aktifkan di Pengaturan.'));
+      // "While using" still shares in the foreground; the foreground-only hint says so, so it is not an error.
       if (permission !== 'granted') return;
       await Location.startLocationUpdatesAsync(TASK, { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 5, deferredUpdatesInterval: 15000, pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: true, foregroundService: { notificationTitle: 'EvacuAid Buddy', notificationBody: message('Sharing location during your accepted Buddy session.', 'Berbagi lokasi selama sesi Buddy yang diterima.') } });
       if (generation.current !== run) { await stopBackground(); ensureCurrent(); }
@@ -140,7 +143,10 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
     const receive = (data: Record<string, unknown> = {}) => refresh.current(typeof data.requestId === 'string' ? data.requestId : undefined);
     const received = Notifications.addNotificationReceivedListener(value => receive(value.request.content.data));
     const response = Notifications.addNotificationResponseReceivedListener(value => receive(value.notification.request.content.data));
-    void Notifications.getLastNotificationResponseAsync().then(value => { if (value) receive(value.notification.request.content.data); }).catch(fail);
+    // iOS hands back the last tapped notification on every launch; only a recent tap may reopen its request, or a long-finished session comes back.
+    // The root layout clears it after routing, so it is left in place here.
+    // ponytail: 15 min covers an offer (2 min) and a cold start after it; persist handled ids if that ever proves too short.
+    void Notifications.getLastNotificationResponseAsync().then(value => { if (value && Date.now() - value.notification.date < 15 * 60_000) receive(value.notification.request.content.data); }).catch(fail);
     return () => { received.remove(); response.remove(); };
   }, []);
   useEffect(() => {
@@ -161,7 +167,7 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
         if (Date.now() - sentAt.current < UPLOAD_GAP_MS) return;
         sentAt.current = Date.now();
         void buddyRequest(token, path(sessionId), 'PUT', next).catch(cause => {
-          fail(cause);
+          failUpload(cause);
           if ([401, 403, 404, 409, 410].includes((cause as ApiError).status ?? 0)) { watch.current?.remove(); watch.current = null; setTracking(false); void stopBackground().catch(fail); }
         });
       });
@@ -177,11 +183,11 @@ export function useBuddyNative({ sessionId, active, token, onRefresh, language =
       void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).then(value => {
         const next = position(value); setLocation(next);
         return buddyRequest(token, path(sessionId), 'PUT', next);
-      }).catch(fail);
+      }).catch(failUpload);
     }, 10000);
     return () => clearInterval(timer);
   }, [tracking, active, sessionId, token]);
-  return { ...(settingsBlocked ? { settingsBlocked: true } : {}), error, tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
+  return { ...(settingsBlocked ? { settingsBlocked: true } : {}), error, clearError: () => setError(null), tracking, foregroundOnly, location, obtainLocation, enableLocation, stopLocation, enableNotifications };
 }
 
 export function useBuddySpeech({ language, onCommand, stopSpeechOnUnmount = true }: { language: 'id' | 'en'; onCommand: (transcript: string) => void; stopSpeechOnUnmount?: boolean }) {
@@ -212,7 +218,7 @@ export function useBuddySpeech({ language, onCommand, stopSpeechOnUnmount = true
   const cancelListening = useCallback(() => { if (!mine.current) return; mine.current = false; setListening(false); ExpoSpeechRecognitionModule.abort(); }, []);
   const speak = (text: string) => speakAloud(text, language);
   useEffect(() => () => { if (mine.current) ExpoSpeechRecognitionModule.abort(); if (stopSpeechOnUnmount) void Speech.stop(); }, [stopSpeechOnUnmount]);
-  return { listening, error, startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), cancelListening, speak };
+  return { listening, error, clearError: () => setError(null), startListening, stopListening: () => ExpoSpeechRecognitionModule.stop(), cancelListening, speak };
 }
 
 // Local notifications stand in for push on builds that can't receive it: they show while the app runs or is backgrounded.
@@ -223,9 +229,11 @@ const notifiedInbox = new Set<string>();
 type InboxEntry = { id: string; kind: string; read: boolean; requestId: string | null };
 
 // One local notification per new unread incoming request or friend request; items present on first load are history, not news.
-export function useInboxNotifications(inbox: InboxEntry[], title: (kind: string) => string) {
+// `ready` is false until the inbox has loaded: the history that arrives with it is the baseline, never news.
+export function useInboxNotifications(inbox: InboxEntry[], title: (kind: string) => string, ready = true) {
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
+    if (!ready) { seen.current = null; return; }
     if (!seen.current) { seen.current = new Set(inbox.map(item => item.id)); return; }
     const fresh = inbox.filter(item => !seen.current!.has(item.id) && !notifiedInbox.has(item.id) && !item.read && NOTIFY_KINDS.has(item.kind));
     inbox.forEach(item => seen.current!.add(item.id));
@@ -236,5 +244,5 @@ export function useInboxNotifications(inbox: InboxEntry[], title: (kind: string)
       if (!permission.granted) return;
       for (const item of fresh) await Notifications.scheduleNotificationAsync({ content: { title: title(item.kind), body: 'EvacuAid Buddy', data: item.requestId ? { requestId: item.requestId } : { inboxId: item.id } }, trigger: null });
     })().catch(() => {});
-  }, [inbox, title]);
+  }, [inbox, title, ready]);
 }

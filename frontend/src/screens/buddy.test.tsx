@@ -53,7 +53,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
 });
 jest.mock('@/features/buddy/native', () => ({
   useInboxNotifications: () => {},
-  useBuddyNative: () => ({ location: mockLocation, tracking: false, error: null, enableNotifications: mockEnableNotifications, enableLocation: async () => {}, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
+  useBuddyNative: () => ({ location: mockLocation, tracking: false, error: null, clearError: jest.fn(), enableNotifications: mockEnableNotifications, enableLocation: async () => {}, obtainLocation: async () => ({ latitude: -6.2, longitude: 106.8, accuracyM: 5, observedAt: new Date().toISOString() }) }),
   useBuddySpeech: ({ onCommand }: { onCommand: (command: string) => void }) => { mockCommand = onCommand; return { speak: mockSpeak, error: null, listening: mockListening, startListening: mockStartListening, stopListening: mockStopListening, cancelListening: mockStopListening }; },
 }));
 jest.mock('@/features/buddy/api', () => ({ ...jest.requireActual('@/features/buddy/api'), buddyRequest: (...args: unknown[]) => mockBuddyRequest(...args) }));
@@ -91,7 +91,7 @@ test('expired offers cannot be accepted', () => {
   expect(view.queryByRole('button', { name: 'Accept and help' })).toBeNull();
 });
 
-test('spoken help uses the primary contact only after explicit confirmation', () => {
+test('spoken help uses the primary contact only after explicit confirmation', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   mockContacts = [{ id: 'trusted', buddyUserId: 'primary-helper', name: 'Trusted person', level: 'PRIMARY' }];
   render(<BuddyScreen />);
@@ -99,7 +99,7 @@ test('spoken help uses the primary contact only after explicit confirmation', ()
   expect(mockRun).not.toHaveBeenCalled();
   expect(alert).toHaveBeenCalledWith('Ask Trusted person for help?', 'Your location is shared with Trusted person during this session. You can stop it any time.', expect.any(Array));
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
-  expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'primary-helper', sharingConsent: true }));
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'primary-helper', sharingConsent: true })));
   alert.mockRestore();
 });
 
@@ -152,12 +152,12 @@ test('the helper session shows one primary action for the current status', () =>
   mockSession = { ...base, status: 'ACCEPTED' };
   const view = render(<BuddyScreen />);
   expect(view.getByLabelText('Nina Rahma. Linked · you are helping. Step 1 of 4 · On the way')).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Start heading to Nina Rahma' })).toBeTruthy();
   expect(view.queryByRole('button', { name: 'I have arrived' })).toBeNull();
   mockSession = { ...base, status: 'EN_ROUTE' };
   view.rerender(<BuddyScreen />);
   expect(view.getByRole('button', { name: 'I have arrived' })).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'Start travelling to requester' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Start heading to Nina Rahma' })).toBeNull();
 });
 
 test('the header menu enables notifications and starts or stops listening', () => {
@@ -173,7 +173,8 @@ test('the header menu enables notifications and starts or stops listening', () =
   expect(mockStopListening).toHaveBeenCalledTimes(1);
 });
 
-test('asking a Buddy names them and the location sharing, and sends only after confirming', () => {
+test('asking a Buddy names them and the location sharing, and sends only after confirming', async () => {
+  mockLocation = { latitude: -6.2, longitude: 106.8 };
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   mockContacts = [{ id: 'trusted', buddyUserId: 'trusted-helper', name: 'Trusted person', level: 'PRIMARY', available: true }, { id: 'second', buddyUserId: 'second-helper', name: 'Second person', level: 'SECONDARY', available: false }];
   const view = render(<BuddyScreen />);
@@ -181,10 +182,10 @@ test('asking a Buddy names them and the location sharing, and sends only after c
   expect(alert).toHaveBeenCalledWith('Ask Trusted person for help?', 'Your location is shared with Trusted person during this session. You can stop it any time.', expect.any(Array));
   expect(mockRun).not.toHaveBeenCalled();
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
-  expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'trusted-helper', sharingConsent: true }));
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'trusted-helper', sharingConsent: true, latitude: -6.2, longitude: 106.8 })));
   fireEvent.press(view.getByRole('button', { name: 'Second person, Unavailable. Tap to ask for help.' }));
   alert.mock.calls.at(-1)?.[2]?.[1].onPress?.();
-  expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'second-helper' }));
+  await waitFor(() => expect(mockRun).toHaveBeenCalledWith('/requests', expect.objectContaining({ helperUserId: 'second-helper' })));
   alert.mockRestore();
 });
 
@@ -192,12 +193,12 @@ test('an active session with a known position becomes a full-screen map with the
   mockSession = { id: 'live', requesterUserId: 'nina', helperUserId: 'helper', requesterName: 'Nina Rahma', status: 'ACCEPTED', supportNeeds: [], attempts: [] };
   const page = render(<BuddyScreen />);
   expect(page.queryByTestId('session-map')).toBeNull();
-  expect(page.getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+  expect(page.getByRole('button', { name: 'Start heading to Nina Rahma' })).toBeTruthy();
   page.unmount();
   mockLocation = { latitude: -6.2, longitude: 106.8 };
   const map = render(<BuddyScreen />);
   expect(map.getByTestId('session-map')).toBeTruthy();
-  expect(within(map.getByTestId('session-sheet')).getByRole('button', { name: 'Start travelling to requester' })).toBeTruthy();
+  expect(within(map.getByTestId('session-sheet')).getByRole('button', { name: 'Start heading to Nina Rahma' })).toBeTruthy();
 });
 
 
@@ -587,11 +588,11 @@ test('GPS updates preserve a pending spoken confirmation and full status is read
   await act(async () => mockCommand('yes'));
   expect(mockRun).toHaveBeenCalledWith('/requests/live/interrupt', {});
   fireEvent.press(view.getByRole('button', { name: 'Read status aloud' }));
-  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(expect.stringContaining('Updated:'), expect.any(Object)));
+  await waitFor(() => expect(Speech.speak).toHaveBeenLastCalledWith(expect.stringContaining('location updated'), expect.any(Object)));
   expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain('m');
   act(() => mockCommand('status'));
   await waitFor(() => expect(Speech.speak).toHaveBeenCalledTimes(5));
-  expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain('Updated:');
+  expect(jest.mocked(Speech.speak).mock.calls.at(-1)?.[0]).toContain('location updated');
 });
 
 test('automatic Buddy status changes speak once and are dropped during recognition', async () => {

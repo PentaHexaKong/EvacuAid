@@ -58,8 +58,8 @@ test('the accepted helper sees one primary step, Call and a named route', () => 
   expect(view.getByRole('button', { name: 'Call' })).toBeTruthy();
   expect(view.getByRole('button', { name: 'Route to Test' })).toBeTruthy();
   const primary = view.UNSAFE_getAllByType(ActionButton).filter(node => !node.props.variant || node.props.variant === 'primary');
-  expect(primary.map(node => node.props.label)).toEqual(['Start travelling to requester']);
-  fireEvent.press(view.getByRole('button', { name: 'Start travelling to requester' }));
+  expect(primary.map(node => node.props.label)).toEqual(['Start heading to Test Person']);
+  fireEvent.press(view.getByRole('button', { name: 'Start heading to Test Person' }));
   expect(mockRun).toHaveBeenCalledWith('/requests/session-1/depart', {});
 });
 
@@ -68,7 +68,7 @@ test('arrival posts only after the helper confirms the native alert', () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const view = render(<Harness />);
   expect(view.getByText('Heading to Test Person')).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'Start travelling to requester' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Start heading to Test Person' })).toBeNull();
   fireEvent.press(view.getByRole('button', { name: 'I have arrived' }));
   expect(mockRun).not.toHaveBeenCalled();
   expect(alert).toHaveBeenCalledWith('I have arrived', 'I have arrived', expect.any(Array));
@@ -91,7 +91,7 @@ test('the requester retains the existing ARRIVED meeting confirmation path', () 
 test('pickup waits for meeting confirmation and report complete remains secondary', () => {
   mockSession.status = 'ARRIVED';
   const view = render(<Harness />);
-  expect(view.getByText('Waiting for requester to confirm meeting')).toBeTruthy();
+  expect(view.getByText('Waiting for Test Person to confirm you have met')).toBeTruthy();
   expect(view.getByRole('button', { name: 'Confirm pickup' })).toBeDisabled();
   expect(view.UNSAFE_getAllByType(ActionButton).find(node => node.props.label === 'Report assistance completed')?.props.variant).toBe('secondary');
   mockSession = { ...mockSession, meetingConfirmed: true };
