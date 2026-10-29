@@ -4,6 +4,7 @@ data/
 # Local Markdown documentation
 *.md
 !README.md
+!SETUP.md
 !docs/ble-beacon.md
 *.markdown
 !backend/AUTHENTICATION.md
@@ -13,3 +14,7 @@ data/
 !FIELD_OPERATIONS.md
 .secrets/
 .playwright-cli/
+
+# Local secrets and machine-specific Compose tweaks
+/.env
+docker-compose.override.yml

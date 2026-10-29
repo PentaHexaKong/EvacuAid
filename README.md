@@ -228,6 +228,7 @@ What follows is honest about what this prototype does not do yet. If something h
 
 ## For developers
 
+- [`SETUP.md`](SETUP.md): **run the whole stack on your own Mac**: backend, routing tiles from OpenStreetMap, database and demo data, Command Center and the app in the iOS Simulator
 - [`frontend/README.md`](frontend/README.md): running a development build against a local backend, Android, scripts and tests
 - [`backend/README.md`](backend/README.md): API endpoints, migrations and backend tests
 - [`backend/AUTHENTICATION.md`](backend/AUTHENTICATION.md): accounts, tokens and roles
